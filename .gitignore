@@ -1,0 +1,26 @@
+# Lex - The Elegant Bible Terminal
+
+# Database (download separately)
+lexicon.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Local config
+.lexrc
