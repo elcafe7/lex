@@ -140,6 +140,40 @@ def normalize_ref(q):
 def sanitize_fts(q):
     return re.sub(r'[^a-zA-Z0-9\s]', ' ', q).strip()
 
+def fuzzy_match(s1, s2, max_dist=2):
+    """Levenshtein distance for fuzzy matching"""
+    if len(s1) < len(s2):
+        return fuzzy_match(s2, s1, max_dist)
+    if len(s2) - len(s1) >= max_dist:
+        return None
+    
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    
+    dist = previous_row[len(s2)]
+    return s2 if dist <= max_dist else None
+
+def fuzzy_search(term, options, max_dist=2):
+    """Find closest match from options"""
+    term = term.lower()
+    for opt in options:
+        opt_lower = opt.lower()
+        # Try exact prefix match first
+        if opt_lower.startswith(term):
+            return opt
+        # Try fuzzy
+        match = fuzzy_match(term, opt_lower, max_dist)
+        if match:
+            return opt
+    return None
+
 def clean_text(text):
     text = re.sub(r'\*[a-z]+', '', text)
     text = re.sub(r'\[/?[a-z]+\]', '', text)
@@ -242,19 +276,30 @@ def query_strongs(q):
     cursor = conn.cursor()
     
     clean_q = sanitize_fts(q)
-    if not clean_q: return
+    if not clean_q: 
+        conn.close()
+        return
 
+    results = []
+    
     # Direct G1234 / H1234 lookup
     if re.match(r'^[GH]\d+$', q.upper()):
         cursor.execute("SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?", (q.upper(),))
+        results = cursor.fetchall()
     else:
-        try:
-            cursor.execute("SELECT number, word, pronunciation, definition FROM strongs_fts WHERE strongs_fts MATCH ? ORDER BY rank LIMIT 3", (clean_q,))
-        except sqlite3.OperationalError:
-            conn.close()
-            return
+        # Try direct LIKE search (better for Strong's with English definitions)
+        cursor.execute("SELECT number, word, pronunciation, definition FROM strongs WHERE word LIKE ? OR definition LIKE ? LIMIT 5", (f'%{clean_q}%', f'%{clean_q}%',))
+        results = cursor.fetchall()
+        
+        # If no results, try FTS
+        if not results:
+            try:
+                cursor.execute("SELECT number, word, definition FROM strongs_fts WHERE strongs_fts MATCH ? ORDER BY rank LIMIT 5", (clean_q,))
+                results_raw = cursor.fetchall()
+                results = [(r[0], r[1], "", r[2]) for r in results_raw]
+            except:
+                pass
             
-    results = cursor.fetchall()
     if results:
         for num, word, pron, defn in results:
             content = f"[{custom_theme.styles['lexicon.word']}]{word}[/] ({pron})\n\n[dim]{defn}[/]"
@@ -282,8 +327,20 @@ def query_dictionary(q):
         cursor.execute("SELECT topic, content, source FROM dictionary_fts WHERE dictionary_fts MATCH ? ORDER BY rank LIMIT 2", (clean_q,))
         results = cursor.fetchall()
     except sqlite3.OperationalError:
+        # Fallback to LIKE
         cursor.execute("SELECT topic, content, source FROM dictionary WHERE topic LIKE ? OR content LIKE ? LIMIT 2", (f'%{q}%', f'%{q}%'))
         results = cursor.fetchall()
+        
+        # If no results, try fuzzy match on topics
+        if not results:
+            cursor.execute("SELECT DISTINCT topic FROM dictionary")
+            topics = [r[0] for r in cursor.fetchall()]
+            match = fuzzy_search(q, topics)
+            if match:
+                cursor.execute("SELECT topic, content, source FROM dictionary WHERE topic = ? LIMIT 2", (match,))
+                results = cursor.fetchall()
+                if results:
+                    console.print(f"[dim]Did you mean: {match}?[/]")
 
     if results:
         for topic, content, source in results:
@@ -382,12 +439,16 @@ def print_help():
 
 [bold]Examples:[/]
   lex John 3:16              Read a verse
-  lex forgiveness          Search the Bible
-  lex G3056               Study Strong's number
-  lex Galilee             Look up a place
-  lex Nicene Creed        Read historical creeds/confessions
-  lex Westminster Confession Westminster Confession of Faith
-  lex --limit 5 John 3:16 Limit cross-refs
+  lex john 1                 Read full chapter
+  lex forgiveness            Search the Bible
+  lex G3056                 Study Strong's number (Greek)
+  lex H7225                 Study Strong's number (Hebrew)
+  lex strongs word          Search Strong's (English)
+  lex define Nicene Creed   Dictionary/creeds only
+  lex places Galilee        Places only
+  lex --limit 5 John 3:16   Limit cross-refs to 5
+  lex --next               Go to next verse
+  lex --prev               Go to previous verse
 
 [bold]Options:[/]
   -h, --help       Show help
@@ -395,16 +456,17 @@ def print_help():
   -l, --limit N   Limit results (default: 10)
   -j, --json     Output as JSON
   -t, --text    Output as plain text
-  
-[bold]Source Flags:[/]
   -b, --bible      Bible only
   -s, --strongs    Strong's only  
   -d, --dictionary Dictionary/creeds only
   -p, --places    Places only
-  
-[bold]Navigation:[/]
   --next   Go to next verse/chapter
   --prev   Go to previous verse/chapter
+
+[bold]Navigation Keys:[/]
+  --next John 3:16   → John 3:17
+  --prev John 3:16   → John 3:15
+  (works for chapters too)
 
 [bold]Files:[/]
   ~/.lexrc  Config file (JSON)
@@ -412,6 +474,47 @@ def print_help():
 [bold]Demo:[/]
   lex demo
 """)
+
+def print_context_help(query_results=False, is_verse=False, is_strongs=False, is_places=False, is_dict=False):
+    """Print contextual help tips after query results"""
+    from rich.align import Align
+    from rich.console import Console
+    
+    tips = []
+    if is_strongs:
+        tips = [
+            "[dim]💡 Try: lex G3056 (Greek) or lex H7225 (Hebrew)[/]",
+            "[dim]📖 Use: lex -b scripture -s strongs (search both)[/]",
+        ]
+    elif is_places:
+        tips = [
+            "[dim]💡 Try: lex Jerusalem, lex Galilee, lex Bethlehem[/]",
+        ]
+    elif is_dict:
+        tips = [
+            "[dim]💡 Creeds: lex Nicene Creed, lex Apostles Creed[/]",
+            "[dim]📖 Try: lex Westminster Confession, lex Augsburg Confession[/]",
+            "[dim]💡 Use: lex -d <search> (dictionary only)[/]",
+        ]
+    elif is_verse:
+        tips = [
+            "[dim]Navigation:[/] [cyan]--next[/] [dim]or[/] [cyan]--prev[/] [dim]for verse/chapter navigation[/]",
+            "[dim]📖 Use:[/] [cyan]-b[/] [dim]Bible only,[/] [cyan]--limit N[/] [dim]to limit cross-refs[/]",
+        ]
+    else:
+        tips = [
+            "[dim]💡 Quick refs:[/] [cyan]lex john 3:16[/] [dim]verse,[/] [cyan]lex john 1[/] [dim]chapter,[/] [cyan]lex G3056[/] [dim]Strong's[/]",
+            "[dim]📖 Source flags:[/] [cyan]-b[/] [dim]Bible,[/] [cyan]-s[/] [dim]Strong's,[/] [cyan]-d[/] [dim]Dict,[/] [cyan]-p[/] [dim]Places[/]",
+        ]
+    
+    if tips:
+        panel = Panel(
+            Text("\n".join(tips)),
+            title="💡 What Next?",
+            border_style="dim",
+            expand=False
+        )
+        console.print(panel)
 
 def run_demo():
     demos = [
@@ -434,32 +537,64 @@ def main():
         print_howto()
         sys.exit(0)
 
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("query", nargs="?", default="")
-    parser.add_argument("-h", "--help", action="store_true")
-    parser.add_argument("-v", "--version", action="store_true")
-    parser.add_argument("-l", "--limit", type=int, default=None)
-    parser.add_argument("-j", "--json", action="store_true")
-    parser.add_argument("-t", "--text", action="store_true")
-    parser.add_argument("-b", "--bible", action="store_true", help="Bible only")
-    parser.add_argument("-s", "--strongs", action="store_true", help="Strong's lexicon only")
-    parser.add_argument("-d", "--dictionary", action="store_true", help="Dictionary/creeds only")
-    parser.add_argument("-p", "--places", action="store_true", help="Places only")
-    parser.add_argument("-c", "--crossrefs", action="store_true", help="Cross-references only")
-    parser.add_argument("--next", action="store_true", help="Go to next verse/chapter")
-    parser.add_argument("--prev", action="store_true", help="Go to previous verse/chapter")
+    # Simple args namespace
+    class Args:
+        bible = strongs = dictionary = places = next = prev = False
+        limit = json = text = help = version = crossrefs = False
+    args = Args()
+
+    # Build query string
+    full_args = sys.argv[1:]
+    query = " ".join(full_args)
     
-    args, unknown = parser.parse_known_args()
+    # Handle plain language commands
+    plain_cmds = [
+        ("define ", "dictionary"), ("dict ", "dictionary"),
+        ("search ", "all"), ("find ", "all"),
+        ("bible ", "bible"), ("verse ", "bible"), ("read ", "bible"),
+        ("places ", "places"), ("map ", "places"), ("geo ", "places"),
+    ]
     
-    if args.help:
+    for prefix, mode in plain_cmds:
+        if query.startswith(prefix):
+            query = query[len(prefix):]
+            args.bible = mode == "bible"
+            args.strongs = mode == "strongs"
+            args.dictionary = mode == "dictionary"
+            args.places = mode == "places"
+            break
+    
+    # Handle strongs/lexicon - don't strip prefix, set mode
+    if query.startswith("strongs ") or query.startswith("lexicon "):
+        query = re.sub(r'^(strongs|lexicon)\s+', '', query)
+        args.strongs = True
+    
+    # Check G#### and H#### patterns
+    if re.match(r'^[GH]\d+', query, re.IGNORECASE):
+        args.strongs = True
+    
+    # Navigation
+    if query.startswith("next "):
+        query, args.next = query[5:], True
+    elif query.startswith("prev "):
+        query, args.prev = query[5:], True
+    
+    # Handle flags
+    if "--help" in full_args or "-h" in full_args:
         print_help()
         sys.exit(0)
-    
-    if args.version:
+    if "--version" in full_args or "-v" in full_args:
         console.print(f"[bold gold3]Lex[/] version [bold]{VERSION}[/]")
         sys.exit(0)
-
-    query = " ".join(filter(None, [args.query] + unknown))
+    if "-b" in full_args: args.bible = True
+    if "-s" in full_args: args.strongs = True
+    if "-d" in full_args: args.dictionary = True
+    if "-p" in full_args: args.places = True
+    
+    for i, a in enumerate(full_args):
+        if a == "--limit" and i+1 < len(full_args):
+            try: args.limit = int(full_args[i+1])
+            except: pass
     
     if not query:
         print_howto()
@@ -472,29 +607,32 @@ def main():
     global CROSS_REF_LIMIT
     CROSS_REF_LIMIT = args.limit
     
-    # Check for source-specific flags
-    search_all = not (args.bible or args.strongs or args.dictionary or args.places or args.crossrefs)
+    # Determine sources to search
+    search_all = not (args.bible or args.strongs or args.dictionary or args.places)
     
     with console.status(f"[bold green]Searching for '{query}'...", spinner="dots"):
-        # Bible search (always runs unless -s, -d, -p used)
-        if search_all or args.bible:
+        
+        # Based on args, run specific searches
+        if args.strongs:
+            query_strongs(query)
+        elif args.dictionary:
+            query_dictionary(query)
+        elif args.places:
+            query_places(query)
+        elif args.bible:
             is_ref = query_bible(query)
-            # Save reference for navigation
             if is_ref:
                 ref_pat, b, c, v = normalize_ref(query)
-                if b and c:
-                    save_last_ref(b, c, v)
-        
-        # Strong's (skip if -b only)
-        if (search_all or args.strongs) and not args.bible:
+                if b and c: save_last_ref(b, c, v)
+        else:
+            # Default: search all sources
+            is_ref = query_bible(query)
+            if is_ref:
+                ref_pat, b, c, v = normalize_ref(query)
+                if b and c: save_last_ref(b, c, v)
+            
             query_strongs(query)
-        
-        # Places (skip if -b, -s only)  
-        if (search_all or args.places) and not args.bible and not args.strongs:
             query_places(query)
-        
-        # Dictionary (skip if -b, -s, -p only)
-        if (search_all or args.dictionary) and not args.bible and not args.strongs and not args.places:
             query_dictionary(query)
         
         # Cross-refs only work with verse refs, handled in query_bible
@@ -511,12 +649,24 @@ def main():
             new_ref = navigate(query, direction)
             if new_ref:
                 console.print(f"[dim]→ {new_ref}[/]")
-                is_ref = query_bible(new_ref)
-                if is_ref:
-                    ref_p, b, c, v = normalize_ref(new_ref)
-                    if b and c:
-                        save_last_ref(b, c, v)
+                query_bible(new_ref)
+                ref_p, b, c, v = normalize_ref(new_ref)
+                if b and c:
+                    save_last_ref(b, c, v)
         sys.exit(0)
+    
+    # Context tips
+    tips = ["💡 Try: --next / --prev for navigation"]
+    if args.dictionary:
+        tips = ["💡 Try: lex define, lex strongs, lex bible"]
+    elif args.strongs:
+        tips = ["💡 Try: lex G3056 or lex H7225"]
+    elif args.bible:
+        tips = ["💡 Try: lex next or lex prev"]
+    else:
+        tips = ["💡 Try: lex define <topic>, lex strongs <word>, lex places <name>"]
+    
+    console.print(Panel(Text("\n".join(tips)), title="💡 Tips", border_style="dim", expand=False))
 
 if __name__ == "__main__":
     main()
