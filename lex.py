@@ -319,6 +319,7 @@ It just works. Type what you want to know.
 *   **Search:** `lex mustard seed` *(Semantically ranked results)*
 *   **Study:** `lex G3056` or `lex logos` *(Deep original language)*
 *   **Explore:** `lex Galilee` *(Geography and history)*
+*   **Creeds:** `lex Nicene Creed` or `lex Westminster Confession` *(Historical confessions)*
 
 *Stop fiddling with tabs. Start studying.*
 
@@ -343,6 +344,8 @@ def print_help():
   lex forgiveness          Search the Bible
   lex G3056               Study Strong's number
   lex Galilee             Look up a place
+  lex Nicene Creed        Read historical creeds/confessions
+  lex Westminster Confession Westminster Confession of Faith
   lex --limit 5 John 3:16 Limit cross-refs
 
 [bold]Options:[/]
