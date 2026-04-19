@@ -17,6 +17,47 @@ from rich.prompt import Prompt
 
 VERSION = "1.2.0"
 
+HISTORY_FILE = os.path.expanduser("~/.lex_history")
+LAST_REF = [None, None, None]  # book, chapter, verse
+
+def save_last_ref(book, chap, verse=None):
+    LAST_REF[0] = book
+    LAST_REF[1] = chap
+    LAST_REF[2] = verse
+
+def get_last_ref():
+    return LAST_REF
+
+def navigate(query, direction):
+    """Navigate to next/previous verse/chapter"""
+    book, chap, verse = get_last_ref()
+    if not book:
+        return None
+    
+    if direction == "next":
+        if verse:
+            verse = str(int(verse) + 1)
+        else:
+            chap = str(int(chap) + 1)
+    elif direction == "prev":
+        if verse:
+            new_verse = int(verse) - 1
+            if new_verse < 1:
+                return None
+            verse = str(new_verse)
+        else:
+            new_chap = int(chap) - 1
+            if new_chap < 1:
+                return None
+            chap = str(new_chap)
+    else:
+        return None
+    
+    new_ref = f"{book} {chap}"
+    if verse:
+        new_ref += f":{verse}"
+    return new_ref
+
 custom_theme = Theme({
     "info": "dim cyan",
     "warning": "magenta",
@@ -349,11 +390,21 @@ def print_help():
   lex --limit 5 John 3:16 Limit cross-refs
 
 [bold]Options:[/]
-  -h, --help     Show help
-  -v, --version Show version
-  -l, --limit N Limit results (default: 10)
-  -j, --json   Output as JSON
-  -t, --text  Output as plain text
+  -h, --help       Show help
+  -v, --version   Show version
+  -l, --limit N   Limit results (default: 10)
+  -j, --json     Output as JSON
+  -t, --text    Output as plain text
+  
+[bold]Source Flags:[/]
+  -b, --bible      Bible only
+  -s, --strongs    Strong's only  
+  -d, --dictionary Dictionary/creeds only
+  -p, --places    Places only
+  
+[bold]Navigation:[/]
+  --next   Go to next verse/chapter
+  --prev   Go to previous verse/chapter
 
 [bold]Files:[/]
   ~/.lexrc  Config file (JSON)
@@ -390,6 +441,13 @@ def main():
     parser.add_argument("-l", "--limit", type=int, default=None)
     parser.add_argument("-j", "--json", action="store_true")
     parser.add_argument("-t", "--text", action="store_true")
+    parser.add_argument("-b", "--bible", action="store_true", help="Bible only")
+    parser.add_argument("-s", "--strongs", action="store_true", help="Strong's lexicon only")
+    parser.add_argument("-d", "--dictionary", action="store_true", help="Dictionary/creeds only")
+    parser.add_argument("-p", "--places", action="store_true", help="Places only")
+    parser.add_argument("-c", "--crossrefs", action="store_true", help="Cross-references only")
+    parser.add_argument("--next", action="store_true", help="Go to next verse/chapter")
+    parser.add_argument("--prev", action="store_true", help="Go to previous verse/chapter")
     
     args, unknown = parser.parse_known_args()
     
@@ -414,18 +472,51 @@ def main():
     global CROSS_REF_LIMIT
     CROSS_REF_LIMIT = args.limit
     
+    # Check for source-specific flags
+    search_all = not (args.bible or args.strongs or args.dictionary or args.places or args.crossrefs)
+    
     with console.status(f"[bold green]Searching for '{query}'...", spinner="dots"):
-        is_ref = query_bible(query)
+        # Bible search (always runs unless -s, -d, -p used)
+        if search_all or args.bible:
+            is_ref = query_bible(query)
+            # Save reference for navigation
+            if is_ref:
+                ref_pat, b, c, v = normalize_ref(query)
+                if b and c:
+                    save_last_ref(b, c, v)
         
-        if not is_ref:
+        # Strong's (skip if -b only)
+        if (search_all or args.strongs) and not args.bible:
             query_strongs(query)
+        
+        # Places (skip if -b, -s only)  
+        if (search_all or args.places) and not args.bible and not args.strongs:
             query_places(query)
+        
+        # Dictionary (skip if -b, -s, -p only)
+        if (search_all or args.dictionary) and not args.bible and not args.strongs and not args.places:
             query_dictionary(query)
-            
-        if not is_ref:
-            has_results = False
-            console.print(f"[warning]No results found for '{query}'.[/]")
-            console.print(f"[dim]Try a different search term or check the spelling.[/]")
+        
+        # Cross-refs only work with verse refs, handled in query_bible
+        if args.crossrefs and not args.bible:
+            ref_pattern, book, chap, verse = normalize_ref(query)
+            if verse:
+                query_crossrefs(book, chap, verse)
+    
+    # Handle navigation
+    if args.next or args.prev:
+        direction = "next" if args.next else "prev"
+        ref_pat, book, chap, verse = normalize_ref(query)
+        if book and chap:
+            new_ref = navigate(query, direction)
+            if new_ref:
+                console.print(f"[dim]→ {new_ref}[/]")
+                is_ref = query_bible(new_ref)
+                if is_ref:
+                    ref_p, b, c, v = normalize_ref(new_ref)
+                    if b and c:
+                        save_last_ref(b, c, v)
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
