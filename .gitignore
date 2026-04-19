@@ -1,8 +1,5 @@
 # Lex - The Elegant Bible Terminal
 
-# Database (download separately)
-lexicon.db
-
 # Python
 __pycache__/
 *.pyc
