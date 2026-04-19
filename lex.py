@@ -149,12 +149,12 @@ def query_bible(q):
             cursor.execute(f"SELECT reference, text FROM bible WHERE reference LIKE '{search_pattern}%' AND reference NOT LIKE '%:0%'")
             chapter_verses = cursor.fetchall()
             if chapter_verses:
-                table = Table(show_header=False, box=None, padding=(0, 1, 1, 1))
-                table.add_column("Ref", style="verse.ref", justify="right")
-                table.add_column("Text", style="verse.text")
+                table = Table(show_header=False, box=None, padding=(0, 1, 0, 1), expand=True)
+                table.add_column("Ref", style="verse.ref", justify="right", no_wrap=True)
+                table.add_column("Text", style="verse.text", overflow="fold")
                 
                 for ref, text in chapter_verses:
-                    table.add_row(f"[{ref}]", clean_text(text)[:100] + "..." if len(text) > 100 else clean_text(text))
+                    table.add_row(f"[{ref}]", clean_text(text))
                 
                 console.print(Panel(table, title=f"📖 {book} {chap}", border_style="gold3", expand=False))
                 conn.close()
