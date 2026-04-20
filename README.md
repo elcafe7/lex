@@ -34,32 +34,25 @@ git clone https://github.com/elcafe7/lex.git
 cd lex
 ```
 
-Install the Python packages used by the current CLI:
+Run the setup script to install dependencies and configure the local environment:
 
 ```bash
-python3 -m pip install rich python-docx reportlab
+chmod +x setup.sh
+./setup.sh
 ```
 
-Run Lex directly:
+The setup script will:
+1. Check for Python 3 and the `rich` library.
+2. Ensure the main database (`lexicon.db`) is present.
+3. Make `lex.py` executable.
+4. Optionally create a `lex` symlink in `~/.local/bin` for easy access.
+
+Now you can run Lex from anywhere (if symlinked) or directly:
 
 ```bash
-python3 ./lex.py
-python3 ./lex.py John 3:16
-python3 ./lex.py study John 1:1
-```
-
-If you want a shell command named `lex`, create a local symlink somewhere on your `PATH`:
-
-```bash
-ln -sf "$PWD/lex.py" ~/.local/bin/lex
-```
-
-Then:
-
-```bash
-lex
-lex jn 1:1
-lex study rev 1:2
+lex John 3:16
+# OR
+./lex.py study John 1:1
 ```
 
 ## Reading
