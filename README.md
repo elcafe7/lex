@@ -1,5 +1,5 @@
 # Lex
-## the elegant bible terminal
+### the elegant bible terminal
 
 ![Lex Banner](docs/images/banner.png)
 
