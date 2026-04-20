@@ -21,3 +21,17 @@ Thumbs.db
 
 # Local config
 .lexrc
+
+# Built Bible edition databases
+bible_versions/*.db
+
+# Large local source-data checkouts and generated scratch data.
+# Keep compact build scripts/docs in git; fetch or rebuild these locally.
+Bible-Geocoding-Data/
+STEPBible-Data/
+bible_databases/
+esv-data/
+strongs/
+temp/
+theolog-ai/
+ubs-open-license/

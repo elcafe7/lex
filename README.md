@@ -1,135 +1,130 @@
 # Lex: The Elegant Bible Terminal
 
-A powerful CLI tool for Bible study, combining scripture lookup, cross-references, Strong's Hebrew/Greek lexicon, geographical data, and dictionary definitions in one elegant interface.
+Lex is a local-first Bible study CLI. It combines Scripture reading, study mode, search, Strong's lookups, dictionary/encyclopedia definitions, TSK cross-references, and historical Christian documents in one terminal tool.
 
-## Features
+Current tracked CLI:
 
-- **Scripture Lookup** - Read any verse or full chapter
-- **TSK Cross-References** - Treasury of Scripture Knowledge (344,799 references)
-- **Strong's Lexicon** - Hebrew (H#) and Greek (G#) word studies
-- **Bible Geography** - Places, coordinates, and historical context
-- **Dictionary** - Theological and biblical definitions
-
-## Installation
-
-### Quick Start (one command)
-
-```bash
-# Clone and run setup script
-git clone https://github.com/your-repo/lex.git
-cd lex
-./setup.sh
-
-# Done! Test it:
-./lex John 3:16
+```text
+./lex.py
 ```
 
-### Manual Install
+Current version:
 
-```bash
-# Clone
-git clone https://github.com/your-repo/lex.git
-cd lex
-
-# Install dependency
-pip install rich
-
-# Download database (45MB)
-./download-db.sh
-# OR manually:
-curl -L -o lexicon.db "https://github.com/your-repo/releases/latest/download/lexicon.db"
-
-# Make executable
-chmod +x lex
-
-# Run
-./lex John 3:16
+```text
+2.3.3-Nav
 ```
 
-### System-wide Install
+## Start Here
+
+For non-technical users:
+
+- [User Guide](docs/USER_GUIDE.md)
+
+For developers:
+
+- [Developer Guide](docs/DEVELOPER_GUIDE.md)
+
+Component documentation:
+
+- [Lex CLI](docs/components/LEX_CLI.md)
+- [Runtime Data Stores](docs/components/DATA_STORES.md)
+- [Bible DB Builder](docs/components/BIBLE_DB_BUILDER.md)
+- [Encyclopedia Importer](docs/components/ENCYCLOPEDIA_IMPORTER.md)
+
+Supporting docs:
+
+- [Bible Edition Standard](docs/BIBLE_EDITION_STANDARD.md)
+- [Encyclopedia Import Notes](docs/ENCYCLOPEDIA_IMPORT_NOTES.md)
+- [Licensing Notes](docs/LICENSING.md)
+
+## Common Commands
+
+Open the main screen:
 
 ```bash
-sudo cp lex /usr/local/bin/
-# Database will be at ~/bible-lexicon-data/lexicon.db by default
-# Or set custom path in ~/.lexrc
+lex
+```
 
-## Quick Start
+Read Scripture:
 
 ```bash
-# Read a verse (with context)
+lex read John 3:16
 lex John 3:16
-
-# Read a full chapter
-lex john 1
-
-# Search the Bible
-lex forgiveness
-
-# Look up a Strong's number (Hebrew/Greek)
-lex G3056
-
-# Find a place
-lex Galilee
-
-# Show demo
-lex demo
+lex John 1
 ```
 
-## Usage
+Study a verse:
 
-### Command Options
+```bash
+lex study John 1:1
+lex John 3:16 -i
+```
 
-| Option | Description |
-|--------|-------------|
-| `lex <query>` | Search or read |
-| `lex --help` | Show help |
-| `lex --version` | Show version |
-| `lex --limit N` | Limit cross-refs to N results |
-| `lex demo` | Run interactive demo |
+Search Scripture:
 
-### Query Examples
+```bash
+lex search israel
+lex search "kingdom of god" --page 2
+```
 
-| Query | Result |
-|-------|--------|
-| `lex John 3:16` | Verse with context + cross-refs |
-| `lex john 1` | Full chapter |
-| `lex john` | Search for "john" |
-| `lex G3056` | Strong's Greek #3056 (logos) |
-| `lex H7225` | Strong's Hebrew #7225 (beginning) |
-| `lex must see faith` | Semantic search |
+Look up Strong's:
 
-### Book Abbreviations
+```bash
+lex G3056
+lex strongs love
+```
 
-All standard abbreviations work:
-- `gn`, `gen` → Genesis
-- `ex`, `exo` → Exodus  
-- `ps`, `psalm` → Psalms
-- `jhn`, `john` → John
-- `rv`, `rev` → Revelation
+Define a term:
 
-## Configuration
+```bash
+lex define covenant
+lex define heliodorus
+```
 
-Create `~/.lexrc` for custom settings:
+Browse creeds and confessions:
 
-```json
-{
-  "db_path": "/path/to/lexicon.db",
-  "cross_ref_limit": 10
-}
+```bash
+lex creed
+lex creed nicene
+lex creed baltimore
+```
+
+Show credits and data licenses:
+
+```bash
+lex --credits
 ```
 
 ## Data Sources
 
-- **Bible Text**: ESV (English Standard Version)
-- **Cross-References**: Treasury of Scripture Knowledge (TSK) via OpenBible.info
-- **Strong's Numbers**: Public domain concordance
-- **Places**: Geographic database
-- **Dictionary**: Theological definitions
+Lex currently uses local data from:
+
+- ESV-derived Bible database
+- Treasury of Scripture Knowledge / OpenBible-style cross-references
+- Strong's Hebrew/Greek lexicon data
+- STEPBible Greek/Hebrew lexicons
+- UBS open-license resources
+- Easton's Bible Dictionary
+- International Standard Bible Encyclopedia OCR import
+- TheologAI historical documents
+- Bible geocoding data
+
+The encyclopedia import is incomplete: the current local ISBE import only covers Volume II, `Clement-Heresh`.
 
 ## License
 
-See individual data sources for licensing. Code is MIT licensed.
+Recommended model:
 
-## Version
+- Lex application code: MIT.
+- Bundled/generated data: source-specific terms.
 
-Current version: **1.2.0**
+Do not represent generated databases or third-party datasets as MIT licensed. See [Licensing Notes](docs/LICENSING.md).
+
+## Developer Verification
+
+```bash
+python3 -m py_compile ./lex.py
+python3 ./lex.py
+python3 ./lex.py --credits
+python3 ./lex.py study James 1:1
+```

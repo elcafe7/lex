@@ -5,59 +5,121 @@ import sys
 import re
 import json
 import argparse
-import time
-from pathlib import Path
-from rich.console import Console
+import shlex
+from rich.align import Align
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
 from rich.markdown import Markdown
 from rich.theme import Theme
-from rich.prompt import Prompt
+from rich.prompt import Prompt, IntPrompt
 
-VERSION = "1.2.0"
-
+# ---------------------------------------------------------------------------
+# Runtime paths and bundled-data adapters
+# ---------------------------------------------------------------------------
+# Lex is currently a single-file CLI that reads several local SQLite/JSON data
+# stores. Keep these paths centralized so future packaging can replace them
+# with config/env-driven paths without touching feature code.
+VERSION = "2.3.3-Nav"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
-LAST_REF = [None, None, None]  # book, chapter, verse
+LEXICON_DB_PATH = os.path.expanduser("~/bible-lexicon-data/lexicon.db")
+BIBLE_DB_PATH = os.path.expanduser("~/bible-lexicon-data/bible_versions/esv.db")
+ENCYCLOPEDIA_DB_PATH = os.path.expanduser("~/bible-lexicon-data/encyclopedia.db")
+INTERLINEAR_PATH = os.path.expanduser("~/bible-lexicon-data/esv-data/data/esv/esv-interlinear.json")
+INTERLINEAR_STRONGS_PATH = os.path.expanduser("~/bible-lexicon-data/esv-data/data/interlinear/strongs.json")
+STEP_GREEK_PATH = os.path.expanduser("~/bible-lexicon-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesg-greek.json")
+STEP_HEBREW_PATH = os.path.expanduser("~/bible-lexicon-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesh-hebrew.json")
+HISTORICAL_DOCS_DIR = os.path.expanduser("~/bible-lexicon-data/theolog-ai/data/historical-documents")
 
-def save_last_ref(book, chap, verse=None):
-    LAST_REF[0] = book
-    LAST_REF[1] = chap
-    LAST_REF[2] = verse
+# The creeds table in lexicon.db has placeholder rows for some documents. This
+# map lets the UI fall back to the complete local JSON document when needed.
+HISTORICAL_DOC_FILES = {
+    "The Apostles' Creed": "apostles-creed.json",
+    "The Nicene Creed": "nicene-creed.json",
+    "Athanasian Creed": "athanasian-creed.json",
+    "Chalcedonian Definition": "chalcedonian-definition.json",
+    "Augsburg Confession": "augsburg-confession.json",
+    "Baltimore Catechism": "baltimore-catechism.json",
+    "Belgic Confession": "belgic-confession.json",
+    "Canons of Dort": "canons-of-dort.json",
+    "Confession of Dositheus": "confession-of-dositheus.json",
+    "Council of Trent": "council-of-trent.json",
+    "Heidelberg Catechism": "heidelberg-catechism.json",
+    "London Baptist Confession of Faith": "london-baptist-1689.json",
+    "The Longer Catechism of the Orthodox Church": "philaret-catechism.json",
+    "Thirty-Nine Articles": "39-articles.json",
+    "Westminster Confession of Faith": "westminster-confession.json",
+    "Westminster Larger Catechism": "westminster-larger-catechism.json",
+    "Westminster Shorter Catechism": "westminster-shorter-catechism.json",
+}
 
-def get_last_ref():
-    return LAST_REF
+# TSK cross-reference data uses abbreviated references like "John.3.16", while
+# the Bible DB uses "esv:John:3:16". These maps are the bridge between them.
+TSK_BOOK_ABBR = {
+    "Genesis": "Gen.", "Exodus": "Ex.", "Leviticus": "Lev.", "Numbers": "Num.",
+    "Deuteronomy": "Deut.", "Joshua": "Josh.", "Judges": "Judg.", "Ruth": "Ruth",
+    "1 Samuel": "1Sam.", "2 Samuel": "2Sam.", "1 Kings": "1Kgs.", "2 Kings": "2Kgs.",
+    "1 Chronicles": "1Chr.", "2 Chronicles": "2Chr.", "Ezra": "Ezra", "Nehemiah": "Neh.",
+    "Esther": "Est.", "Job": "Job", "Psalms": "Ps.", "Proverbs": "Prov.",
+    "Ecclesiastes": "Eccl.", "Song of Solomon": "Song", "Isaiah": "Isa.", "Jeremiah": "Jer.",
+    "Lamentations": "Lam.", "Ezekiel": "Ezek.", "Daniel": "Dan.", "Hosea": "Hos.",
+    "Joel": "Joel", "Amos": "Amos", "Obadiah": "Obad.", "Jonah": "Jonah",
+    "Micah": "Mic.", "Nahum": "Nah.", "Habakkuk": "Hab.", "Zephaniah": "Zeph.",
+    "Haggai": "Hag.", "Zechariah": "Zech.", "Malachi": "Mal.", "Matthew": "Matt.",
+    "Mark": "Mark", "Luke": "Luke", "John": "John", "Acts": "Acts", "Romans": "Rom.",
+    "1 Corinthians": "1Cor.", "2 Corinthians": "2Cor.", "Galatians": "Gal.",
+    "Ephesians": "Eph.", "Philippians": "Phil.", "Colossians": "Col.",
+    "1 Thessalonians": "1Thess.", "2 Thessalonians": "2Thess.", "1 Timothy": "1Tim.",
+    "2 Timothy": "2Tim.", "Titus": "Titus", "Philemon": "Phlm.", "Hebrews": "Heb.",
+    "James": "Jas.", "1 Peter": "1Pet.", "2 Peter": "2Pet.", "1 John": "1John.",
+    "2 John": "2John.", "3 John": "3John.", "Jude": "Jude", "Revelation": "Rev.",
+}
+TSK_TO_BOOK = {abbr.rstrip("."): book for book, abbr in TSK_BOOK_ABBR.items()}
 
-def navigate(query, direction):
-    """Navigate to next/previous verse/chapter"""
-    book, chap, verse = get_last_ref()
-    if not book:
-        return None
-    
-    if direction == "next":
-        if verse:
-            verse = str(int(verse) + 1)
-        else:
-            chap = str(int(chap) + 1)
-    elif direction == "prev":
-        if verse:
-            new_verse = int(verse) - 1
-            if new_verse < 1:
-                return None
-            verse = str(new_verse)
-        else:
-            new_chap = int(chap) - 1
-            if new_chap < 1:
-                return None
-            chap = str(new_chap)
-    else:
-        return None
-    
-    new_ref = f"{book} {chap}"
-    if verse:
-        new_ref += f":{verse}"
-    return new_ref
+# Original-language creed text is only stored for short documents where
+# side-by-side display is useful. Longer confessions stay English-only for now.
+CREED_ORIGINALS = {
+    "The Apostles' Creed": {
+        "language": "Latin",
+        "sections": {
+            "God the Father": "Credo in Deum Patrem omnipotentem, Creatorem caeli et terrae.",
+            "Jesus Christ": "Et in Iesum Christum, Filium eius unicum, Dominum nostrum, qui conceptus est de Spiritu Sancto, natus ex Maria Virgine, passus sub Pontio Pilato, crucifixus, mortuus, et sepultus; descendit ad inferos; tertia die resurrexit a mortuis; ascendit ad caelos; sedet ad dexteram Dei Patris omnipotentis; inde venturus est iudicare vivos et mortuos.",
+            "The Holy Spirit and the Church": "Credo in Spiritum Sanctum, sanctam Ecclesiam catholicam, sanctorum communionem, remissionem peccatorum, carnis resurrectionem, vitam aeternam. Amen.",
+        },
+    },
+    "The Nicene Creed": {
+        "language": "Greek",
+        "sections": {
+            "God the Father": "Πιστεύομεν εἰς ἕνα Θεόν, Πατέρα, παντοκράτορα, ποιητὴν οὐρανοῦ καὶ γῆς, ὁρατῶν τε πάντων καὶ ἀοράτων.",
+            "Jesus Christ the Son": "Καὶ εἰς ἕνα Κύριον Ἰησοῦν Χριστόν, τὸν Υἱὸν τοῦ Θεοῦ τὸν μονογενῆ, τὸν ἐκ τοῦ Πατρὸς γεννηθέντα πρὸ πάντων τῶν αἰώνων· φῶς ἐκ φωτός, Θεὸν ἀληθινὸν ἐκ Θεοῦ ἀληθινοῦ, γεννηθέντα, οὐ ποιηθέντα, ὁμοούσιον τῷ Πατρί, δι᾿ οὗ τὰ πάντα ἐγένετο. Τὸν δι᾿ ἡμᾶς τοὺς ἀνθρώπους καὶ διὰ τὴν ἡμετέραν σωτηρίαν κατελθόντα ἐκ τῶν οὐρανῶν καὶ σαρκωθέντα ἐκ Πνεύματος ἁγίου καὶ Μαρίας τῆς Παρθένου καὶ ἐνανθρωπήσαντα. Σταυρωθέντα τε ὑπὲρ ἡμῶν ἐπὶ Ποντίου Πιλάτου καὶ παθόντα καὶ ταφέντα. Καὶ ἀναστάντα τῇ τρίτῃ ἡμέρᾳ, κατὰ τὰς Γραφάς. Καὶ ἀνελθόντα εἰς τοὺς οὐρανοὺς καὶ καθεζόμενον ἐκ δεξιῶν τοῦ Πατρός. Καὶ πάλιν ἐρχόμενον μετὰ δόξης κρῖναι ζῶντας καὶ νεκρούς, οὗ τῆς βασιλείας οὐκ ἔσται τέλος.",
+            "The Holy Spirit": "Καὶ εἰς τὸ Πνεῦμα τὸ Ἅγιον, τὸ κύριον, τὸ ζωοποιόν, τὸ ἐκ τοῦ Πατρὸς ἐκπορευόμενον, τὸ σὺν Πατρὶ καὶ Υἱῷ συμπροσκυνούμενον καὶ συνδοξαζόμενον, τὸ λαλῆσαν διὰ τῶν προφητῶν.",
+            "The Church and Final Hope": "Εἰς μίαν, ἁγίαν, καθολικὴν καὶ ἀποστολικὴν Ἐκκλησίαν. Ὁμολογοῦμεν ἓν βάπτισμα εἰς ἄφεσιν ἁμαρτιῶν. Προσδοκοῦμεν ἀνάστασιν νεκρῶν καὶ ζωὴν τοῦ μέλλοντος αἰῶνος. Ἀμήν.",
+        },
+    },
+}
 
+# Topic-level notes for creed texts. These are intentionally separated from the
+# creed body so we can explain textual/traditional variants without altering the
+# source document text.
+CREED_NOTES = {
+    "The Nicene Creed": (
+        "**Filioque note:** This local English text includes the Filioque clause "
+        "('and the Son') in the line on the Holy Spirit: 'He proceeds from the "
+        "Father and the Son.' The Greek text shown here preserves the older "
+        "conciliar wording, 'from the Father,' without the later Latin addition.\n\n"
+        "**Generally accept/use the Filioque:** Roman Catholic/Latin Western "
+        "tradition and many Western Protestant traditions, including much "
+        "Anglican, Lutheran, Reformed, Methodist, and Baptist usage.\n\n"
+        "**Generally deny or omit the Filioque:** Eastern Orthodox churches, "
+        "Oriental Orthodox churches, and the Church of the East. Some Eastern "
+        "Catholic churches may omit it liturgically while remaining in communion "
+        "with Rome."
+    )
+}
+
+# Rich styles used across panels/tables. Keep style names stable; rendering
+# methods reference these string keys directly.
 custom_theme = Theme({
     "info": "dim cyan",
     "warning": "magenta",
@@ -67,606 +129,1589 @@ custom_theme = Theme({
     "lexicon.word": "bold green",
     "place.name": "bold orange3",
     "dict.topic": "bold violet",
+    "interlinear.strongs": "dim cyan",
+    "interlinear.translit": "italic yellow",
 })
 
 console = Console(theme=custom_theme)
 
-def load_config():
-    config = {"db_path": os.path.expanduser("~/bible-lexicon-data/lexicon.db"), "cross_ref_limit": 10}
-    config_path = Path(os.path.expanduser("~/.lexrc"))
-    if config_path.exists():
-        try:
-            with open(config_path) as f:
-                config.update(json.load(f))
-        except:
-            pass
-    
-    # Check if database exists, show helpful error if not
-    if not Path(config["db_path"]).exists():
-        console.print(f"[warning]Database not found at: {config['db_path']}[/]")
-        console.print("[dim]Download from: https://github.com/your-repo/lexicon.db[/]")
-        console.print('[dim]Or set custom path in ~/.lexrc: {"db_path": "/path/to/lexicon.db"}[/]')
-        sys.exit(1)
-    
-    return config
+# ---------------------------------------------------------------------------
+# Database and application coordinator
+# ---------------------------------------------------------------------------
+class LexDB:
+    def __init__(self, db_path):
+        self.db_path = db_path
 
-CONFIG = load_config()
-DB_PATH = CONFIG["db_path"]
-CROSS_REF_LIMIT = None
+    def query(self, sql, params=()):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql, params)
+            return cursor.fetchall()
 
-def normalize_ref(q):
-    """
-    Intelligently handles references.
-    'Jn 3:16', 'John 3 16', '1st Gen 1:1' -> ('John:3:16', book, chap, verse)
-    """
-    abbr = {
-        "gn": "Genesis", "gen": "Genesis", "ex": "Exodus", "exo": "Exodus",
-        "lv": "Leviticus", "lev": "Leviticus", "nm": "Numbers", "num": "Numbers",
-        "dt": "Deuteronomy", "deut": "Deuteronomy", "js": "Joshua", "josh": "Joshua",
-        "jg": "Judges", "judg": "Judges", "rt": "Ruth", "1s": "1 Samuel", "2s": "2 Samuel",
-        "1k": "1 Kings", "2k": "2 Kings", "1ch": "1 Chronicles", "2ch": "2 Chronicles",
-        "ez": "Ezra", "ne": "Nehemiah", "es": "Esther", "jb": "Job", "ps": "Psalms",
-        "pr": "Proverbs", "ec": "Ecclesiastes", "sn": "Song of Solomon", "is": "Isaiah",
-        "jr": "Jeremiah", "lm": "Lamentations", "ezk": "Ezekiel", "dn": "Daniel",
-        "hs": "Hosea", "jl": "Joel", "am": "Amos", "ob": "Obadiah", "jn": "Jonah",
-        "mc": "Micah", "na": "Nahum", "hk": "Habakkuk", "zp": "Zephaniah", "hg": "Haggai",
-        "zc": "Zechariah", "ml": "Malachi", "mt": "Matthew", "mk": "Mark", "lk": "Luke",
-        "jhn": "John", "john": "John", "jn": "Jonah", "ac": "Acts", "rm": "Romans", "1co": "1 Corinthians",
-        "2co": "2 Corinthians", "gl": "Galatians", "ep": "Ephesians", "ph": "Philippians",
-        "cl": "Colossians", "1th": "1 Thessalonians", "2th": "2 Thessalonians",
-        "1ti": "1 Timothy", "2ti": "2 Timothy", "tt": "Titus", "phm": "Philemon",
-        "hb": "Hebrews", "jm": "James", "1p": "1 Peter", "2p": "2 Peter",
-        "1j": "1 John", "2j": "2 John", "3j": "3 John", "jd": "Jude", "rv": "Revelation",
-        "1st": "1", "2nd": "2", "3rd": "3"
-    }
-    
-    # Pre-process ordinal prefixes like "1st" -> "1"
-    q_clean = q.lower().strip()
-    for prefix in ["1st ", "2nd ", "3rd "]:
-        if q_clean.startswith(prefix):
-            q_clean = q_clean.replace(prefix, prefix[0] + " ", 1)
+class LexAgent:
+    # LexAgent owns all local data access and terminal rendering. The CLI parser
+    # at the bottom should stay thin and dispatch into these feature methods.
+    def __init__(self):
+        self.db = LexDB(LEXICON_DB_PATH)
+        self.bible_db = LexDB(BIBLE_DB_PATH if os.path.exists(BIBLE_DB_PATH) else LEXICON_DB_PATH)
+        self.encyclopedia_db = LexDB(ENCYCLOPEDIA_DB_PATH) if os.path.exists(ENCYCLOPEDIA_DB_PATH) else None
+        self.last_ref = self.load_history()
+        self._interlinear_index = None
+        self._ordered_refs = None
+        self._interlinear_strongs = None
+        self._step_greek = None
+        self._step_hebrew = None
 
-    match = re.match(r'^([1-3]?\s?[a-zA-Z]+)\s*(\d+)(?:[\s:.](\d+))?$', q_clean)
-    if match:
-        book, chap, verse = match.groups()
-        book_key = book.replace(" ", "")
-        book_name = abbr.get(book_key, book.title())
-        
-        if verse:
-            return f"%{book_name}:{chap}:{verse}%", book_name, chap, verse
-        return f"{book_name}:{chap}:", book_name, chap, None
-    return None, None, None, None
-
-def sanitize_fts(q):
-    return re.sub(r'[^a-zA-Z0-9\s]', ' ', q).strip()
-
-def fuzzy_match(s1, s2, max_dist=2):
-    """Levenshtein distance for fuzzy matching"""
-    if len(s1) < len(s2):
-        return fuzzy_match(s2, s1, max_dist)
-    if len(s2) - len(s1) >= max_dist:
-        return None
-    
-    previous_row = range(len(s2) + 1)
-    for i, c1 in enumerate(s1):
-        current_row = [i + 1]
-        for j, c2 in enumerate(s2):
-            insertions = previous_row[j + 1] + 1
-            deletions = current_row[j] + 1
-            substitutions = previous_row[j] + (c1 != c2)
-            current_row.append(min(insertions, deletions, substitutions))
-        previous_row = current_row
-    
-    dist = previous_row[len(s2)]
-    return s2 if dist <= max_dist else None
-
-def fuzzy_search(term, options, max_dist=2):
-    """Find closest match from options"""
-    term = term.lower()
-    for opt in options:
-        opt_lower = opt.lower()
-        # Try exact prefix match first
-        if opt_lower.startswith(term):
-            return opt
-        # Try fuzzy
-        match = fuzzy_match(term, opt_lower, max_dist)
-        if match:
-            return opt
-    return None
-
-def clean_text(text):
-    text = re.sub(r'\*[a-z]+', '', text)
-    text = re.sub(r'\[/?[a-z]+\]', '', text)
-    text = re.sub(r'["""]', '', text)
-    return text.strip()
-
-def get_context(cursor, target_id, padding=2):
-    """Fetches surrounding verses based on physical ROWID in the DB."""
-    cursor.execute("SELECT reference, text FROM bible WHERE id BETWEEN ? AND ?", (target_id - padding, target_id + padding))
-    return cursor.fetchall()
-
-def query_bible(q):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    ref_pattern, book, chap, verse = normalize_ref(q)
-    
-    if ref_pattern:
-        if verse:
-            search_pattern = f"%{ref_pattern.replace('%', '')}%"
-            cursor.execute(f"SELECT id, reference, text FROM bible WHERE reference LIKE '{search_pattern}%' LIMIT 1")
-            result = cursor.fetchone()
-            
-            if result:
-                target_id = result[0]
-                context_verses = get_context(cursor, target_id, padding=2)
-                
-                panel_text = Text()
-                for idx, (ref, text) in enumerate(context_verses):
-                    is_target = (ref == result[1])
-                    style_ref = "verse.ref" if is_target else "info"
-                    style_text = "verse.text" if is_target else "dim"
-                    
-                    if is_target:
-                        panel_text.append(f"[{ref}] ", style=style_ref)
-                        panel_text.append(f"{clean_text(text)}\n\n", style=style_text)
-                    else:
-                        panel_text.append(f"[{ref}] ", style=style_ref)
-                        panel_text.append(f"{clean_text(text)}\n\n", style=style_text)
-                        
-                console.print(Panel(panel_text, title=f"📖 Scripture: {book} {chap}", border_style="gold3", expand=False))
-                conn.close()
-                query_crossrefs(book, chap, verse)
-                return True
-        elif not verse and chap:
-            book_name = book.title()
-            search_pattern = f"%{book_name}:{chap}%"
-            cursor.execute(f"SELECT reference, text FROM bible WHERE reference LIKE '{search_pattern}%' AND reference NOT LIKE '%:0%'")
-            chapter_verses = cursor.fetchall()
-            if chapter_verses:
-                table = Table(show_header=False, box=None, padding=(0, 1, 0, 1), expand=True)
-                table.add_column("Ref", style="verse.ref", justify="right", no_wrap=True)
-                table.add_column("Text", style="verse.text", overflow="fold")
-                
-                for ref, text in chapter_verses:
-                    table.add_row(f"[{ref}]", clean_text(text))
-                
-                console.print(Panel(table, title=f"📖 {book} {chap}", border_style="gold3", expand=False))
-                conn.close()
-                return True
-        
-        conn.close()
-        return False
-
-    clean_q = sanitize_fts(q)
-    if not clean_q:
-        conn.close()
-        return False
-
-    try:
-        # FTS5 magic with relevance ranking
-        cursor.execute("SELECT reference, text, rank FROM bible_fts WHERE bible_fts MATCH ? ORDER BY rank LIMIT 7", (clean_q,))
-        results = cursor.fetchall()
-    except sqlite3.OperationalError:
-        cursor.execute("SELECT reference, text FROM bible WHERE text LIKE ? LIMIT 7", (f'%{q}%',))
-        results = cursor.fetchall()
-
-    if results:
-        table = Table(show_header=False, box=None, padding=(0, 1, 1, 1))
-        table.add_column("Ref", style="verse.ref", justify="right")
-        table.add_column("Text", style="verse.text")
-        
-        for res in results:
-            text = clean_text(res[1])
-            terms = clean_q.split()
-            if terms:
-                term = terms[0]
-                text = re.sub(f"(?i)({term})", r"[bold green]\1[/bold green]", text)
-            table.add_row(f"[{res[0]}]", text)
-            
-        console.print(Panel(table, title=f"🔍 Search Results: '{q}'", border_style="cyan", expand=False))
-        conn.close()
-        return True
-    
-    conn.close()
-    return False
-
-def query_strongs(q):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    clean_q = sanitize_fts(q)
-    if not clean_q: 
-        conn.close()
-        return
-
-    results = []
-    
-    # Direct G1234 / H1234 lookup
-    if re.match(r'^[GH]\d+$', q.upper()):
-        cursor.execute("SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?", (q.upper(),))
-        results = cursor.fetchall()
-    else:
-        # Try direct LIKE search (better for Strong's with English definitions)
-        cursor.execute("SELECT number, word, pronunciation, definition FROM strongs WHERE word LIKE ? OR definition LIKE ? LIMIT 5", (f'%{clean_q}%', f'%{clean_q}%',))
-        results = cursor.fetchall()
-        
-        # If no results, try FTS
-        if not results:
+    # -----------------------------------------------------------------------
+    # Shared utilities and lazy data loading
+    # -----------------------------------------------------------------------
+    def load_history(self):
+        if os.path.exists(HISTORY_FILE):
             try:
-                cursor.execute("SELECT number, word, definition FROM strongs_fts WHERE strongs_fts MATCH ? ORDER BY rank LIMIT 5", (clean_q,))
-                results_raw = cursor.fetchall()
-                results = [(r[0], r[1], "", r[2]) for r in results_raw]
-            except:
-                pass
-            
-    if results:
-        for num, word, pron, defn in results:
-            content = f"[{custom_theme.styles['lexicon.word']}]{word}[/] ({pron})\n\n[dim]{defn}[/]"
-            console.print(Panel(content, title=f"📚 Lexicon: {num}", border_style="blue", expand=False))
-    conn.close()
+                with open(HISTORY_FILE, "r") as f: return f.read().strip()
+            except: pass
+        return None
 
-def query_places(q):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT name, lat, lng, description FROM places WHERE name LIKE ? OR description LIKE ? LIMIT 2", (f'%{q}%', f'%{q}%'))
-    results = cursor.fetchall()
-    if results:
-        for name, lat, lng, desc in results:
-            content = f"📍 [dim]Coordinates: {lat}, {lng}[/]\n\n{desc}"
-            console.print(Panel(content, title=f"🌍 Place: {name}", border_style="orange3", expand=False))
-    conn.close()
+    def save_history(self, ref):
+        try:
+            with open(HISTORY_FILE, "w") as f: f.write(ref)
+        except: pass
 
-def query_dictionary(q):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    clean_q = sanitize_fts(q)
-    if not clean_q: return
+    def clean_text(self, text):
+        text = re.sub(r' <[GH]\d+>', '', text)
+        text = re.sub(r'\*[a-z]+', '', text)
+        text = re.sub(r'\byourln\b', 'your', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bonld\b', 'on', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[/?[a-z]+\]', '', text)
+        return text.strip()
 
-    try:
-        cursor.execute("SELECT topic, content, source FROM dictionary_fts WHERE dictionary_fts MATCH ? ORDER BY rank LIMIT 2", (clean_q,))
-        results = cursor.fetchall()
-    except sqlite3.OperationalError:
-        # Fallback to LIKE
-        cursor.execute("SELECT topic, content, source FROM dictionary WHERE topic LIKE ? OR content LIKE ? LIMIT 2", (f'%{q}%', f'%{q}%'))
-        results = cursor.fetchall()
-        
-        # If no results, try fuzzy match on topics
-        if not results:
-            cursor.execute("SELECT DISTINCT topic FROM dictionary")
-            topics = [r[0] for r in cursor.fetchall()]
-            match = fuzzy_search(q, topics)
-            if match:
-                cursor.execute("SELECT topic, content, source FROM dictionary WHERE topic = ? LIMIT 2", (match,))
-                results = cursor.fetchall()
-                if results:
-                    console.print(f"[dim]Did you mean: {match}?[/]")
+    def escape_fts_query(self, query):
+        cleaned = re.sub(r"[^\w\s]", " ", query).strip()
+        if not cleaned:
+            return None
+        return f"\"{' '.join(cleaned.split())}\""
 
-    if results:
-        for topic, content, source in results:
-            display_content = content[:600] + "..." if len(content) > 600 else content
-            console.print(Panel(display_content, title=f"📖 Dictionary: {topic} (Source: {source})", border_style="violet", expand=False))
-    conn.close()
+    def fts_terms_query(self, query):
+        terms = re.findall(r"\w+", query)
+        if not terms:
+            return None
+        return " AND ".join(f'"{term}"' for term in terms)
 
-def convert_to_tsref(book, chapter, verse=None):
-    """Convert 'John 3 16' -> 'John.3.16' for cross-ref lookup"""
-    book_abbr = {
-        "Genesis": "Gen.", "Exodus": "Ex.", "Leviticus": "Lev.", "Numbers": "Num.",
-        "Deuteronomy": "Deut.", "Joshua": "Josh.", "Judges": "Judg.", "Ruth": "Ruth",
-        "1 Samuel": "1Sam.", "2 Samuel": "2Sam.", "1 Kings": "1Kgs.", "2 Kings": "2Kgs.",
-        "1 Chronicles": "1Chr.", "2 Chronicles": "2Chr.", "Ezra": "Ezra", "Nehemiah": "Neh.",
-        "Esther": "Est.", "Job": "Job", "Psalms": "Ps.", "Proverbs": "Prov.",
-        "Ecclesiastes": "Eccl.", "Song of Solomon": "Song", "Isaiah": "Isa.", "Jeremiah": "Jer.",
-        "Lamentations": "Lam.", "Ezekiel": "Ezek.", "Daniel": "Dan.", "Hosea": "Hos.",
-        "Joel": "Joel", "Amos": "Amos", "Obadiah": "Obad.", "Jonah": "Jonah",
-        "Micah": "Mic.", "Nahum": "Nah.", "Habakkuk": "Hab.", "Zephaniah": "Zeph.",
-        "Haggai": "Hag.", "Zechariah": "Zech.", "Malachi": "Mal.", "Matthew": "Matt.",
-        "Mark": "Mark", "Luke": "Luke", "John": "John", "Acts": "Acts", "Romans": "Rom.",
-        "1 Corinthians": "1Cor.", "2 Corinthians": "2Cor.", "Galatians": "Gal.",
-        "Ephesians": "Eph.", "Philippians": "Phil.", "Colossians": "Col.",
-        "1 Thessalonians": "1Thess.", "2 Thessalonians": "2Thess.", "1 Timothy": "1Tim.",
-        "2 Timothy": "2Tim.", "Titus": "Titus", "Philemon": "Phlm.", "Hebrews": "Heb.",
-        "James": "Jas.", "1 Peter": "1Pet.", "2 Peter": "2Pet.", "1 John": "1John.",
-        "2 John": "2John.", "3 John": "3John.", "Jude": "Jude", "Revelation": "Rev."
-    }
-    prefix = book_abbr.get(book, book)
-    # Ensure dot after book abbr
-    if not prefix.endswith('.'):
-        prefix += '.'
-    if verse:
-        return f"{prefix}{chapter}.{verse}"
-    return f"{prefix}{chapter}."
+    def highlight_search_terms(self, text, query):
+        result = Text()
+        terms = sorted(set(re.findall(r"\w+", query)), key=len, reverse=True)
+        if not terms:
+            result.append(text, style="verse.text")
+            return result
+        pattern = re.compile("(" + "|".join(re.escape(term) for term in terms) + ")", re.IGNORECASE)
+        pos = 0
+        for match in pattern.finditer(text):
+            if match.start() > pos:
+                result.append(text[pos:match.start()], style="verse.text")
+            result.append(match.group(0), style="bold black on gold3")
+            pos = match.end()
+        if pos < len(text):
+            result.append(text[pos:], style="verse.text")
+        return result
 
-def query_crossrefs(book, chapter, verse=None, limit=None):
-    """Query TSK cross-references for a verse"""
-    if limit is None:
-        limit = CROSS_REF_LIMIT if CROSS_REF_LIMIT else CONFIG.get("cross_ref_limit", 10)
-    
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    tsref = convert_to_tsref(book, chapter, verse)
-    if not tsref:
-        conn.close()
-        return
-    
-    try:
-        cursor.execute("SELECT to_ref, votes FROM cross_refs WHERE from_ref = ? ORDER BY votes DESC LIMIT ?", (tsref, limit))
-        results = cursor.fetchall()
-    except sqlite3.OperationalError:
-        conn.close()
-        return
-    
-    if results:
-        ref_list = Text()
-        for to_ref, votes in results:
-            ref_list.append(f"  {to_ref} ", style="verse.ref")
-            ref_list.append(f"({votes})\n", style="dim")
-        
-        title_ref = f"{book} {chapter}:{verse or ''}" if verse else f"{book} {chapter}"
-        console.print(Panel(ref_list, title=f"🔗 Cross-Refs: {title_ref}", border_style="cyan", expand=False))
-    
-    conn.close()
+    def normalize_term(self, text):
+        return re.sub(r"[^a-z0-9]+", "", text.lower())
 
-def print_howto():
-    markdown = """
-# Lex: The Elegant Bible Terminal
+    def normalize_strongs_key(self, key):
+        match = re.match(r"([gh])0*(\d+)$", key.lower())
+        if not match:
+            return None, None, None
+        prefix, num = match.groups()
+        return f"{prefix}{int(num)}", f"{prefix.upper()}{int(num)}", f"{prefix.upper()}{int(num):04d}"
 
-It just works. Type what you want to know.
+    def load_json_file(self, path):
+        if not os.path.exists(path):
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
 
-*   **Read:** `lex John 3:16` *(Automatically shows context)*
-*   **Search:** `lex mustard seed` *(Semantically ranked results)*
-*   **Study:** `lex G3056` or `lex logos` *(Deep original language)*
-*   **Explore:** `lex Galilee` *(Geography and history)*
-*   **Creeds:** `lex Nicene Creed` or `lex Westminster Confession` *(Historical confessions)*
+    def get_interlinear_index(self):
+        if self._interlinear_index is None:
+            data = self.load_json_file(INTERLINEAR_PATH) or []
+            self._interlinear_index = {}
+            for row in data:
+                ref = row.get("r")
+                if not ref:
+                    continue
+                existing = self._interlinear_index.get(ref)
+                # Some source rows are heading/context rows with the same ref.
+                # Prefer rows with phrase data so study mode gets real tokens.
+                if existing is None or (row.get("p") and not existing.get("p")):
+                    self._interlinear_index[ref] = row
+            self._ordered_refs = [
+                row["r"] for row in data
+                if row.get("r", "").startswith("esv:") and row.get("r", "").count(":") == 3 and not row.get("h")
+            ]
+        return self._interlinear_index
 
-*Stop fiddling with tabs. Start studying.*
+    def get_ordered_refs(self):
+        if self._ordered_refs is None:
+            self.get_interlinear_index()
+        return self._ordered_refs or []
 
-## Options
+    def get_interlinear_strongs(self):
+        if self._interlinear_strongs is None:
+            self._interlinear_strongs = self.load_json_file(INTERLINEAR_STRONGS_PATH) or {}
+        return self._interlinear_strongs
 
-*   `--help`     Show this help message
-*   `--version`   Show version info
-*   `--limit N`  Limit cross-refs to N results
-*   `--json`     Output in JSON format
-*   `--text`     Output in plain text
-"""
-    console.print(Panel(Markdown(markdown), border_style="dim", expand=False))
+    def get_step_greek(self):
+        if self._step_greek is None:
+            self._step_greek = self.load_json_file(STEP_GREEK_PATH) or {}
+        return self._step_greek
 
-def print_help():
-    console.print("""
-[bold gold3]Lex[/] - The Elegant Bible Terminal
+    def get_step_hebrew(self):
+        if self._step_hebrew is None:
+            self._step_hebrew = self.load_json_file(STEP_HEBREW_PATH) or {}
+        return self._step_hebrew
 
-[bold]Usage:[/] lex [options] <query>
+    def parse_history_ref(self, ref):
+        if not ref:
+            return None
+        verse_match = re.match(r"^(?:[a-z0-9]+:)?(.+?):(\d+):(\d+)$", ref, re.IGNORECASE)
+        if verse_match:
+            book, chap, verse = verse_match.groups()
+            return {"kind": "verse", "book": book, "chapter": int(chap), "verse": int(verse), "reference": ref}
+        chapter_match = re.match(r"^(.*?)\s+(\d+)$", ref)
+        if chapter_match:
+            book, chap = chapter_match.groups()
+            return {"kind": "chapter", "book": book, "chapter": int(chap), "reference": ref}
+        return None
 
-[bold]Examples:[/]
-  lex John 3:16              Read a verse
-  lex john 1                 Read full chapter
-  lex forgiveness            Search the Bible
-  lex G3056                 Study Strong's number (Greek)
-  lex H7225                 Study Strong's number (Hebrew)
-  lex strongs word          Search Strong's (English)
-  lex define Nicene Creed   Dictionary/creeds only
-  lex places Galilee        Places only
-  lex --limit 5 John 3:16   Limit cross-refs to 5
-  lex --next               Go to next verse
-  lex --prev               Go to previous verse
+    def parse_reference_parts(self, db_ref):
+        parts = db_ref.split(":")
+        if len(parts) < 4:
+            return None
+        return {
+            "version": parts[0],
+            "book": parts[1],
+            "chapter": int(parts[2]),
+            "verse": int(parts[3]),
+            "reference": db_ref,
+        }
 
-[bold]Options:[/]
-  -h, --help       Show help
-  -v, --version   Show version
-  -l, --limit N   Limit results (default: 10)
-  -j, --json     Output as JSON
-  -t, --text    Output as plain text
-  -b, --bible      Bible only
-  -s, --strongs    Strong's only  
-  -d, --dictionary Dictionary/creeds only
-  -p, --places    Places only
-  --next   Go to next verse/chapter
-  --prev   Go to previous verse/chapter
+    def convert_to_tsk_ref(self, book, chapter, verse=None):
+        prefix = TSK_BOOK_ABBR.get(book, book)
+        if not prefix.endswith("."):
+            prefix += "."
+        return f"{prefix}{chapter}.{verse}" if verse else f"{prefix}{chapter}."
 
-[bold]Navigation Keys:[/]
-  --next John 3:16   → John 3:17
-  --prev John 3:16   → John 3:15
-  (works for chapters too)
+    def parse_tsk_ref(self, tsk_ref):
+        first_ref = tsk_ref.split("-", 1)[0]
+        match = re.match(r"^([1-3]?[A-Za-z]+)\.(\d+)\.(\d+)$", first_ref)
+        if not match:
+            return None
+        book_abbr, chapter, verse = match.groups()
+        book = TSK_TO_BOOK.get(book_abbr)
+        if not book:
+            return None
+        return f"esv:{book}:{int(chapter)}:{int(verse)}"
 
-[bold]Files:[/]
-  ~/.lexrc  Config file (JSON)
-
-[bold]Demo:[/]
-  lex demo
-""")
-
-def print_context_help(query_results=False, is_verse=False, is_strongs=False, is_places=False, is_dict=False):
-    """Print contextual help tips after query results"""
-    from rich.align import Align
-    from rich.console import Console
-    
-    tips = []
-    if is_strongs:
-        tips = [
-            "[dim]💡 Try: lex G3056 (Greek) or lex H7225 (Hebrew)[/]",
-            "[dim]📖 Use: lex -b scripture -s strongs (search both)[/]",
-        ]
-    elif is_places:
-        tips = [
-            "[dim]💡 Try: lex Jerusalem, lex Galilee, lex Bethlehem[/]",
-        ]
-    elif is_dict:
-        tips = [
-            "[dim]💡 Creeds: lex Nicene Creed, lex Apostles Creed[/]",
-            "[dim]📖 Try: lex Westminster Confession, lex Augsburg Confession[/]",
-            "[dim]💡 Use: lex -d <search> (dictionary only)[/]",
-        ]
-    elif is_verse:
-        tips = [
-            "[dim]Navigation:[/] [cyan]--next[/] [dim]or[/] [cyan]--prev[/] [dim]for verse/chapter navigation[/]",
-            "[dim]📖 Use:[/] [cyan]-b[/] [dim]Bible only,[/] [cyan]--limit N[/] [dim]to limit cross-refs[/]",
-        ]
-    else:
-        tips = [
-            "[dim]💡 Quick refs:[/] [cyan]lex john 3:16[/] [dim]verse,[/] [cyan]lex john 1[/] [dim]chapter,[/] [cyan]lex G3056[/] [dim]Strong's[/]",
-            "[dim]📖 Source flags:[/] [cyan]-b[/] [dim]Bible,[/] [cyan]-s[/] [dim]Strong's,[/] [cyan]-d[/] [dim]Dict,[/] [cyan]-p[/] [dim]Places[/]",
-        ]
-    
-    if tips:
-        panel = Panel(
-            Text("\n".join(tips)),
-            title="💡 What Next?",
-            border_style="dim",
-            expand=False
+    def get_tsk_crossrefs(self, db_ref):
+        parts = self.parse_reference_parts(db_ref)
+        if not parts:
+            return []
+        tsk_ref = self.convert_to_tsk_ref(parts["book"], parts["chapter"], parts["verse"])
+        return self.db.query(
+            "SELECT to_ref, votes FROM cross_refs WHERE from_ref = ? ORDER BY votes DESC, to_ref",
+            (tsk_ref,)
         )
-        console.print(panel)
 
-def run_demo():
-    demos = [
-        ("John 3:16", query_bible),
-        ("G3056", query_strongs),
-        ("Galilee", query_places),
-        ("forgiveness", query_dictionary),
-    ]
-    for q, func in demos:
-        with console.status(f"[bold green]Demo: '{q}'...", spinner="dots"):
-            func(q)
-        time.sleep(0.5)
+    def get_crossref_preview(self, tsk_ref):
+        db_ref = self.parse_tsk_ref(tsk_ref)
+        if not db_ref:
+            return None
+        row = self.bible_db.query(
+            "SELECT text FROM bible WHERE reference = ? ORDER BY id LIMIT 1",
+            (db_ref,)
+        )
+        return self.clean_text(row[0][0]) if row else None
 
-    console.print("\n" + "─" * 40)
-    console.print("[bold gold3]Demo Complete.[/] You've seen the power of Lex.")
-    console.print("Try your first study now. Just type `lex [your search]`.")
+    def get_navigation_reference(self, current_ref, direction):
+        refs = self.get_ordered_refs()
+        try:
+            idx = refs.index(current_ref)
+        except ValueError:
+            return None
+        target_idx = idx + (1 if direction == "next" else -1)
+        if target_idx < 0 or target_idx >= len(refs):
+            return None
+        return refs[target_idx]
 
+    def get_adjacent_chapter_reference(self, book, chapter, direction):
+        chapters = []
+        seen = set()
+        for ref in self.get_ordered_refs():
+            parts = self.parse_reference_parts(ref)
+            if not parts:
+                continue
+            key = (parts["book"], parts["chapter"])
+            if key not in seen:
+                seen.add(key)
+                chapters.append(key)
+        try:
+            idx = chapters.index((book, chapter))
+        except ValueError:
+            return None
+        target_idx = idx + (1 if direction == "next" else -1)
+        if target_idx < 0 or target_idx >= len(chapters):
+            return None
+        target_book, target_chapter = chapters[target_idx]
+        for ref in self.get_ordered_refs():
+            parts = self.parse_reference_parts(ref)
+            if parts and parts["book"] == target_book and parts["chapter"] == target_chapter:
+                return ref
+        return None
+
+    def resolve_navigation_query(self, direction):
+        parsed = self.parse_history_ref(self.last_ref)
+        if not parsed:
+            return None
+        if parsed["kind"] == "verse":
+            ref = self.get_navigation_reference(parsed["reference"], direction)
+            if not ref:
+                return None
+            parts = self.parse_reference_parts(ref)
+            return f"{parts['book']} {parts['chapter']}:{parts['verse']}" if parts else None
+        ref = self.get_adjacent_chapter_reference(parsed["book"], parsed["chapter"], direction)
+        if not ref:
+            return None
+        parts = self.parse_reference_parts(ref)
+        return f"{parts['book']} {parts['chapter']}" if parts else None
+
+    def normalize_ref(self, q):
+        # User-facing references are intentionally forgiving here. The DB still
+        # uses canonical "version:Book:Chapter:Verse" strings internally.
+        abbr = {
+            "gn": "Genesis", "gen": "Genesis", "ex": "Exodus", "mt": "Matthew", "jhn": "John", "john": "John", "rv": "Revelation",
+            "sn": "Song of Solomon", "ps": "Psalms", "pr": "Proverbs", "is": "Isaiah", "jr": "Jeremiah"
+        }
+        q_clean = q.lower().strip()
+        pattern = r'^([1-3]?\s?[a-zA-Z\s]+)\s+(\d+)(?:[\s:.](\d+))?$'
+        match = re.match(pattern, q_clean)
+        if match:
+            b, c, v = match.groups()
+            b_key = b.replace(" ", "")
+            b_name = abbr.get(b_key, b.title())
+            return f"{b_name}:{c}:{v}" if v else f"{b_name}:{c}", b_name, c, v
+        return None, None, None, None
+
+    # -----------------------------------------------------------------------
+    # Landing pages, help, and credits
+    # -----------------------------------------------------------------------
+    def display_intro(self):
+        logo = Text(
+            r"""
+██╗     ███████╗██╗  ██╗
+██║     ██╔════╝╚██╗██╔╝
+██║     █████╗   ╚███╔╝
+██║     ██╔══╝   ██╔██╗
+███████╗███████╗██╔╝ ██╗
+╚══════╝╚══════╝╚═╝  ╚═╝
+""",
+            style="bold gold3",
+        )
+        title = Text("Lex: The Elegant Bible Terminal", style="bold white")
+        tagline = Text("Master Admin Study Tool for the Source Code of the Universe", style="bold cyan")
+        positioning = Text(
+            "Read the canon. Inspect the languages. Traverse the tradition.",
+            style="dim",
+        )
+
+        metrics = Table.grid(padding=(0, 2))
+        metrics.add_column(justify="center", style="bold gold3")
+        metrics.add_column(justify="center", style="bold green")
+        metrics.add_column(justify="center", style="bold cyan")
+        metrics.add_column(justify="center", style="bold magenta")
+        metrics.add_row("66 books", "TSK graph", "Strong's + STEPBible", "Creeds + ISBE")
+
+        primary = Table.grid(padding=(0, 2))
+        primary.add_column(style="bold green", no_wrap=True)
+        primary.add_column(style="white")
+        primary.add_row("Read:", "lex read John 3:16  (Context with navigation)")
+        primary.add_row("Study:", "lex study John 3:16  (Interlinear + lexicon)")
+        primary.add_row("Search:", 'lex search "mustard seed"  (Ranked search results)')
+        primary.add_row("Strong's Lookup:", "lex strongs love  or  lex G3056")
+
+        also = Table.grid(padding=(0, 2))
+        also.add_column(style="bold gold3", no_wrap=True)
+        also.add_column(style="white")
+        also.add_row("Quick Read:", "lex John 3:16")
+        also.add_row("Quick Study:", "lex John 3:16 -i")
+        also.add_row("Lexicon:", "lex G3056  or  lex logos")
+        also.add_row("Creeds:", "lex creed")
+        also.add_row("Define:", "lex define grace")
+
+        launch = Table.grid(padding=(0, 1))
+        launch.add_column(style="dim")
+        launch.add_column(style="bold gold3")
+        launch.add_column(style="dim")
+        launch.add_row("MODE", "LOCAL-FIRST", "No browser tabs. No drift. Just the sources.")
+
+        nav = Text()
+        nav.append("Quick Navigation: ", style="bold cyan")
+        nav.append("lex --next", style="gold3")
+        nav.append(" | ")
+        nav.append("lex --prev", style="gold3")
+        nav.append("  (Relative to your last read reference)", style="dim")
+
+        credits = Table.grid(padding=(0, 2))
+        credits.add_column(style="bold cyan", no_wrap=True)
+        credits.add_column(style="dim")
+        credits.add_row("Credits:", "ESV text, TSK/OpenBible, Strong's, STEPBible, UBS, Easton, ISBE, TheologAI historical docs")
+        credits.add_row("License:", "Lex code MIT; data remains under source terms. Run lex --credits")
+
+        footer = Text("Start with a verb, or type a reference directly.", style="italic dim")
+        console.print(
+            Panel(
+                Group(
+                    Align.center(logo),
+                    Align.center(title),
+                    Align.center(tagline),
+                    Align.center(positioning),
+                    "",
+                    Align.center(metrics),
+                    "",
+                    Text("Start with a verb.", style="bold white"),
+                    "",
+                    Text("Primary", style="bold cyan"),
+                    primary,
+                    "",
+                    Text("Also Available", style="bold cyan"),
+                    also,
+                    "",
+                    nav,
+                    "",
+                    Align.center(launch),
+                    "",
+                    credits,
+                    Align.center(footer),
+                ),
+                title=f"Lex {VERSION}",
+                subtitle="source-aware bible study, shipped as a command",
+                border_style="bold cyan",
+                padding=(1, 3),
+                expand=False,
+            )
+        )
+
+    def display_credits(self):
+        table = Table(title="Lex Credits and Data Licenses", box=None, show_lines=True)
+        table.add_column("Component", style="bold cyan", no_wrap=True)
+        table.add_column("Source / Repo", style="white", overflow="fold")
+        table.add_column("License / Terms", style="gold3", overflow="fold")
+        table.add_row(
+            "Lex CLI code",
+            "Local project code: /home/n8te/lex_v3.py",
+            "Recommended: MIT for application code only",
+        )
+        table.add_row(
+            "Bible text",
+            "Local bible-data / ESV-derived SQLite: bible_versions/esv.db; source package notes: bible-data",
+            "Permission/copyright-controlled translation text; do not relicense as MIT",
+        )
+        table.add_row(
+            "TSK cross refs",
+            "Treasury of Scripture Knowledge / OpenBible-style cross-reference data",
+            "Verify upstream terms before redistribution",
+        )
+        table.add_row(
+            "Strong's lexicon",
+            "OpenScriptures Strong's Hebrew and Greek Dictionaries: github.com/openscriptures/strongs",
+            "Local XHTML says GPL-3.0; another local source note says Public Domain. Verify source chain before distribution",
+        )
+        table.add_row(
+            "STEPBible language data",
+            "STEPBible Data: github.com/STEPBible/STEPBible-Data; www.STEPBible.org",
+            "CC BY 4.0; credit STEP Bible",
+        )
+        table.add_row(
+            "UBS resources",
+            "UBS Open License resources: local ubs-open-license dataset",
+            "CC BY-SA 4.0; preserve attribution and ShareAlike obligations",
+        )
+        table.add_row(
+            "Bible geography",
+            "OpenBible Bible Geocoding Data: openbible.info/geo",
+            "CC BY 4.0; some map/image data may carry ODbL or separate CC terms",
+        )
+        table.add_row(
+            "Dictionary",
+            "Easton's Bible Dictionary entries in lexicon.db",
+            "Public domain",
+        )
+        table.add_row(
+            "Encyclopedia",
+            "International Standard Bible Encyclopedia OCR import; currently local Volume II Clement-Heresh",
+            "Public domain source; OCR/import quality and volume coverage still in progress",
+        )
+        table.add_row(
+            "Creeds/confessions",
+            "TheologAI historical documents dataset: local theolog-ai/data/historical-documents",
+            "Public domain per local TheologAI README; preserve source attribution",
+        )
+        table.add_row(
+            "Interlinear data",
+            "Local esv-data interlinear + STEPBible/Strong's-backed resources",
+            "Mixed source terms; preserve Bible text, STEPBible, and Strong's source obligations",
+        )
+
+        note = Markdown(
+            """
+**Recommended licensing model:** MIT for Lex application code; source-specific terms for all data.
+
+For redistribution, include upstream license files and a `NOTICE`/`DATA_LICENSES.md`.
+Do not represent the ESV text, UBS resources, STEPBible data, or generated databases as MIT-licensed.
+
+See: `~/bible-lexicon-data/docs/LICENSING.md`
+"""
+        )
+        console.print(Panel(Group(table, "", note), border_style="cyan", padding=(1, 2)))
+
+    def display_study_landing(self):
+        md = """
+# Lex Study
+*Interlinear reading without leaving the terminal*
+
+Study mode aligns the English verse with the source text, transliteration, lemma,
+morphology, and Strong's-backed lexicon notes.
+
+**What It Shows**
+
+*   **Verse Context:** a compact read panel around the target verse
+*   **Source Alignment:** English phrase, source token, lemma, and code
+*   **Lexicon Notes:** Strong's and STEPBible definitions for Greek, Hebrew, and Aramaic
+*   **Navigation:** read a verse, then move with `lex --prev` and `lex --next`
+
+**Try These**
+
+*   `lex study John 1:1`
+*   `lex study Genesis 1:1`
+*   `lex study Daniel 2:4`
+*   `lex John 3:16 -i`
+
+---
+*Read the text. Inspect the words. Stay in one tool.*
+"""
+        console.print(Panel(Markdown(md), title="🔤 Study Mode", border_style="green", expand=False))
+
+    def display_read_landing(self):
+        md = """
+# Lex Read
+*Scripture reading with fast terminal navigation*
+
+Read mode centers a passage in context and keeps your place for `lex --prev`
+and `lex --next`.
+
+**What It Does**
+
+*   **Verse View:** shows the target verse with nearby context
+*   **Chapter View:** prints the full chapter in order
+*   **History:** saves your last reading position for navigation
+*   **Bridge to Study:** jump from reading into analysis with `lex study ...`
+
+**Try These**
+
+*   `lex read John 3:16`
+*   `lex read Genesis 1`
+*   `lex John 1:1`
+*   `lex --next`
+
+---
+*Open the text fast. Move without friction. Study when needed.*
+"""
+        console.print(Panel(Markdown(md), title="📖 Read Mode", border_style="gold3", expand=False))
+
+    def display_search_howto(self):
+        md = """
+# Search Help
+
+Use explicit search mode:
+
+*   `lex search "mustard seed"`
+*   `lex search kingdom heaven`
+
+Free-text search no longer runs from bare input.
+"""
+        console.print(Panel(Markdown(md), title="🔎 Search", border_style="cyan", expand=False))
+
+    def display_strongs_howto(self):
+        md = """
+# Strong's Lookup
+
+Find Strong's entries by number, transliteration, or English gloss:
+
+*   `lex strongs love`
+*   `lex strongs word`
+*   `lex strongs God`
+*   `lex G3056`
+"""
+        console.print(Panel(Markdown(md), title="🔤 Strong's Lookup", border_style="blue", expand=False))
+
+    # -----------------------------------------------------------------------
+    # Bible reading and navigation rendering
+    # -----------------------------------------------------------------------
+    def format_display_ref(self, db_ref):
+        parts = self.parse_reference_parts(db_ref)
+        if not parts:
+            return db_ref
+        return f"{parts['book']} {parts['chapter']}:{parts['verse']}"
+
+    def display_read_nav(self, book, chap, verse=None):
+        study_ref = f"{book} {chap}:{verse or 1}"
+        console.print(f"[dim]lex --prev  |  lex --next  |  lex study {study_ref}[/]")
+
+    def render_verse_context(self, rows, target_ref, book, chap, verse):
+        body = Text()
+        for _, ref, text in rows:
+            parts = self.parse_reference_parts(ref)
+            verse_no = str(parts["verse"]) if parts else self.format_display_ref(ref)
+            is_target = ref == target_ref
+            marker = ">" if is_target else " "
+            label_style = "bold black on gold3" if is_target else "dim gold3"
+            text_style = "bold white" if is_target else "dim"
+            body.append(f"{marker} {verse_no.rjust(3)} ", style=label_style)
+            body.append(f"{self.clean_text(text)}\n", style=text_style)
+        console.print(
+            Panel(
+                body,
+                title=f"📖 {book} {chap}:{verse}",
+                subtitle="context",
+                border_style="gold3",
+                padding=(1, 2),
+            )
+        )
+        self.display_read_nav(book, chap, verse)
+
+    def render_chapter(self, rows, book, chap):
+        body = Text()
+        for ref, text in rows:
+            parts = self.parse_reference_parts(ref)
+            verse_no = str(parts["verse"]) if parts else self.format_display_ref(ref)
+            body.append(f"{verse_no.rjust(3)} ", style="bold gold3")
+            body.append(f"{self.clean_text(text)}\n\n", style="verse.text")
+        console.print(
+            Panel(
+                body,
+                title=f"📖 {book} {chap}",
+                subtitle=f"{len(rows)} verses",
+                border_style="gold3",
+                padding=(1, 2),
+            )
+        )
+        self.display_read_nav(book, chap)
+
+    def display_verse(self, query, interlinear=False):
+        ref_norm, book, chap, verse = self.normalize_ref(query)
+        if not ref_norm: return False
+        if verse:
+            res = self.bible_db.query(
+                "SELECT MIN(id), reference, text FROM bible WHERE reference LIKE ? GROUP BY reference LIMIT 1",
+                (f"%:{book}:{chap}:{verse}",)
+            )
+        else:
+            res = self.bible_db.query(
+                """
+                SELECT reference, text
+                FROM bible
+                WHERE id IN (
+                    SELECT MIN(id)
+                    FROM bible
+                    WHERE reference LIKE ? AND reference NOT LIKE '%:0'
+                    GROUP BY reference
+                )
+                ORDER BY id
+                """,
+                (f"%:{book}:{chap}:%",)
+            )
+        if res:
+            if verse:
+                target_id, ref, text = res[0]
+                context_ids = []
+                current = ref
+                prev2 = self.get_navigation_reference(current, "prev")
+                prev1 = self.get_navigation_reference(prev2, "prev") if prev2 else None
+                next1 = self.get_navigation_reference(current, "next")
+                next2 = self.get_navigation_reference(next1, "next") if next1 else None
+                for candidate in [prev1, prev2, current, next1, next2]:
+                    if candidate:
+                        row = self.bible_db.query(
+                            "SELECT MIN(id), reference, text FROM bible WHERE reference = ? GROUP BY reference",
+                            (candidate,)
+                        )
+                        if row:
+                            context_ids.append(row[0])
+                self.render_verse_context(context_ids, ref, book, chap, verse)
+                if interlinear: self.display_study(ref)
+                self.save_history(ref)
+            else:
+                self.render_chapter(res, book, chap)
+                self.save_history(f"{book} {chap}")
+            return True
+        return False
+
+    # -----------------------------------------------------------------------
+    # Study mode: source text, interlinear rows, lexicons, and TSK links
+    # -----------------------------------------------------------------------
+    def lookup_lexicon_entry(self, strongs_id):
+        short_key, strongs_db_key, step_key = self.normalize_strongs_key(strongs_id)
+        interlinear = self.get_interlinear_strongs().get(short_key) if short_key else None
+        step = self.get_step_greek().get(step_key) if strongs_id.lower().startswith("g") else self.get_step_hebrew().get(step_key)
+        db = self.db.query("SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?", (strongs_db_key,)) if strongs_db_key else []
+        return {
+            "interlinear": interlinear,
+            "step": step,
+            "db": db[0] if db else None,
+        }
+
+    def extract_english_glosses(self, entry):
+        if not entry:
+            return []
+        raw = entry.get("r", "")
+        if "|English:" not in raw:
+            return []
+        english = raw.split("|English:", 1)[1]
+        glosses = []
+        for part in english.split(","):
+            gloss = part.strip().lower()
+            if gloss and gloss != "misc":
+                glosses.append(gloss)
+        return glosses
+
+    def parse_interlinear_token(self, token):
+        parts = token.split("|")
+        while len(parts) < 10:
+            parts.append("")
+        strongs = parts[3].upper() if parts[3] else ""
+        try:
+            source_order = int(parts[0])
+        except ValueError:
+            source_order = None
+        surface = parts[6]
+        if surface in {"→", "←"}:
+            surface = ""
+        return {
+            "source_order": source_order,
+            "strongs": strongs,
+            "morph": parts[4],
+            "english": parts[5],
+            "surface": surface,
+            "translit": parts[7],
+            "lemma": parts[8],
+            "lemma_translit": parts[9],
+            "gloss": parts[10] if len(parts) > 10 else "",
+        }
+
+    def detect_source_language(self, parsed_tokens):
+        codes = [token["strongs"] for token in parsed_tokens if token["strongs"]]
+        if any(code.startswith("G") for code in codes):
+            return "Greek"
+        if any(code.startswith("H") for code in codes):
+            return "Hebrew / Aramaic"
+        if any(re.search(r"[\u0590-\u05ff]", token["surface"]) for token in parsed_tokens):
+            return "Hebrew / Aramaic"
+        return "Source Text"
+
+    def display_source_text(self, parsed_tokens):
+        source_tokens = sorted(
+            [token for token in parsed_tokens if token["surface"]],
+            key=lambda token: token["source_order"] if token["source_order"] is not None else 9999,
+        )
+        source_words = [token["surface"] for token in source_tokens]
+        if not source_words:
+            return
+        translit_words = [token["translit"] for token in source_tokens if token["translit"]]
+        body = Text()
+        body.append(" ".join(source_words), style="bold cyan")
+        if translit_words:
+            body.append("\n\n", style="dim")
+            body.append(" ".join(translit_words), style="italic yellow")
+        console.print(
+            Panel(
+                body,
+                title=f"🔡 {self.detect_source_language(parsed_tokens)}",
+                border_style="cyan",
+                padding=(1, 2),
+            )
+        )
+
+    def display_study_tsk(self, db_ref, parsed_tokens):
+        refs = self.get_tsk_crossrefs(db_ref)
+        if not refs:
+            return
+        anchor_words = []
+        seen_words = set()
+        for token in parsed_tokens:
+            word = token["english"] or token["gloss"] or token["lemma"] or token["surface"]
+            word = word.strip(" ,.;:!?").lower()
+            if len(word) < 3 or word in seen_words:
+                continue
+            seen_words.add(word)
+            anchor_words.append(word)
+            if len(anchor_words) >= 10:
+                break
+        table = Table(title="🔗 Treasury of Scripture Knowledge", box=None)
+        table.add_column("Ref", style="verse.ref", no_wrap=True)
+        table.add_column("Votes", style="dim", justify="right")
+        table.add_column("Preview", overflow="fold")
+        for to_ref, votes in refs:
+            preview = self.get_crossref_preview(to_ref)
+            table.add_row(to_ref, str(votes), preview[:140] if preview else "")
+        console.print(table)
+        if anchor_words:
+            console.print("[dim]Verse-level TSK links; local data has no per-word anchor. Key terms: {}[/]".format(", ".join(anchor_words)))
+
+    def display_study(self, db_ref):
+        row = self.get_interlinear_index().get(db_ref)
+        if not row or not row.get("p"):
+            console.print(Panel("No local interlinear data found for this verse.", border_style="magenta"))
+            return False
+        parsed_tokens = [self.parse_interlinear_token(token) for token in row["p"]]
+        self.display_source_text(parsed_tokens)
+        verse_table = Table(title=f"🔤 Study: {db_ref}", box=None)
+        verse_table.add_column("Eng", style="bold white", overflow="fold")
+        verse_table.add_column("Src", style="cyan", overflow="fold")
+        verse_table.add_column("Lemma", style="green", overflow="fold")
+        verse_table.add_column("Code", style="yellow")
+        verse_table.add_column("Gloss", style="white", overflow="fold")
+        for parsed in parsed_tokens[:30]:
+            code = parsed["strongs"] or parsed["morph"] or "-"
+            gloss = parsed["gloss"] or parsed["english"] or "-"
+            verse_table.add_row(
+                parsed["english"] or "•",
+                f"{parsed['surface']} ({parsed['translit']})" if parsed["surface"] else "•",
+                f"{parsed['lemma']} ({parsed['lemma_translit']})" if parsed["lemma"] else "•",
+                code,
+                gloss,
+            )
+        console.print(verse_table)
+
+        lex_table = Table(title="📚 Lexicon Notes", box=None)
+        lex_table.add_column("Strongs", style="lexicon.num")
+        lex_table.add_column("Lemma", style="lexicon.word", overflow="fold")
+        lex_table.add_column("Details", overflow="fold")
+        seen = set()
+        for parsed in parsed_tokens:
+            strongs = parsed["strongs"]
+            if not strongs or strongs in seen:
+                continue
+            seen.add(strongs)
+            entry = self.lookup_lexicon_entry(strongs)
+            lemma = parsed["lemma"] or (entry["db"][1] if entry["db"] else "")
+            pieces = []
+            if parsed["morph"]:
+                pieces.append(parsed["morph"])
+            if entry["step"]:
+                pieces.append(re.sub(r"<[^>]+>", "", entry["step"].get("definition", ""))[:140])
+            elif entry["interlinear"]:
+                pieces.append(entry["interlinear"].get("d", "")[:140])
+            elif entry["db"]:
+                pieces.append(entry["db"][3][:140])
+            if entry["step"] and entry["step"].get("translit"):
+                lemma = f"{lemma} ({entry['step']['translit']})"
+            elif entry["db"]:
+                lemma = f"{lemma} ({entry['db'][2]})"
+            lex_table.add_row(strongs, lemma or "-", " | ".join(piece for piece in pieces if piece) or "-")
+            if len(seen) >= 12:
+                break
+        console.print(lex_table)
+        self.display_study_tsk(db_ref, parsed_tokens)
+        return True
+
+    def display_dictionary_howto(self):
+        md = "# 📖 Bible Dictionary Help\n\n- `lex define \"Grace\"`"
+        console.print(Panel(Markdown(md), border_style="violet"))
+
+    # -----------------------------------------------------------------------
+    # Creeds and historical documents
+    # -----------------------------------------------------------------------
+    def format_creed_source(self, topic, source):
+        source_map = {
+            "Athanasian Creed": "5th c. | trinitarian creed",
+            "Augsburg Confession": "1530 | Lutheran confession",
+            "Baltimore Catechism": "1885 | Roman Catholic catechism",
+            "Belgic Confession": "1561 | Reformed confession",
+            "Canons of Dort": "1619 | Reformed canons",
+            "Chalcedonian Definition": "451 | Christological definition",
+            "Confession of Dositheus": "1672 | Eastern Orthodox confession",
+            "Council of Trent": "1545-1563 | Catholic council decrees",
+            "Heidelberg Catechism": "1563 | Reformed catechism",
+            "London Baptist Confession of Faith": "1689 | Baptist confession",
+            "The Apostles' Creed": "early | baptismal creed",
+            "The Longer Catechism of the Orthodox Church": "1830s | Orthodox catechism",
+            "The Nicene Creed": "325/381 | ecumenical creed",
+            "Thirty-Nine Articles": "1571 | Anglican articles",
+            "Westminster Confession of Faith": "1646 | Presbyterian confession",
+            "Westminster Larger Catechism": "1648 | Presbyterian catechism",
+            "Westminster Shorter Catechism": "1647 | Presbyterian catechism",
+        }
+        return source_map.get(topic, source or "undated | creed text")
+
+    def creed_sort_key(self, topic):
+        order = {
+            "The Apostles' Creed": 200,
+            "The Nicene Creed": 325,
+            "Chalcedonian Definition": 451,
+            "Athanasian Creed": 500,
+            "Council of Trent": 1545,
+            "Augsburg Confession": 1530,
+            "Belgic Confession": 1561,
+            "Heidelberg Catechism": 1563,
+            "Thirty-Nine Articles": 1571,
+            "Canons of Dort": 1619,
+            "Westminster Confession of Faith": 1646,
+            "Westminster Shorter Catechism": 1647,
+            "Westminster Larger Catechism": 1648,
+            "London Baptist Confession of Faith": 1689,
+            "Confession of Dositheus": 1672,
+            "Baltimore Catechism": 1885,
+            "The Longer Catechism of the Orthodox Church": 1830,
+        }
+        return order.get(topic, 9999), topic
+
+    def creed_tradition(self, topic):
+        groups = {
+            "The Apostles' Creed": "Ecumenical Creeds",
+            "The Nicene Creed": "Ecumenical Creeds",
+            "Chalcedonian Definition": "Ecumenical Creeds",
+            "Athanasian Creed": "Ecumenical Creeds",
+            "Augsburg Confession": "Lutheran",
+            "Belgic Confession": "Reformed",
+            "Canons of Dort": "Reformed",
+            "Heidelberg Catechism": "Reformed",
+            "Westminster Confession of Faith": "Reformed",
+            "Westminster Shorter Catechism": "Reformed",
+            "Westminster Larger Catechism": "Reformed",
+            "London Baptist Confession of Faith": "Baptist",
+            "Thirty-Nine Articles": "Anglican",
+            "Council of Trent": "Roman Catholic",
+            "Baltimore Catechism": "Roman Catholic",
+            "Confession of Dositheus": "Eastern Orthodox",
+            "The Longer Catechism of the Orthodox Church": "Eastern Orthodox",
+        }
+        return groups.get(topic, "Other")
+
+    def creed_tradition_sort_key(self, topic):
+        tradition_order = {
+            "Ecumenical Creeds": 0,
+            "Lutheran": 1,
+            "Reformed": 2,
+            "Anglican": 3,
+            "Baptist": 4,
+            "Roman Catholic": 5,
+            "Eastern Orthodox": 6,
+            "Other": 99,
+        }
+        tradition = self.creed_tradition(topic)
+        year, title = self.creed_sort_key(topic)
+        return tradition_order.get(tradition, 99), year, title
+
+    def creed_year_label(self, topic, source):
+        return self.format_creed_source(topic, source).split("|", 1)[0].strip()
+
+    def extract_creed_title(self, content):
+        match = re.match(r'^\[(.*?)\]\s*', content, re.DOTALL)
+        return match.group(1).strip() if match else None
+
+    def strip_creed_title(self, content):
+        return re.sub(r'^\[.*?\]\s*', '', content, count=1, flags=re.DOTALL).strip()
+
+    def is_empty_creed_content(self, content):
+        return not self.strip_creed_title(content or "")
+
+    def load_historical_document(self, topic):
+        filename = HISTORICAL_DOC_FILES.get(topic)
+        if not filename:
+            return None
+        return self.load_json_file(os.path.join(HISTORICAL_DOCS_DIR, filename))
+
+    def build_creed_sections_from_file(self, topic):
+        data = self.load_historical_document(topic)
+        if not data:
+            return []
+        sections = []
+        source = data.get("title", topic)
+        for item in data.get("sections", []):
+            title = item.get("title") or item.get("chapter") or item.get("question") or topic
+            if item.get("q") or item.get("a"):
+                body = "\n\n".join(
+                    part for part in [
+                        f"**Q.** {item.get('q')}" if item.get("q") else "",
+                        f"**A.** {item.get('a')}" if item.get("a") else "",
+                    ]
+                    if part
+                )
+                if item.get("question"):
+                    title = f"Q{item['question']}: {item.get('q', '').strip()}"
+            else:
+                body = item.get("content", "")
+            proofs = self.extract_scripture_refs(body)
+            sections.append({"title": str(title), "source": source, "body_parts": [body] if body else [], "proofs": proofs})
+        return sections
+
+    def extract_scripture_refs(self, text):
+        patterns = [
+            r'\b(?:[1-3]\s+)?[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+\d+[:;]\d+(?:-\d+)?(?:,\s*\d+(?:-\d+)?)*',
+            r'\b(?:[1-3]\s+)?[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+\d+\b',
+        ]
+        refs = []
+        for pattern in patterns:
+            refs.extend(re.findall(pattern, text))
+        cleaned = []
+        seen = set()
+        for ref in refs:
+            normalized = ref.replace(";", ":").strip(" .")
+            if normalized not in seen:
+                seen.add(normalized)
+                cleaned.append(normalized)
+        filtered = []
+        for ref in cleaned:
+            if ":" not in ref and any(full.startswith(f"{ref}:") for full in cleaned):
+                continue
+            filtered.append(ref)
+        return filtered
+
+    def is_proof_only_row(self, content):
+        body = self.strip_creed_title(content)
+        refs = self.extract_scripture_refs(body)
+        if not refs:
+            return False
+        stripped = body
+        for ref in refs:
+            stripped = stripped.replace(ref.replace(":", ";"), " ")
+            stripped = stripped.replace(ref, " ")
+        stripped = re.sub(r'[\d\W_]+', ' ', stripped)
+        return len(stripped.strip()) <= 18
+
+    def build_creed_sections(self, topic):
+        rows = self.db.query("SELECT rowid, content, source FROM creeds WHERE topic = ? ORDER BY rowid", (topic,))
+        if not rows:
+            return self.build_creed_sections_from_file(topic)
+        sections = []
+        current = None
+        for _, content, source in rows:
+            title = self.extract_creed_title(content) or topic
+            body = self.strip_creed_title(content)
+            proof_refs = self.extract_scripture_refs(body)
+            proof_only = self.is_proof_only_row(content)
+            if current is None or current["title"] != title:
+                current = {"title": title, "source": source, "body_parts": [], "proofs": []}
+                sections.append(current)
+            if not proof_only and body:
+                current["body_parts"].append(body)
+            for ref in proof_refs:
+                if ref not in current["proofs"]:
+                    current["proofs"].append(ref)
+        if not any(section["body_parts"] or section["proofs"] for section in sections):
+            file_sections = self.build_creed_sections_from_file(topic)
+            if file_sections:
+                return file_sections
+        return sections
+
+    def should_render_creed_as_document(self, topic, sections):
+        short_topics = {
+            "The Apostles' Creed",
+            "The Nicene Creed",
+            "Athanasian Creed",
+            "Chalcedonian Definition",
+        }
+        total_body = sum(len("\n\n".join(section["body_parts"])) for section in sections)
+        return topic in short_topics or (len(sections) <= 4 and total_body <= 5000)
+
+    def get_creed_original(self, topic, section_title):
+        doc = CREED_ORIGINALS.get(topic)
+        if not doc:
+            return None, None
+        return doc["sections"].get(section_title), doc["language"]
+
+    def display_creed_note(self, topic):
+        note = CREED_NOTES.get(topic)
+        if note:
+            console.print(Panel(Markdown(note), title="Textual / Tradition Note", border_style="yellow"))
+
+    def display_creed_original_document(self, topic, sections):
+        doc = CREED_ORIGINALS.get(topic)
+        if not doc:
+            return False
+        console.print(Panel(f"{topic}\nSource: {self.format_creed_source(topic, sections[0]['source'])}\nOriginal: {doc['language']}", border_style="bold green"))
+        table = Table(title=f"{topic}: English / {doc['language']}", box=None)
+        table.add_column(doc["language"], style="cyan", overflow="fold")
+        table.add_column("English", style="white", overflow="fold")
+        for section in sections:
+            body = "\n\n".join(section["body_parts"]).strip()
+            original = doc["sections"].get(section["title"])
+            if not body and not original:
+                continue
+            left = f"{section['title']}\n\n{original or '[not yet loaded]'}"
+            right = f"{section['title']}\n\n{body}"
+            table.add_row(left, right)
+        console.print(table)
+        self.display_creed_note(topic)
+        return True
+
+    def display_creed_document(self, topic, sections):
+        if not sections:
+            return False
+        if topic in CREED_ORIGINALS:
+            return self.display_creed_original_document(topic, sections)
+        parts = []
+        proof_set = []
+        seen = set()
+        for section in sections:
+            body = "\n\n".join(section["body_parts"]).strip()
+            if body:
+                parts.append(f"## {section['title']}\n\n{body}")
+            for ref in section["proofs"]:
+                if ref not in seen:
+                    seen.add(ref)
+                    proof_set.append(ref)
+        proofs = ""
+        if proof_set:
+            proofs = "\n\n---\n\n**Scripture Proofs**\n\n" + "\n".join(f"- {ref}" for ref in proof_set[:40])
+        console.print(
+            Panel(
+                Markdown(
+                    f"# {topic}\n\n"
+                    f"**Source:** {self.format_creed_source(topic, sections[0]['source'])}\n\n---\n\n"
+                    + "\n\n".join(parts)
+                    + proofs
+                ),
+                border_style="bold green"
+            )
+        )
+        self.display_creed_note(topic)
+        return True
+
+    def display_creed_sections(self, topic):
+        sections = self.build_creed_sections(topic)
+        if not sections:
+            return False
+        if self.should_render_creed_as_document(topic, sections):
+            return self.display_creed_document(topic, sections)
+        while True:
+            table = Table(title=f"📜 {topic}", box=None)
+            table.add_column("ID", style="verse.ref")
+            table.add_column("Section", style="bold green")
+            table.add_column("Proofs", style="dim cyan")
+            for i, section in enumerate(sections, 1):
+                proof_count = str(len(section["proofs"])) if section["proofs"] else "-"
+                table.add_row(str(i), section["title"], proof_count)
+            console.print(table)
+            choice = Prompt.ask("Select section, or q to quit", default="1").strip().lower()
+            if choice == "q":
+                return True
+            if not choice.isdigit():
+                console.print("[warning]Enter a section number or q.[/]")
+                continue
+            section_idx = int(choice) - 1
+            if 0 <= section_idx < len(sections):
+                self.display_creed_reader(topic, sections, start_idx=section_idx)
+            else:
+                console.print("[warning]Section number out of range.[/]")
+        return True
+
+    def display_creed_navigator(self, query=None):
+        if query:
+            matches = self.find_creed_topics(query)
+            if len(matches) == 1:
+                return self.display_creed_sections(matches[0][0])
+            if len(matches) > 1:
+                table = Table(title=f"📜 Matching Creeds: {query}", box=None)
+                table.add_column("Document", style="bold green")
+                table.add_column("Sections", style="dim cyan")
+                table.add_column("Source", style="dim")
+                for topic, source in matches:
+                    table.add_row(topic, str(len(self.build_creed_sections(topic))), self.format_creed_source(topic, source))
+                console.print(table)
+                console.print("[dim]Use: lex creed <document name>[/]")
+                return True
+            res = self.db.query(
+                """
+                SELECT topic, content, source
+                FROM creeds
+                WHERE content LIKE ? AND content NOT LIKE '[]%'
+                LIMIT 8
+                """,
+                (f'%{query}%',)
+            )
+            for t, c, s in res:
+                title = self.extract_creed_title(c) or t
+                refs = self.extract_scripture_refs(c)
+                snippet = self.strip_creed_title(c)[:700]
+                if refs:
+                    snippet += "\n\n**Scripture Proofs:** " + "; ".join(refs[:8])
+                display_source = self.format_creed_source(t, s)
+                console.print(Panel(Markdown(f"# {t}: {title}\n\n**Source:** {display_source}\n\n{snippet}"), border_style="green"))
+            return bool(res)
+        
+        creeds_list = self.db.query(
+            """
+            SELECT topic, source
+            FROM creeds
+            GROUP BY topic, source
+            """
+        )
+        creeds_list = sorted(creeds_list, key=lambda row: self.creed_tradition_sort_key(row[0]))
+        table = Table(title="📜 Creeds Navigator", box=None)
+        table.add_column("ID", style="verse.ref")
+        table.add_column("Tradition", style="bold cyan")
+        table.add_column("Year", style="dim")
+        table.add_column("Document", style="bold green")
+        table.add_column("Sections", style="dim cyan")
+        section_counts = {topic: len(self.build_creed_sections(topic)) for topic, _ in creeds_list}
+        last_tradition = None
+        for i, (t, s) in enumerate(creeds_list):
+            tradition = self.creed_tradition(t)
+            tradition_label = tradition if tradition != last_tradition else ""
+            table.add_row(
+                str(i+1),
+                tradition_label,
+                self.creed_year_label(t, s),
+                t,
+                str(section_counts.get(t, 0)),
+            )
+            last_tradition = tradition
+        console.print(table)
+        choice = Prompt.ask("Select ID, or q to quit", default="1").strip().lower()
+        if choice == "q":
+            return True
+        if not choice.isdigit():
+            console.print("[warning]Enter a document ID or q.[/]")
+            return True
+        doc_idx = int(choice) - 1
+        if 0 <= doc_idx < len(creeds_list):
+            self.display_creed_sections(creeds_list[doc_idx][0])
+        else:
+            console.print("[warning]Document ID out of range.[/]")
+        return True
+
+    def find_creed_topics(self, query):
+        normalized_query = self.normalize_term(query)
+        if not normalized_query:
+            return []
+        rows = self.db.query(
+            """
+            SELECT topic, source
+            FROM creeds
+            GROUP BY topic, source
+            """
+        )
+        exact = []
+        partial = []
+        for topic, source in rows:
+            normalized_topic = self.normalize_term(topic)
+            if normalized_topic == normalized_query:
+                exact.append((topic, source))
+            elif normalized_query in normalized_topic:
+                partial.append((topic, source))
+        return sorted(exact or partial, key=lambda row: self.creed_sort_key(row[0]))
+
+    def display_creed_reader(self, topic, sections, start_idx=0):
+        if not sections:
+            return
+        art_idx = start_idx
+        while True:
+            section = sections[art_idx]
+            body = "\n\n".join(section["body_parts"]).strip() or "_No article body stored for this section._"
+            proofs = ""
+            if section["proofs"]:
+                proofs = "\n\n---\n\n**Scripture Proofs**\n\n" + "\n".join(f"- {ref}" for ref in section["proofs"][:24])
+            console.clear()
+            original, original_language = self.get_creed_original(topic, section["title"])
+            if original:
+                table = Table(title=f"{topic}: {section['title']}", box=None)
+                table.add_column(original_language, style="cyan", overflow="fold")
+                table.add_column("English", style="white", overflow="fold")
+                table.add_row(original, body)
+                console.print(table)
+                if proofs:
+                    console.print(Panel(Markdown(proofs), border_style="green"))
+            else:
+                console.print(
+                    Panel(
+                        Markdown(
+                            f"# {topic}: {section['title']}\n\n"
+                            f"**Source:** {self.format_creed_source(topic, section['source'])}\n\n---\n\n{body}{proofs}"
+                        ),
+                        border_style="bold green"
+                    )
+                )
+            console.print(f"[dim]Section {art_idx+1}/{len(sections)} of '{topic}'[/]")
+            console.print("[dim][n] Next | [p] Prev | [m] Sections | [q] Quit[/]")
+            
+            nav = Prompt.ask("Navigate", choices=["n", "p", "m", "q"], default="q").lower()
+            if nav == "n" and art_idx < len(sections)-1: art_idx += 1
+            elif nav == "p" and art_idx > 0: art_idx -= 1
+            elif nav == "m": break
+            elif nav == "q": sys.exit(0)
+
+    # -----------------------------------------------------------------------
+    # Scripture search, Strong's lookup, dictionary, and encyclopedia
+    # -----------------------------------------------------------------------
+    def query_search_results(self, fts_query, limit, offset):
+        return self.bible_db.query(
+            """
+            SELECT reference, text
+            FROM bible_fts
+            WHERE bible_fts MATCH ?
+            ORDER BY rank
+            LIMIT ? OFFSET ?
+            """,
+            (fts_query, limit, offset)
+        )
+
+    def count_search_results(self, fts_query):
+        rows = self.bible_db.query(
+            "SELECT COUNT(*) FROM bible_fts WHERE bible_fts MATCH ?",
+            (fts_query,)
+        )
+        return rows[0][0] if rows else 0
+
+    def display_search(self, query, page=1, limit=10):
+        safe_query = self.escape_fts_query(query)
+        if not safe_query:
+            return False
+        mode = "phrase"
+        active_query = safe_query
+        page = max(1, page)
+        limit = min(max(1, limit), 50)
+        total = self.count_search_results(active_query)
+        if total:
+            page = min(page, ((total - 1) // limit) + 1)
+        offset = (page - 1) * limit
+        res = self.query_search_results(active_query, limit, offset) if total else []
+        if not total:
+            terms_query = self.fts_terms_query(query)
+            if terms_query and terms_query != safe_query:
+                active_query = terms_query
+                mode = "all terms"
+                total = self.count_search_results(active_query)
+                if total:
+                    page = min(page, ((total - 1) // limit) + 1)
+                offset = (page - 1) * limit
+                res = self.query_search_results(active_query, limit, offset) if total else []
+        if not res:
+            return False
+        body = Text()
+        for idx, (ref, text) in enumerate(res, 1):
+            parts = self.parse_reference_parts(ref)
+            display_ref = self.format_display_ref(ref) if parts else ref
+            body.append(f"{offset + idx:>3}. {display_ref}\n", style="verse.ref")
+            body.append_text(self.highlight_search_terms(self.clean_text(text), query))
+            body.append("\n\n", style="dim")
+        shown_end = offset + len(res)
+        footer = f"Mode: {mode}  |  Showing {offset + 1}-{shown_end} of {total}  |  Open: lex read <ref>  |  Study: lex study <ref>"
+        query_arg = shlex.quote(query)
+        if shown_end < total:
+            footer += f"\nNext page: lex search {query_arg} --page {page + 1}"
+            if limit != 10:
+                footer += f" --limit {limit}"
+        if page > 1:
+            footer += f"\nPrevious page: lex search {query_arg} --page {page - 1}"
+            if limit != 10:
+                footer += f" --limit {limit}"
+        body.append(footer, style="dim")
+        console.print(
+            Panel(
+                body,
+                title=f"🔍 Search: {query}",
+                subtitle=f"page {page}",
+                border_style="cyan",
+                padding=(1, 2),
+            )
+        )
+        return True
+
+    def display_strongs(self, query):
+        if re.match(r'^[GH]\d+$', query.upper()):
+            res = self.db.query("SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?", (query.upper(),))
+        else:
+            normalized = self.normalize_term(query)
+            res = self.db.query(
+                """
+                SELECT number, word, pronunciation, definition
+                FROM strongs
+                WHERE lower(replace(replace(replace(pronunciation, '''', ''), '-', ''), ' ', '')) = ?
+                LIMIT 5
+                """,
+                (normalized,)
+            )
+            if not res:
+                safe_query = self.escape_fts_query(query)
+                if not safe_query:
+                    return False
+                res = self.db.query(
+                    """
+                    SELECT s.number, s.word, s.pronunciation, s.definition
+                    FROM strongs_fts f
+                    JOIN strongs s ON s.number = f.number
+                    WHERE strongs_fts MATCH ?
+                    LIMIT 5
+                    """,
+                    (safe_query,)
+                )
+        for n, w, p, d in res:
+            lang = "Greek" if n.startswith('G') else "Hebrew"
+            console.print(Panel(f"[lexicon.word]{w}[/] ({p})\n\n{d}", title=f"📚 {lang} Lexicon: {n}", border_style="blue"))
+        return bool(res)
+
+    def display_english_strongs(self, query):
+        normalized = self.normalize_term(query)
+        if not normalized:
+            return False
+        exact_results = []
+        fuzzy_results = []
+        seen = set()
+        for strongs_id, entry in self.get_interlinear_strongs().items():
+            glosses = self.extract_english_glosses(entry)
+            exact_matches = [gloss for gloss in glosses if self.normalize_term(gloss) == normalized]
+            fuzzy_matches = [gloss for gloss in glosses if normalized in self.normalize_term(gloss)]
+            if not exact_matches and not fuzzy_matches:
+                continue
+            _, db_key, _ = self.normalize_strongs_key(strongs_id)
+            db_rows = self.db.query(
+                "SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?",
+                (db_key,)
+            ) if db_key else []
+            if not db_rows or db_key in seen:
+                continue
+            seen.add(db_key)
+            number, word, pronunciation, definition = db_rows[0]
+            item = (number, word, pronunciation, definition, ", ".join((exact_matches or fuzzy_matches)[:3]))
+            if exact_matches:
+                exact_results.append(item)
+            else:
+                fuzzy_results.append(item)
+        results = exact_results[:8] if exact_results else fuzzy_results[:8]
+        safe_query = self.escape_fts_query(query)
+        if safe_query:
+            db_rows = self.db.query(
+                """
+                SELECT strongs.number, strongs.word, strongs.pronunciation, strongs.definition
+                FROM strongs_fts
+                JOIN strongs USING(number)
+                WHERE strongs_fts MATCH ?
+                LIMIT 12
+                """,
+                (safe_query,)
+            )
+            for n, w, p, d in db_rows:
+                if n in seen:
+                    continue
+                results.append((n, w, p, d, query))
+                seen.add(n)
+                if len(results) >= 12:
+                    break
+        if not results:
+            return False
+        table = Table(title=f"🔤 Strong's Lookup: '{query}'", box=None)
+        table.add_column("No.", style="lexicon.num")
+        table.add_column("Lemma", style="lexicon.word")
+        table.add_column("Pronunciation")
+        table.add_column("English", style="white")
+        table.add_column("Definition", overflow="fold")
+        for number, word, pronunciation, definition, gloss in results:
+            table.add_row(number, word, pronunciation, gloss, definition[:120])
+        console.print(table)
+        return True
+
+    def display_dictionary(self, query):
+        normalized = query.strip()
+        if not normalized:
+            return False
+        res = self.db.query(
+            """
+            SELECT topic, content, source
+            FROM dictionary
+            WHERE lower(topic) = lower(?)
+            LIMIT 3
+            """,
+            (normalized,)
+        )
+        if not res:
+            res = self.db.query(
+                """
+                SELECT topic, content, source
+                FROM dictionary
+                WHERE lower(topic) LIKE lower(?)
+                ORDER BY CASE WHEN lower(topic) LIKE lower(?) THEN 0 ELSE 1 END, topic
+                LIMIT 3
+                """,
+                (f"{normalized}%", f"%{normalized}%")
+            )
+        if not res:
+            safe_query = self.escape_fts_query(query)
+            if not safe_query:
+                return False
+            res = self.db.query(
+                "SELECT topic, content, source FROM dictionary_fts WHERE dictionary_fts MATCH ? LIMIT 3",
+                (safe_query,)
+            )
+        for t, c, s in res:
+            console.print(Panel(Markdown(c[:1000]), title=f"📖 {t} ({s})", border_style="violet"))
+        return bool(res)
+
+    def display_encyclopedia(self, query):
+        if not self.encyclopedia_db:
+            return False
+        normalized = query.strip()
+        if not normalized:
+            return False
+        tables = {row[0] for row in self.encyclopedia_db.query("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "encyclopedia" not in tables:
+            return False
+        res = self.encyclopedia_db.query(
+            """
+            SELECT topic, content, source
+            FROM encyclopedia
+            WHERE lower(topic) = lower(?)
+            LIMIT 3
+            """,
+            (normalized,)
+        )
+        if not res:
+            res = self.encyclopedia_db.query(
+                """
+                SELECT topic, content, source
+                FROM encyclopedia
+                WHERE lower(topic) LIKE lower(?)
+                ORDER BY CASE WHEN lower(topic) LIKE lower(?) THEN 0 ELSE 1 END, topic
+                LIMIT 3
+                """,
+                (f"{normalized}%", f"%{normalized}%")
+            )
+        if not res and "encyclopedia_fts" in tables:
+            safe_query = self.escape_fts_query(query)
+            if not safe_query:
+                return False
+            res = self.encyclopedia_db.query(
+                """
+                SELECT topic, content, source
+                FROM encyclopedia_fts
+                WHERE encyclopedia_fts MATCH ?
+                LIMIT 3
+                """,
+                (safe_query,)
+            )
+        for t, c, s in res:
+            console.print(Panel(Markdown(c[:1400]), title=f"📚 {t} ({s})", border_style="cyan"))
+        return bool(res)
+
+# ---------------------------------------------------------------------------
+# CLI dispatch
+# ---------------------------------------------------------------------------
+# Keep parsing and routing here thin. Feature behavior should live on LexAgent
+# so commands can eventually be tested without shelling out.
 def main():
-    if len(sys.argv) < 2:
-        print_howto()
-        sys.exit(0)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("query", nargs="*")
+    parser.add_argument("-i", "--interlinear", action="store_true")
+    parser.add_argument("-d", "--define", action="store_true")
+    parser.add_argument("-c", "--creed", action="store_true")
+    parser.add_argument("-s", "--strongs", action="store_true")
+    parser.add_argument("-v", "--version", action="store_true")
+    parser.add_argument("--credits", action="store_true")
+    parser.add_argument("--next", action="store_true")
+    parser.add_argument("--prev", action="store_true")
+    parser.add_argument("--page", type=int, default=1)
+    parser.add_argument("--limit", type=int, default=10)
+    args = parser.parse_args()
+    agent = LexAgent()
+    query = " ".join(args.query)
 
-    # Simple args namespace
-    class Args:
-        bible = strongs = dictionary = places = next = prev = False
-        limit = json = text = help = version = crossrefs = False
-    args = Args()
-
-    # Build query string
-    full_args = sys.argv[1:]
-    query = " ".join(full_args)
-    
-    # Handle plain language commands
-    plain_cmds = [
-        ("define ", "dictionary"), ("dict ", "dictionary"),
-        ("search ", "all"), ("find ", "all"),
-        ("bible ", "bible"), ("verse ", "bible"), ("read ", "bible"),
-        ("places ", "places"), ("map ", "places"), ("geo ", "places"),
-    ]
-    
-    for prefix, mode in plain_cmds:
-        if query.startswith(prefix):
-            query = query[len(prefix):]
-            args.bible = mode == "bible"
-            args.strongs = mode == "strongs"
-            args.dictionary = mode == "dictionary"
-            args.places = mode == "places"
-            break
-    
-    # Handle strongs/lexicon - don't strip prefix, set mode
-    if query.startswith("strongs ") or query.startswith("lexicon "):
-        query = re.sub(r'^(strongs|lexicon)\s+', '', query)
-        args.strongs = True
-    
-    # Check G#### and H#### patterns
-    if re.match(r'^[GH]\d+', query, re.IGNORECASE):
-        args.strongs = True
-    
-    # Navigation
-    if query.startswith("next "):
-        query, args.next = query[5:], True
-    elif query.startswith("prev "):
-        query, args.prev = query[5:], True
-    
-    # Handle flags
-    if "--help" in full_args or "-h" in full_args:
-        print_help()
-        sys.exit(0)
-    if "--version" in full_args or "-v" in full_args:
+    if args.version:
         console.print(f"[bold gold3]Lex[/] version [bold]{VERSION}[/]")
         sys.exit(0)
-    if "-b" in full_args: args.bible = True
-    if "-s" in full_args: args.strongs = True
-    if "-d" in full_args: args.dictionary = True
-    if "-p" in full_args: args.places = True
-    
-    for i, a in enumerate(full_args):
-        if a == "--limit" and i+1 < len(full_args):
-            try: args.limit = int(full_args[i+1])
-            except: pass
-    
-    if not query:
-        print_howto()
-        sys.exit(0)
-    
-    if query.lower() in ["demo", "--demo"]:
-        run_demo()
+
+    if args.credits:
+        agent.display_credits()
         sys.exit(0)
 
-    global CROSS_REF_LIMIT
-    CROSS_REF_LIMIT = args.limit
-    
-    # Determine sources to search
-    search_all = not (args.bible or args.strongs or args.dictionary or args.places)
-    
-    with console.status(f"[bold green]Searching for '{query}'...", spinner="dots"):
-        
-        # Based on args, run specific searches
-        if args.strongs:
-            query_strongs(query)
-        elif args.dictionary:
-            query_dictionary(query)
-        elif args.places:
-            query_places(query)
-        elif args.bible:
-            is_ref = query_bible(query)
-            if is_ref:
-                ref_pat, b, c, v = normalize_ref(query)
-                if b and c: save_last_ref(b, c, v)
-        else:
-            # Default: search all sources
-            is_ref = query_bible(query)
-            if is_ref:
-                ref_pat, b, c, v = normalize_ref(query)
-                if b and c: save_last_ref(b, c, v)
-            
-            query_strongs(query)
-            query_places(query)
-            query_dictionary(query)
-        
-        # Cross-refs only work with verse refs, handled in query_bible
-        if args.crossrefs and not args.bible:
-            ref_pattern, book, chap, verse = normalize_ref(query)
-            if verse:
-                query_crossrefs(book, chap, verse)
-    
-    # Handle navigation
     if args.next or args.prev:
-        direction = "next" if args.next else "prev"
-        ref_pat, book, chap, verse = normalize_ref(query)
-        if book and chap:
-            new_ref = navigate(query, direction)
-            if new_ref:
-                console.print(f"[dim]→ {new_ref}[/]")
-                query_bible(new_ref)
-                ref_p, b, c, v = normalize_ref(new_ref)
-                if b and c:
-                    save_last_ref(b, c, v)
+        last = agent.last_ref
+        if not last: sys.exit(1)
+        query = agent.resolve_navigation_query("next" if args.next else "prev")
+        if not query:
+            sys.exit(1)
+    
+    if not query and not (args.next or args.prev):
+        agent.display_intro()
         sys.exit(0)
-    
-    # Context tips
-    tips = ["💡 Try: --next / --prev for navigation"]
-    if args.dictionary:
-        tips = ["💡 Try: lex define, lex strongs, lex bible"]
+
+    if query == "read":
+        agent.display_read_landing()
+        sys.exit(0)
+    elif query.startswith("read "):
+        query = query[5:].strip()
+    elif query == "study":
+        agent.display_study_landing()
+        sys.exit(0)
+    elif query.startswith("study "):
+        query = query[6:].strip()
+        if not query:
+            agent.display_study_landing()
+            sys.exit(0)
+        args.interlinear = True
+    elif query == "search":
+        agent.display_search_howto()
+        sys.exit(0)
+    elif query.startswith("search "):
+        query = query[7:].strip()
+        if not query:
+            sys.exit(1)
+        if not agent.display_search(query, page=args.page, limit=args.limit):
+            console.print("[warning]No scripture search results found.[/]")
+            sys.exit(1)
+        sys.exit(0)
+    elif query == "strongs":
+        agent.display_strongs_howto()
+        sys.exit(0)
+    elif query.startswith("strongs "):
+        q = query[8:].strip()
+        if not q:
+            agent.display_strongs_howto()
+            sys.exit(1)
+        if not agent.display_english_strongs(q):
+            if not agent.display_strongs(q):
+                console.print("[warning]No Strong's entries found for that term.[/]")
+                sys.exit(1)
+        sys.exit(0)
+
+    if args.define or query.startswith("define"):
+        q = query.replace("define ", "").strip()
+        if not q or q == "define": agent.display_dictionary_howto()
+        else:
+            dictionary_found = agent.display_dictionary(q)
+            encyclopedia_found = agent.display_encyclopedia(q)
+            if not dictionary_found and not encyclopedia_found:
+                console.print("[warning]No dictionary or encyclopedia entry found.[/]")
+    elif args.creed or query.startswith("creed"):
+        q = query.replace("creed ", "").strip()
+        if not q or q == "creed": agent.display_creed_navigator()
+        elif not agent.display_creed_navigator(q):
+            console.print("[warning]No creed or confession entry found.[/]")
+            sys.exit(1)
     elif args.strongs:
-        tips = ["💡 Try: lex G3056 or lex H7225"]
-    elif args.bible:
-        tips = ["💡 Try: lex next or lex prev"]
-    else:
-        tips = ["💡 Try: lex define <topic>, lex strongs <word>, lex places <name>"]
-    
-    console.print(Panel(Text("\n".join(tips)), title="💡 Tips", border_style="dim", expand=False))
+        if not query:
+            agent.display_strongs_howto()
+            sys.exit(1)
+        if not agent.display_english_strongs(query):
+            if not agent.display_strongs(query):
+                console.print("[warning]No Strong's entries found for that term.[/]")
+                sys.exit(1)
+    elif re.match(r'^[GH]\d+', query, re.IGNORECASE):
+        if not agent.display_strongs(query):
+            console.print("[warning]No Strong's entry found for that number.[/]")
+            sys.exit(1)
+    elif query:
+        if not agent.display_verse(query, interlinear=args.interlinear):
+            if not agent.display_strongs(query):
+                agent.display_search_howto()
+                sys.exit(1)
 
 if __name__ == "__main__":
     main()
