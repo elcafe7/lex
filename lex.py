@@ -27,19 +27,31 @@ from rich.prompt import Prompt, IntPrompt
 # with config/env-driven paths without touching feature code.
 VERSION = "2.3.3-Nav"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
-LEXICON_DB_PATH = os.path.expanduser("~/bible-lexicon-data/lexicon.db")
-BIBLE_DB_PATH = os.path.expanduser("~/bible-lexicon-data/bible_versions/esv.db")
-ENCYCLOPEDIA_DB_PATH = os.path.expanduser("~/bible-lexicon-data/encyclopedia.db")
-CROSS_REFS_DB_PATH = os.path.expanduser("~/bible-lexicon-data/cross_refs.db")
-STRONGS_DB_PATH = os.path.expanduser("~/bible-lexicon-data/strongs.db")
-DICTIONARY_DB_PATH = os.path.expanduser("~/bible-lexicon-data/dictionary.db")
-CREEDS_DB_PATH = os.path.expanduser("~/bible-lexicon-data/creeds.db")
-PLACES_DB_PATH = os.path.expanduser("~/bible-lexicon-data/places.db")
-INTERLINEAR_PATH = os.path.expanduser("~/bible-lexicon-data/esv-data/data/esv/esv-interlinear.json")
-INTERLINEAR_STRONGS_PATH = os.path.expanduser("~/bible-lexicon-data/esv-data/data/interlinear/strongs.json")
-STEP_GREEK_PATH = os.path.expanduser("~/bible-lexicon-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesg-greek.json")
-STEP_HEBREW_PATH = os.path.expanduser("~/bible-lexicon-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesh-hebrew.json")
-HISTORICAL_DOCS_DIR = os.path.expanduser("~/bible-lexicon-data/theolog-ai/data/historical-documents")
+
+# Local-first path resolution: check the directory where lex.py lives first.
+# This makes the repo portable when cloned.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+HOME_FALLBACK = os.path.expanduser("~/bible-lexicon-data")
+
+def get_lex_path(relative_path, fallback_base=HOME_FALLBACK):
+    local_path = os.path.join(BASE_DIR, relative_path)
+    if os.path.exists(local_path):
+        return local_path
+    return os.path.join(fallback_base, relative_path)
+
+LEXICON_DB_PATH = get_lex_path("lexicon.db")
+BIBLE_DB_PATH = get_lex_path("bible_versions/esv.db")
+ENCYCLOPEDIA_DB_PATH = get_lex_path("encyclopedia.db")
+CROSS_REFS_DB_PATH = get_lex_path("cross_refs.db")
+STRONGS_DB_PATH = get_lex_path("strongs.db")
+DICTIONARY_DB_PATH = get_lex_path("dictionary.db")
+CREEDS_DB_PATH = get_lex_path("creeds.db")
+PLACES_DB_PATH = get_lex_path("places.db")
+INTERLINEAR_PATH = get_lex_path("esv-data/data/esv/esv-interlinear.json")
+INTERLINEAR_STRONGS_PATH = get_lex_path("esv-data/data/interlinear/strongs.json")
+STEP_GREEK_PATH = get_lex_path("theolog-ai/data/biblical-languages/stepbible-lexicons/tbesg-greek.json")
+STEP_HEBREW_PATH = get_lex_path("theolog-ai/data/biblical-languages/stepbible-lexicons/tbesh-hebrew.json")
+HISTORICAL_DOCS_DIR = get_lex_path("theolog-ai/data/historical-documents")
 
 # The creeds table in lexicon.db has placeholder rows for some documents. This
 # map lets the UI fall back to the complete local JSON document when needed.
