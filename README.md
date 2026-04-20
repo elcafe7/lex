@@ -1,5 +1,7 @@
 # Lex
 
+![Lex Banner](docs/images/banner.png)
+
 **A local-first Bible study terminal for reading, searching, studying, and exporting Scripture work.**
 
 Lex is a Python CLI that keeps Bible study fast and offline. It combines Scripture reading, interlinear study, Strong's and STEPBible lexicon notes, Treasury of Scripture Knowledge cross-references, dictionary/encyclopedia lookups, and historical Christian documents in one terminal tool.
