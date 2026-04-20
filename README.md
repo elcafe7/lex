@@ -51,13 +51,34 @@ Read Scripture:
 lex read John 3:16
 lex John 3:16
 lex John 1
+lex jn 1:1
+lex 2 jn 1:2
 ```
 
 Study a verse:
 
 ```bash
 lex study John 1:1
+lex study rev 1:2
 lex John 3:16 -i
+```
+
+Interactive study mode includes actions for next/previous verse, read context,
+verse web, and DOCX/PDF export.
+
+Show a verse-centered connection view:
+
+```bash
+lex web John 3:16
+lex web Romans 1:1 --limit 8
+```
+
+Study mode can use a soft section cascade in interactive terminals. Use
+`--no-animate` for immediate output or `--animate` to force the pauses:
+
+```bash
+lex study John 1:1 --no-animate
+lex study John 1:1 --animate
 ```
 
 Search Scripture:
@@ -65,6 +86,17 @@ Search Scripture:
 ```bash
 lex search israel
 lex search "kingdom of god" --page 2
+lex search covenant -jeremiah
+lex search beast -daniel-revelation
+lex search resurrection -nt
+lex search covenant -major
+```
+
+In an interactive terminal, search uses a compact action bar for result study,
+read mode, paging, and export. Search and study exports are saved under:
+
+```text
+~/Documents/lex_exports
 ```
 
 Look up Strong's:

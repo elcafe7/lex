@@ -18,6 +18,8 @@ Read one verse with context:
 
 ```bash
 lex read John 3:16
+lex jn 1:1
+lex 2 jn 1:2
 ```
 
 You can also type the reference directly:
@@ -46,6 +48,7 @@ Study mode shows the verse in context, then source-language data, an interlinear
 
 ```bash
 lex study John 1:1
+lex study rev 1:2
 lex study Genesis 1:1
 lex study James 1:1
 ```
@@ -55,6 +58,42 @@ You can also use quick study mode:
 ```bash
 lex John 3:16 -i
 ```
+
+In an interactive terminal, study sections can appear with a subtle pause between them. Turn this off or force it with:
+
+```bash
+lex study Romans 1:1 --no-animate
+lex study Romans 1:1 --animate
+```
+
+In an interactive terminal, study mode ends with a compact action bar:
+
+```text
+n / p  next or previous verse
+r      read context
+w      verse web
+e      export
+q      done
+```
+
+The export menu can save the study packet as DOCX or PDF under:
+
+```text
+~/Documents/lex_exports/studies
+```
+
+Lex tries to open exported files automatically after saving. If your desktop blocks that, it still prints the saved path.
+
+## View A Verse Web
+
+Verse web mode prints a verse as the visual center, then shows its strongest local cross-reference connections with short previews:
+
+```bash
+lex web John 3:16
+lex web Romans 1:1 --limit 8
+```
+
+Use it when you want a quick map of the major passages connected to one verse.
 
 ## Search Scripture
 
@@ -72,7 +111,47 @@ lex search israel --page 2
 lex search israel --page 3 --limit 25
 ```
 
-The search output shows the result range and gives next/previous page commands.
+Limit a search to a book, a book range, or a section of the canon:
+
+```bash
+lex search covenant -jeremiah
+lex search beast -daniel-revelation
+lex search covenant -major
+lex search resurrection -nt
+```
+
+Supported group scopes include:
+
+- `-ot` / `-old-testament`
+- `-nt` / `-new-testament`
+- `-law` / `-pentateuch` / `-torah`
+- `-history`
+- `-wisdom` / `-poetry`
+- `-major` / `-major-prophets`
+- `-minor` / `-minor-prophets`
+- `-prophets`
+- `-gospels`
+- `-epistles` / `-letters`
+- `-pauline`
+- `-general-epistles`
+
+In an interactive terminal, search uses a compact action bar:
+
+```text
+1-10   study result
+r #    read result
+n / p  page
+e      export
+q      quit
+```
+
+The export menu can save the current result page as DOCX or PDF under:
+
+```text
+~/Documents/lex_exports
+```
+
+The explicit `--page` commands still work for scripts, copied commands, and non-interactive output.
 
 ## Look Up Strong's Numbers
 
@@ -152,6 +231,15 @@ If `lex` shows no result for a reference, try spelling the book name fully:
 ```bash
 lex 1 Corinthians 13
 lex Song of Solomon 2:1
+```
+
+Common abbreviations also work for references:
+
+```bash
+lex jn 1:1
+lex rom 8:1
+lex study rev 1:2
+lex 2 jn 1:2
 ```
 
 If an encyclopedia term is missing, the local encyclopedia is incomplete. The current ISBE import only covers Volume II, `Clement-Heresh`.

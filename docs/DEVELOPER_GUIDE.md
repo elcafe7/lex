@@ -32,9 +32,9 @@ readlink -f /usr/local/bin/lex
 1. `main()` parses CLI flags and query words.
 2. `LexAgent` opens the local SQLite databases and lazily loads JSON datasets.
 3. Read/search commands use `bible_versions/esv.db`.
-4. Study mode uses Bible rows plus ESV interlinear JSON, Strong's data, STEPBible lexicons, and TSK cross-references.
-5. Creed mode uses `lexicon.db` rows, with JSON fallback for placeholder historical documents.
-6. Define mode queries Easton's dictionary from `lexicon.db` and ISBE entries from `encyclopedia.db`.
+4. Study mode uses Bible rows plus ESV interlinear JSON, `strongs.db`, STEPBible lexicons, and TSK rows from `cross_refs.db`.
+5. Creed mode uses `creeds.db` rows, with JSON fallback for placeholder historical documents.
+6. Define mode queries Easton's dictionary from `dictionary.db` and ISBE entries from `encyclopedia.db`.
 
 ## Verification Commands
 
@@ -62,11 +62,17 @@ Rebuild the encyclopedia DB:
 python3 /home/n8te/bible-lexicon-data/scripts/build_encyclopedia_db.py
 ```
 
+Rebuild split Lex domain DBs:
+
+```bash
+python3 /home/n8te/bible-lexicon-data/scripts/split_lexicon_db.py
+```
+
 ## Current Design Constraints
 
 - `lex.py` is still a single-file CLI. Keep feature sections clearly commented until it is split into modules.
 - The working tree contains many local datasets and unrelated generated files. Do not delete or reset them casually.
-- `lexicon.db` and `encyclopedia.db` are generated/compiled data artifacts with mixed source terms.
+- `lexicon.db`, split domain DBs, and `encyclopedia.db` are generated/compiled data artifacts with mixed source terms.
 - The local encyclopedia is incomplete because only ISBE Volume II is currently imported.
 - The Strong's source chain has conflicting local license notes. Treat redistribution cautiously until verified.
 

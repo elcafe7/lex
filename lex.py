@@ -6,6 +6,10 @@ import re
 import json
 import argparse
 import shlex
+import time
+import html
+import subprocess
+import shutil
 from rich.align import Align
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -26,6 +30,11 @@ HISTORY_FILE = os.path.expanduser("~/.lex_history")
 LEXICON_DB_PATH = os.path.expanduser("~/bible-lexicon-data/lexicon.db")
 BIBLE_DB_PATH = os.path.expanduser("~/bible-lexicon-data/bible_versions/esv.db")
 ENCYCLOPEDIA_DB_PATH = os.path.expanduser("~/bible-lexicon-data/encyclopedia.db")
+CROSS_REFS_DB_PATH = os.path.expanduser("~/bible-lexicon-data/cross_refs.db")
+STRONGS_DB_PATH = os.path.expanduser("~/bible-lexicon-data/strongs.db")
+DICTIONARY_DB_PATH = os.path.expanduser("~/bible-lexicon-data/dictionary.db")
+CREEDS_DB_PATH = os.path.expanduser("~/bible-lexicon-data/creeds.db")
+PLACES_DB_PATH = os.path.expanduser("~/bible-lexicon-data/places.db")
 INTERLINEAR_PATH = os.path.expanduser("~/bible-lexicon-data/esv-data/data/esv/esv-interlinear.json")
 INTERLINEAR_STRONGS_PATH = os.path.expanduser("~/bible-lexicon-data/esv-data/data/interlinear/strongs.json")
 STEP_GREEK_PATH = os.path.expanduser("~/bible-lexicon-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesg-greek.json")
@@ -76,6 +85,172 @@ TSK_BOOK_ABBR = {
     "2 John": "2John.", "3 John": "3John.", "Jude": "Jude", "Revelation": "Rev.",
 }
 TSK_TO_BOOK = {abbr.rstrip("."): book for book, abbr in TSK_BOOK_ABBR.items()}
+BIBLE_BOOKS = list(TSK_BOOK_ABBR.keys())
+BIBLE_BOOK_INDEX = {book: idx for idx, book in enumerate(BIBLE_BOOKS)}
+
+BOOK_SCOPE_ALIASES = {}
+for book in BIBLE_BOOKS:
+    book_key = re.sub(r"[^a-z0-9]+", "-", book.lower()).strip("-")
+    compact_key = re.sub(r"[^a-z0-9]+", "", book.lower())
+    BOOK_SCOPE_ALIASES[book_key] = book
+    BOOK_SCOPE_ALIASES[compact_key] = book
+    abbr = TSK_BOOK_ABBR.get(book, "").rstrip(".").lower()
+    if abbr:
+        BOOK_SCOPE_ALIASES[re.sub(r"[^a-z0-9]+", "-", abbr).strip("-")] = book
+        BOOK_SCOPE_ALIASES[re.sub(r"[^a-z0-9]+", "", abbr)] = book
+
+BOOK_SCOPE_ALIASES.update({
+    "ge": "Genesis",
+    "gn": "Genesis",
+    "gen": "Genesis",
+    "ex": "Exodus",
+    "exo": "Exodus",
+    "exod": "Exodus",
+    "le": "Leviticus",
+    "lev": "Leviticus",
+    "nu": "Numbers",
+    "num": "Numbers",
+    "de": "Deuteronomy",
+    "dt": "Deuteronomy",
+    "deut": "Deuteronomy",
+    "jos": "Joshua",
+    "josh": "Joshua",
+    "jdg": "Judges",
+    "judg": "Judges",
+    "ru": "Ruth",
+    "1sa": "1 Samuel",
+    "1sam": "1 Samuel",
+    "2sa": "2 Samuel",
+    "2sam": "2 Samuel",
+    "1ki": "1 Kings",
+    "1kgs": "1 Kings",
+    "2ki": "2 Kings",
+    "2kgs": "2 Kings",
+    "1ch": "1 Chronicles",
+    "1chr": "1 Chronicles",
+    "2ch": "2 Chronicles",
+    "2chr": "2 Chronicles",
+    "ezr": "Ezra",
+    "neh": "Nehemiah",
+    "est": "Esther",
+    "psalm": "Psalms",
+    "ps": "Psalms",
+    "psa": "Psalms",
+    "psm": "Psalms",
+    "pss": "Psalms",
+    "pr": "Proverbs",
+    "pro": "Proverbs",
+    "prov": "Proverbs",
+    "ec": "Ecclesiastes",
+    "ecc": "Ecclesiastes",
+    "eccl": "Ecclesiastes",
+    "song": "Song of Solomon",
+    "sos": "Song of Solomon",
+    "canticles": "Song of Solomon",
+    "is": "Isaiah",
+    "isa": "Isaiah",
+    "jr": "Jeremiah",
+    "jer": "Jeremiah",
+    "lam": "Lamentations",
+    "eze": "Ezekiel",
+    "ezek": "Ezekiel",
+    "ezk": "Ezekiel",
+    "da": "Daniel",
+    "dn": "Daniel",
+    "dan": "Daniel",
+    "hos": "Hosea",
+    "jl": "Joel",
+    "am": "Amos",
+    "ob": "Obadiah",
+    "obad": "Obadiah",
+    "jon": "Jonah",
+    "mi": "Micah",
+    "mic": "Micah",
+    "na": "Nahum",
+    "nah": "Nahum",
+    "hab": "Habakkuk",
+    "zep": "Zephaniah",
+    "zeph": "Zephaniah",
+    "hag": "Haggai",
+    "zec": "Zechariah",
+    "zech": "Zechariah",
+    "mal": "Malachi",
+    "mt": "Matthew",
+    "mat": "Matthew",
+    "matt": "Matthew",
+    "mk": "Mark",
+    "mrk": "Mark",
+    "lk": "Luke",
+    "lu": "Luke",
+    "jn": "John",
+    "jhn": "John",
+    "joh": "John",
+    "ac": "Acts",
+    "ro": "Romans",
+    "rom": "Romans",
+    "1co": "1 Corinthians",
+    "1cor": "1 Corinthians",
+    "2co": "2 Corinthians",
+    "2cor": "2 Corinthians",
+    "gal": "Galatians",
+    "eph": "Ephesians",
+    "php": "Philippians",
+    "phil": "Philippians",
+    "col": "Colossians",
+    "1th": "1 Thessalonians",
+    "1thess": "1 Thessalonians",
+    "2th": "2 Thessalonians",
+    "2thess": "2 Thessalonians",
+    "1ti": "1 Timothy",
+    "1tim": "1 Timothy",
+    "2ti": "2 Timothy",
+    "2tim": "2 Timothy",
+    "tit": "Titus",
+    "phm": "Philemon",
+    "phlm": "Philemon",
+    "heb": "Hebrews",
+    "jas": "James",
+    "jam": "James",
+    "1pe": "1 Peter",
+    "1pet": "1 Peter",
+    "2pe": "2 Peter",
+    "2pet": "2 Peter",
+    "1jn": "1 John",
+    "1jhn": "1 John",
+    "2jn": "2 John",
+    "2jhn": "2 John",
+    "3jn": "3 John",
+    "3jhn": "3 John",
+    "rev": "Revelation",
+    "rv": "Revelation",
+    "re": "Revelation",
+    "revelations": "Revelation",
+})
+
+BOOK_SCOPE_GROUPS = {
+    "ot": BIBLE_BOOKS[:39],
+    "old-testament": BIBLE_BOOKS[:39],
+    "nt": BIBLE_BOOKS[39:],
+    "new-testament": BIBLE_BOOKS[39:],
+    "law": BIBLE_BOOKS[:5],
+    "pentateuch": BIBLE_BOOKS[:5],
+    "penteteuch": BIBLE_BOOKS[:5],
+    "torah": BIBLE_BOOKS[:5],
+    "history": BIBLE_BOOKS[5:17],
+    "wisdom": BIBLE_BOOKS[17:22],
+    "poetry": BIBLE_BOOKS[17:22],
+    "major": BIBLE_BOOKS[22:27],
+    "major-prophets": BIBLE_BOOKS[22:27],
+    "minor": BIBLE_BOOKS[27:39],
+    "minor-prophets": BIBLE_BOOKS[27:39],
+    "prophets": BIBLE_BOOKS[22:39],
+    "gospels": BIBLE_BOOKS[39:43],
+    "gospel": BIBLE_BOOKS[39:43],
+    "epistles": BIBLE_BOOKS[45:65],
+    "letters": BIBLE_BOOKS[45:65],
+    "pauline": BIBLE_BOOKS[44:57],
+    "general-epistles": BIBLE_BOOKS[57:65],
+}
 
 # Original-language creed text is only stored for short documents where
 # side-by-side display is useful. Longer confessions stay English-only for now.
@@ -123,6 +298,10 @@ CREED_NOTES = {
 custom_theme = Theme({
     "info": "dim cyan",
     "warning": "magenta",
+    "success": "bold green",
+    "ui.action": "blue",
+    "ui.action.key": "bold blue",
+    "ui.meta": "dim",
     "verse.ref": "bold gold3",
     "verse.text": "white",
     "lexicon.num": "bold blue",
@@ -155,6 +334,11 @@ class LexAgent:
         self.db = LexDB(LEXICON_DB_PATH)
         self.bible_db = LexDB(BIBLE_DB_PATH if os.path.exists(BIBLE_DB_PATH) else LEXICON_DB_PATH)
         self.encyclopedia_db = LexDB(ENCYCLOPEDIA_DB_PATH) if os.path.exists(ENCYCLOPEDIA_DB_PATH) else None
+        self.cross_refs_db = LexDB(CROSS_REFS_DB_PATH if os.path.exists(CROSS_REFS_DB_PATH) else LEXICON_DB_PATH)
+        self.strongs_db = LexDB(STRONGS_DB_PATH if os.path.exists(STRONGS_DB_PATH) else LEXICON_DB_PATH)
+        self.dictionary_db = LexDB(DICTIONARY_DB_PATH if os.path.exists(DICTIONARY_DB_PATH) else LEXICON_DB_PATH)
+        self.creeds_db = LexDB(CREEDS_DB_PATH if os.path.exists(CREEDS_DB_PATH) else LEXICON_DB_PATH)
+        self.places_db = LexDB(PLACES_DB_PATH if os.path.exists(PLACES_DB_PATH) else LEXICON_DB_PATH)
         self.last_ref = self.load_history()
         self._interlinear_index = None
         self._ordered_refs = None
@@ -196,6 +380,61 @@ class LexAgent:
         if not terms:
             return None
         return " AND ".join(f'"{term}"' for term in terms)
+
+    def parse_book_scope(self, token):
+        raw = token.strip()
+        if not raw.startswith("-") or raw.startswith("--"):
+            return None
+        scope = raw.lstrip("-").lower().strip()
+        if not scope:
+            return None
+        scope = re.sub(r"[^a-z0-9]+", "-", scope).strip("-")
+        if scope in BOOK_SCOPE_GROUPS:
+            return {
+                "label": scope,
+                "books": BOOK_SCOPE_GROUPS[scope],
+            }
+        if scope in BOOK_SCOPE_ALIASES:
+            book = BOOK_SCOPE_ALIASES[scope]
+            return {
+                "label": book,
+                "books": [book],
+            }
+        aliases = sorted(BOOK_SCOPE_ALIASES, key=len, reverse=True)
+        for start_alias in aliases:
+            prefix = f"{start_alias}-"
+            if not scope.startswith(prefix):
+                continue
+            end_alias = scope[len(prefix):]
+            if end_alias not in BOOK_SCOPE_ALIASES:
+                continue
+            start_book = BOOK_SCOPE_ALIASES[start_alias]
+            end_book = BOOK_SCOPE_ALIASES[end_alias]
+            start_idx = BIBLE_BOOK_INDEX[start_book]
+            end_idx = BIBLE_BOOK_INDEX[end_book]
+            if start_idx > end_idx:
+                start_idx, end_idx = end_idx, start_idx
+                start_book, end_book = end_book, start_book
+            return {
+                "label": f"{start_book}-{end_book}",
+                "books": BIBLE_BOOKS[start_idx:end_idx + 1],
+            }
+        return None
+
+    def parse_search_query_and_scope(self, query):
+        try:
+            tokens = shlex.split(query)
+        except ValueError:
+            tokens = query.split()
+        kept = []
+        scope = None
+        for token in tokens:
+            parsed_scope = self.parse_book_scope(token)
+            if parsed_scope:
+                scope = parsed_scope
+            else:
+                kept.append(token)
+        return " ".join(kept).strip(), scope
 
     def highlight_search_terms(self, text, query):
         result = Text()
@@ -316,7 +555,7 @@ class LexAgent:
         if not parts:
             return []
         tsk_ref = self.convert_to_tsk_ref(parts["book"], parts["chapter"], parts["verse"])
-        return self.db.query(
+        return self.cross_refs_db.query(
             "SELECT to_ref, votes FROM cross_refs WHERE from_ref = ? ORDER BY votes DESC, to_ref",
             (tsk_ref,)
         )
@@ -386,17 +625,14 @@ class LexAgent:
     def normalize_ref(self, q):
         # User-facing references are intentionally forgiving here. The DB still
         # uses canonical "version:Book:Chapter:Verse" strings internally.
-        abbr = {
-            "gn": "Genesis", "gen": "Genesis", "ex": "Exodus", "mt": "Matthew", "jhn": "John", "john": "John", "rv": "Revelation",
-            "sn": "Song of Solomon", "ps": "Psalms", "pr": "Proverbs", "is": "Isaiah", "jr": "Jeremiah"
-        }
         q_clean = q.lower().strip()
-        pattern = r'^([1-3]?\s?[a-zA-Z\s]+)\s+(\d+)(?:[\s:.](\d+))?$'
+        pattern = r'^([1-3]?\s?[a-zA-Z\s.]+)\s+(\d+)(?:[\s:.](\d+))?$'
         match = re.match(pattern, q_clean)
         if match:
             b, c, v = match.groups()
-            b_key = b.replace(" ", "")
-            b_name = abbr.get(b_key, b.title())
+            b_slug = re.sub(r"[^a-z0-9]+", "-", b).strip("-")
+            b_compact = re.sub(r"[^a-z0-9]+", "", b)
+            b_name = BOOK_SCOPE_ALIASES.get(b_slug) or BOOK_SCOPE_ALIASES.get(b_compact) or b.title()
             return f"{b_name}:{c}:{v}" if v else f"{b_name}:{c}", b_name, c, v
         return None, None, None, None
 
@@ -442,6 +678,7 @@ class LexAgent:
         also.add_column(style="white")
         also.add_row("Quick Read:", "lex John 3:16")
         also.add_row("Quick Study:", "lex John 3:16 -i")
+        also.add_row("Verse Web:", "lex web John 3:16")
         also.add_row("Lexicon:", "lex G3056  or  lex logos")
         also.add_row("Creeds:", "lex creed")
         also.add_row("Define:", "lex define grace")
@@ -617,6 +854,9 @@ and `lex --next`.
 **Try These**
 
 *   `lex read John 3:16`
+*   `lex jn 1:1`
+*   `lex study rev 1:2`
+*   `lex 2 jn 1:2`
 *   `lex read Genesis 1`
 *   `lex John 1:1`
 *   `lex --next`
@@ -634,6 +874,62 @@ Use explicit search mode:
 
 *   `lex search "mustard seed"`
 *   `lex search kingdom heaven`
+
+Search starts with an exact phrase match. If that finds nothing, Lex falls back
+to an all-terms match.
+
+## Page Controls
+
+*   `lex search covenant --page 2`
+*   `lex search covenant --limit 20`
+
+In an interactive terminal, search opens a compact action bar:
+
+*   `1`, `2`, `3` - study that numbered result
+*   `r 1`, `r 2` - read that numbered result
+*   `n` / `p` - next or previous page
+*   `e` - export menu
+*   `q` - quit
+
+Export menu:
+
+*   `d` - DOCX
+*   `f` - PDF
+*   `o` - open exports folder
+*   `q` - back
+
+Exports are saved under `~/Documents/lex_exports` and Lex tries to open them after saving.
+
+## Book Scopes
+
+Add a single-dash scope after the search term:
+
+*   `lex search covenant -jeremiah`
+*   `lex search beast -daniel-revelation`
+*   `lex search covenant -major`
+*   `lex search resurrection -nt`
+
+Book ranges follow canonical order, so `-jeremiah-revelation` searches from
+Jeremiah through Revelation. Book names use lowercase words joined by hyphens:
+
+*   `-song-of-solomon`
+*   `-1-john`
+*   `-1-corinthians-2-corinthians`
+
+## Group Scopes
+
+*   `-ot` / `-old-testament`
+*   `-nt` / `-new-testament`
+*   `-law` / `-pentateuch` / `-torah`
+*   `-history`
+*   `-wisdom` / `-poetry`
+*   `-major` / `-major-prophets`
+*   `-minor` / `-minor-prophets`
+*   `-prophets`
+*   `-gospels`
+*   `-epistles` / `-letters`
+*   `-pauline`
+*   `-general-epistles`
 
 Free-text search no longer runs from bare input.
 """
@@ -664,6 +960,11 @@ Find Strong's entries by number, transliteration, or English gloss:
     def display_read_nav(self, book, chap, verse=None):
         study_ref = f"{book} {chap}:{verse or 1}"
         console.print(f"[dim]lex --prev  |  lex --next  |  lex study {study_ref}[/]")
+
+    def should_animate(self, animate):
+        if animate is not None:
+            return animate
+        return console.is_terminal and not os.environ.get("NO_COLOR")
 
     def render_verse_context(self, rows, target_ref, book, chap, verse):
         body = Text()
@@ -705,7 +1006,7 @@ Find Strong's entries by number, transliteration, or English gloss:
         )
         self.display_read_nav(book, chap)
 
-    def display_verse(self, query, interlinear=False):
+    def display_verse(self, query, interlinear=False, animate=None):
         ref_norm, book, chap, verse = self.normalize_ref(query)
         if not ref_norm: return False
         if verse:
@@ -746,13 +1047,67 @@ Find Strong's entries by number, transliteration, or English gloss:
                         if row:
                             context_ids.append(row[0])
                 self.render_verse_context(context_ids, ref, book, chap, verse)
-                if interlinear: self.display_study(ref)
+                if interlinear: self.display_study(ref, animate=animate)
                 self.save_history(ref)
             else:
                 self.render_chapter(res, book, chap)
                 self.save_history(f"{book} {chap}")
             return True
         return False
+
+    def display_verse_web(self, query, limit=12):
+        ref_norm, book, chap, verse = self.normalize_ref(query)
+        if not ref_norm or not verse:
+            console.print("[warning]Verse web needs a single verse, e.g. lex web John 3:16[/]")
+            return False
+        rows = self.bible_db.query(
+            "SELECT MIN(id), reference, text FROM bible WHERE reference LIKE ? GROUP BY reference LIMIT 1",
+            (f"%:{book}:{chap}:{verse}",)
+        )
+        if not rows:
+            return False
+        _, db_ref, verse_text = rows[0]
+        clean_verse = self.clean_text(verse_text)
+        refs = self.get_tsk_crossrefs(db_ref)[:max(1, min(limit, 24))]
+
+        center = Text()
+        center.append(f"{book} {chap}:{verse}\n", style="bold gold3")
+        center.append(clean_verse, style="bold white")
+
+        console.print(
+            Panel(
+                Align.center(center),
+                title="✦ Scripture Web ✦",
+                subtitle="ranked local TSK connections",
+                border_style="gold3",
+                padding=(1, 2),
+            )
+        )
+
+        if not refs:
+            console.print("[warning]No local cross-reference links found for this verse.[/]")
+            return True
+
+        table = Table(title="Major Connections", box=None, expand=True)
+        table.add_column("Rank", style="dim", justify="right", no_wrap=True)
+        table.add_column("Link", style="verse.ref", no_wrap=True)
+        table.add_column("Weight", style="bold cyan", justify="right", no_wrap=True)
+        table.add_column("Preview", style="verse.text", overflow="fold")
+        for idx, (to_ref, votes) in enumerate(refs, 1):
+            preview = self.get_crossref_preview(to_ref)
+            table.add_row(str(idx), to_ref, str(votes), preview[:180] if preview else "")
+        console.print(table)
+
+        spark = Text()
+        for idx, (to_ref, votes) in enumerate(refs[:8], 1):
+            if idx > 1:
+                spark.append("  ", style="dim")
+            spark.append("●", style="gold3" if idx == 1 else "cyan")
+            spark.append(f" {to_ref}", style="dim")
+        console.print(Panel(spark, title="Connection Trail", border_style="cyan"))
+        console.print(f"[dim]Open a link: lex read <ref>  |  Study center: lex study {book} {chap}:{verse}[/]")
+        self.save_history(db_ref)
+        return True
 
     # -----------------------------------------------------------------------
     # Study mode: source text, interlinear rows, lexicons, and TSK links
@@ -761,7 +1116,7 @@ Find Strong's entries by number, transliteration, or English gloss:
         short_key, strongs_db_key, step_key = self.normalize_strongs_key(strongs_id)
         interlinear = self.get_interlinear_strongs().get(short_key) if short_key else None
         step = self.get_step_greek().get(step_key) if strongs_id.lower().startswith("g") else self.get_step_hebrew().get(step_key)
-        db = self.db.query("SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?", (strongs_db_key,)) if strongs_db_key else []
+        db = self.strongs_db.query("SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?", (strongs_db_key,)) if strongs_db_key else []
         return {
             "interlinear": interlinear,
             "step": step,
@@ -865,13 +1220,221 @@ Find Strong's entries by number, transliteration, or English gloss:
         if anchor_words:
             console.print("[dim]Verse-level TSK links; local data has no per-word anchor. Key terms: {}[/]".format(", ".join(anchor_words)))
 
-    def display_study(self, db_ref):
+    def pause_study_section(self, animate):
+        if self.should_animate(animate):
+            time.sleep(0.16)
+
+    def study_export_dir(self):
+        path = os.path.expanduser("~/Documents/lex_exports/studies")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def study_export_filename(self, db_ref, ext):
+        parts = self.parse_reference_parts(db_ref)
+        label = self.format_display_ref(db_ref) if parts else db_ref
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "_", f"lex_study_{label}.{ext}").strip("_")
+        return os.path.join(self.study_export_dir(), safe)
+
+    def build_study_export_data(self, db_ref):
+        row = self.get_interlinear_index().get(db_ref)
+        if not row or not row.get("p"):
+            return None
+        parsed_tokens = [self.parse_interlinear_token(token) for token in row["p"]]
+        parts = self.parse_reference_parts(db_ref)
+        display_ref = self.format_display_ref(db_ref) if parts else db_ref
+        verse_row = self.bible_db.query(
+            "SELECT text FROM bible WHERE reference = ? ORDER BY id LIMIT 1",
+            (db_ref,)
+        )
+        source_tokens = sorted(
+            [token for token in parsed_tokens if token["surface"]],
+            key=lambda token: token["source_order"] if token["source_order"] is not None else 9999,
+        )
+        lex_notes = []
+        seen = set()
+        for parsed in parsed_tokens:
+            strongs = parsed["strongs"]
+            if not strongs or strongs in seen:
+                continue
+            seen.add(strongs)
+            entry = self.lookup_lexicon_entry(strongs)
+            lemma = parsed["lemma"] or (entry["db"][1] if entry["db"] else "")
+            pieces = []
+            if parsed["morph"]:
+                pieces.append(parsed["morph"])
+            if entry["step"]:
+                pieces.append(re.sub(r"<[^>]+>", "", entry["step"].get("definition", ""))[:280])
+            elif entry["interlinear"]:
+                pieces.append(entry["interlinear"].get("d", "")[:280])
+            elif entry["db"]:
+                pieces.append(entry["db"][3][:280])
+            if entry["step"] and entry["step"].get("translit"):
+                lemma = f"{lemma} ({entry['step']['translit']})"
+            elif entry["db"]:
+                lemma = f"{lemma} ({entry['db'][2]})"
+            lex_notes.append({"strongs": strongs, "lemma": lemma or "-", "details": " | ".join(piece for piece in pieces if piece) or "-"})
+            if len(lex_notes) >= 18:
+                break
+        tsk_refs = []
+        for to_ref, votes in self.get_tsk_crossrefs(db_ref)[:24]:
+            preview = self.get_crossref_preview(to_ref)
+            tsk_refs.append({"reference": to_ref, "votes": votes, "preview": preview or ""})
+        return {
+            "db_ref": db_ref,
+            "display_ref": display_ref,
+            "verse": self.clean_text(verse_row[0][0]) if verse_row else "",
+            "language": self.detect_source_language(parsed_tokens),
+            "source": " ".join(token["surface"] for token in source_tokens),
+            "transliteration": " ".join(token["translit"] for token in source_tokens if token["translit"]),
+            "interlinear": parsed_tokens[:30],
+            "lex_notes": lex_notes,
+            "tsk_refs": tsk_refs,
+        }
+
+    def export_study_docx(self, db_ref):
+        try:
+            from docx import Document
+        except ImportError:
+            console.print("[warning]DOCX export needs python-docx installed.[/]")
+            return None
+        data = self.build_study_export_data(db_ref)
+        if not data:
+            return None
+        path = self.study_export_filename(db_ref, "docx")
+        doc = Document()
+        doc.add_heading(f"Lex Study: {data['display_ref']}", level=1)
+        if data["verse"]:
+            doc.add_paragraph(data["verse"])
+        doc.add_heading(data["language"], level=2)
+        if data["source"]:
+            doc.add_paragraph(data["source"])
+        if data["transliteration"]:
+            doc.add_paragraph(data["transliteration"])
+        doc.add_heading("Interlinear", level=2)
+        table = doc.add_table(rows=1, cols=5)
+        for cell, title in zip(table.rows[0].cells, ["English", "Source", "Lemma", "Code", "Gloss"]):
+            cell.text = title
+        for parsed in data["interlinear"]:
+            row = table.add_row().cells
+            row[0].text = parsed["english"] or "-"
+            row[1].text = f"{parsed['surface']} ({parsed['translit']})" if parsed["surface"] else "-"
+            row[2].text = f"{parsed['lemma']} ({parsed['lemma_translit']})" if parsed["lemma"] else "-"
+            row[3].text = parsed["strongs"] or parsed["morph"] or "-"
+            row[4].text = parsed["gloss"] or parsed["english"] or "-"
+        doc.add_heading("Lexicon Notes", level=2)
+        for note in data["lex_notes"]:
+            doc.add_paragraph(f"{note['strongs']} - {note['lemma']}: {note['details']}")
+        doc.add_heading("Treasury of Scripture Knowledge", level=2)
+        for ref in data["tsk_refs"]:
+            doc.add_paragraph(f"{ref['reference']} ({ref['votes']}): {ref['preview']}")
+        doc.save(path)
+        return path
+
+    def export_study_pdf(self, db_ref):
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.lib.styles import getSampleStyleSheet
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table as PdfTable
+        except ImportError:
+            console.print("[warning]PDF export needs reportlab installed.[/]")
+            return None
+        data = self.build_study_export_data(db_ref)
+        if not data:
+            return None
+        path = self.study_export_filename(db_ref, "pdf")
+        doc = SimpleDocTemplate(path, pagesize=letter, rightMargin=42, leftMargin=42, topMargin=42, bottomMargin=42)
+        styles = getSampleStyleSheet()
+        self.setup_pdf_styles(styles)
+        story = [self.pdf_paragraph(f"Lex Study: {data['display_ref']}", styles["Title"])]
+        if data["verse"]:
+            story.extend([self.pdf_paragraph(data["verse"], styles["BodyText"]), Spacer(1, 10)])
+        story.append(self.pdf_paragraph(data["language"], styles["Heading2"]))
+        if data["source"]:
+            source_style = styles["Hebrew"] if re.search(r"[\u0590-\u05ff]", data["source"]) and "Hebrew" in styles else styles["BodyText"]
+            story.append(self.pdf_paragraph(data["source"], source_style))
+        if data["transliteration"]:
+            story.append(self.pdf_paragraph(data["transliteration"], styles["Italic"]))
+        story.extend([Spacer(1, 10), self.pdf_paragraph("Interlinear", styles["Heading2"])])
+        table_rows = [["English", "Source", "Lemma", "Code", "Gloss"]]
+        for parsed in data["interlinear"]:
+            table_rows.append([
+                self.pdf_paragraph(parsed["english"] or "-", styles["BodyText"]),
+                self.pdf_paragraph(f"{parsed['surface']} ({parsed['translit']})" if parsed["surface"] else "-", styles["Hebrew"] if parsed["surface"] and re.search(r"[\u0590-\u05ff]", parsed["surface"]) and "Hebrew" in styles else styles["BodyText"]),
+                self.pdf_paragraph(f"{parsed['lemma']} ({parsed['lemma_translit']})" if parsed["lemma"] else "-", styles["Hebrew"] if parsed["lemma"] and re.search(r"[\u0590-\u05ff]", parsed["lemma"]) and "Hebrew" in styles else styles["BodyText"]),
+                self.pdf_paragraph(parsed["strongs"] or parsed["morph"] or "-", styles["BodyText"]),
+                self.pdf_paragraph(parsed["gloss"] or parsed["english"] or "-", styles["BodyText"]),
+            ])
+        story.append(PdfTable(table_rows, repeatRows=1))
+        story.append(self.pdf_paragraph("Lexicon Notes", styles["Heading2"]))
+        for note in data["lex_notes"]:
+            story.append(self.pdf_paragraph(f"{note['strongs']} - {note['lemma']}: {note['details']}", styles["BodyText"]))
+        story.append(self.pdf_paragraph("Treasury of Scripture Knowledge", styles["Heading2"]))
+        for ref in data["tsk_refs"]:
+            story.append(self.pdf_paragraph(f"{ref['reference']} ({ref['votes']}): {ref['preview']}", styles["BodyText"]))
+        doc.build(story)
+        return path
+
+    def prompt_study_export(self, db_ref):
+        while True:
+            self.render_action_bar(
+                "Export",
+                [
+                    ("d", "DOCX study packet"),
+                    ("f", "PDF study packet"),
+                    ("o", "open studies folder"),
+                    ("q", "back"),
+                ],
+            )
+            action = Prompt.ask("Export action", choices=["d", "f", "o", "q"], default="q").lower()
+            if action == "q":
+                return
+            if action == "o":
+                self.open_exports_folder(self.study_export_dir())
+                continue
+            path = self.export_study_docx(db_ref) if action == "d" else self.export_study_pdf(db_ref)
+            if path:
+                self.open_export(path)
+                return
+
+    def prompt_study_actions(self, db_ref):
+        current_ref = db_ref
+        while True:
+            self.render_action_bar(
+                "Study Actions",
+                [
+                    ("n / p", "next or previous verse"),
+                    ("r", "read context"),
+                    ("w", "verse web"),
+                    ("e", "export"),
+                    ("q", "done"),
+                ],
+            )
+            action = Prompt.ask("Study action", choices=["n", "p", "r", "w", "e", "q"], default="q").lower()
+            if action == "q":
+                return
+            if action == "e":
+                self.prompt_study_export(current_ref)
+                continue
+            if action == "r":
+                self.display_verse(self.format_display_ref(current_ref))
+                continue
+            if action == "w":
+                self.display_verse_web(self.format_display_ref(current_ref))
+                continue
+            next_ref = self.get_navigation_reference(current_ref, "next" if action == "n" else "prev")
+            if next_ref:
+                current_ref = next_ref
+                self.display_study(current_ref, actions=False)
+
+    def display_study(self, db_ref, animate=None, actions=None):
         row = self.get_interlinear_index().get(db_ref)
         if not row or not row.get("p"):
             console.print(Panel("No local interlinear data found for this verse.", border_style="magenta"))
             return False
         parsed_tokens = [self.parse_interlinear_token(token) for token in row["p"]]
+        self.pause_study_section(animate)
         self.display_source_text(parsed_tokens)
+        self.pause_study_section(animate)
         verse_table = Table(title=f"🔤 Study: {db_ref}", box=None)
         verse_table.add_column("Eng", style="bold white", overflow="fold")
         verse_table.add_column("Src", style="cyan", overflow="fold")
@@ -890,6 +1453,7 @@ Find Strong's entries by number, transliteration, or English gloss:
             )
         console.print(verse_table)
 
+        self.pause_study_section(animate)
         lex_table = Table(title="📚 Lexicon Notes", box=None)
         lex_table.add_column("Strongs", style="lexicon.num")
         lex_table.add_column("Lemma", style="lexicon.word", overflow="fold")
@@ -919,7 +1483,11 @@ Find Strong's entries by number, transliteration, or English gloss:
             if len(seen) >= 12:
                 break
         console.print(lex_table)
+        self.pause_study_section(animate)
         self.display_study_tsk(db_ref, parsed_tokens)
+        use_actions = console.is_terminal if actions is None else actions
+        if use_actions:
+            self.prompt_study_actions(db_ref)
         return True
 
     def display_dictionary_howto(self):
@@ -1088,7 +1656,7 @@ Find Strong's entries by number, transliteration, or English gloss:
         return len(stripped.strip()) <= 18
 
     def build_creed_sections(self, topic):
-        rows = self.db.query("SELECT rowid, content, source FROM creeds WHERE topic = ? ORDER BY rowid", (topic,))
+        rows = self.creeds_db.query("SELECT rowid, content, source FROM creeds WHERE topic = ? ORDER BY rowid", (topic,))
         if not rows:
             return self.build_creed_sections_from_file(topic)
         sections = []
@@ -1229,7 +1797,7 @@ Find Strong's entries by number, transliteration, or English gloss:
                 console.print(table)
                 console.print("[dim]Use: lex creed <document name>[/]")
                 return True
-            res = self.db.query(
+            res = self.creeds_db.query(
                 """
                 SELECT topic, content, source
                 FROM creeds
@@ -1248,7 +1816,7 @@ Find Strong's entries by number, transliteration, or English gloss:
                 console.print(Panel(Markdown(f"# {t}: {title}\n\n**Source:** {display_source}\n\n{snippet}"), border_style="green"))
             return bool(res)
         
-        creeds_list = self.db.query(
+        creeds_list = self.creeds_db.query(
             """
             SELECT topic, source
             FROM creeds
@@ -1293,7 +1861,7 @@ Find Strong's entries by number, transliteration, or English gloss:
         normalized_query = self.normalize_term(query)
         if not normalized_query:
             return []
-        rows = self.db.query(
+        rows = self.creeds_db.query(
             """
             SELECT topic, source
             FROM creeds
@@ -1352,51 +1920,83 @@ Find Strong's entries by number, transliteration, or English gloss:
     # -----------------------------------------------------------------------
     # Scripture search, Strong's lookup, dictionary, and encyclopedia
     # -----------------------------------------------------------------------
-    def query_search_results(self, fts_query, limit, offset):
+    def search_scope_clause(self, scope):
+        if not scope:
+            return "", ()
+        clauses = " OR ".join(["reference GLOB ?"] * len(scope["books"]))
+        params = tuple(f"*:{book}:*" for book in scope["books"])
+        return f" AND ({clauses})", params
+
+    def query_search_results(self, fts_query, limit, offset, scope=None):
+        scope_clause, scope_params = self.search_scope_clause(scope)
         return self.bible_db.query(
-            """
+            f"""
             SELECT reference, text
             FROM bible_fts
             WHERE bible_fts MATCH ?
+            {scope_clause}
             ORDER BY rank
             LIMIT ? OFFSET ?
             """,
-            (fts_query, limit, offset)
+            (fts_query, *scope_params, limit, offset)
         )
 
-    def count_search_results(self, fts_query):
+    def count_search_results(self, fts_query, scope=None):
+        scope_clause, scope_params = self.search_scope_clause(scope)
         rows = self.bible_db.query(
-            "SELECT COUNT(*) FROM bible_fts WHERE bible_fts MATCH ?",
-            (fts_query,)
+            f"SELECT COUNT(*) FROM bible_fts WHERE bible_fts MATCH ?{scope_clause}",
+            (fts_query, *scope_params)
         )
         return rows[0][0] if rows else 0
 
-    def display_search(self, query, page=1, limit=10):
-        safe_query = self.escape_fts_query(query)
+    def resolve_search(self, query, page=1, limit=10):
+        search_query, scope = self.parse_search_query_and_scope(query)
+        safe_query = self.escape_fts_query(search_query)
         if not safe_query:
-            return False
+            return None
         mode = "phrase"
         active_query = safe_query
         page = max(1, page)
         limit = min(max(1, limit), 50)
-        total = self.count_search_results(active_query)
+        total = self.count_search_results(active_query, scope=scope)
         if total:
             page = min(page, ((total - 1) // limit) + 1)
         offset = (page - 1) * limit
-        res = self.query_search_results(active_query, limit, offset) if total else []
+        res = self.query_search_results(active_query, limit, offset, scope=scope) if total else []
         if not total:
-            terms_query = self.fts_terms_query(query)
+            terms_query = self.fts_terms_query(search_query)
             if terms_query and terms_query != safe_query:
                 active_query = terms_query
                 mode = "all terms"
-                total = self.count_search_results(active_query)
+                total = self.count_search_results(active_query, scope=scope)
                 if total:
                     page = min(page, ((total - 1) // limit) + 1)
                 offset = (page - 1) * limit
-                res = self.query_search_results(active_query, limit, offset) if total else []
+                res = self.query_search_results(active_query, limit, offset, scope=scope) if total else []
         if not res:
-            return False
+            return None
+        return {
+            "query": search_query,
+            "active_query": active_query,
+            "mode": mode,
+            "scope": scope,
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "offset": offset,
+            "results": res,
+            "page_count": ((total - 1) // limit) + 1 if total else 1,
+        }
+
+    def render_search_page(self, state, interactive=False):
         body = Text()
+        query = state["query"]
+        page = state["page"]
+        limit = state["limit"]
+        offset = state["offset"]
+        total = state["total"]
+        res = state["results"]
+        scope = state.get("scope")
         for idx, (ref, text) in enumerate(res, 1):
             parts = self.parse_reference_parts(ref)
             display_ref = self.format_display_ref(ref) if parts else ref
@@ -1404,13 +2004,18 @@ Find Strong's entries by number, transliteration, or English gloss:
             body.append_text(self.highlight_search_terms(self.clean_text(text), query))
             body.append("\n\n", style="dim")
         shown_end = offset + len(res)
-        footer = f"Mode: {mode}  |  Showing {offset + 1}-{shown_end} of {total}  |  Open: lex read <ref>  |  Study: lex study <ref>"
+        scope_label = f"  |  Scope: {scope['label']}" if scope else ""
+        footer = f"Mode: {state['mode']}{scope_label}  |  Showing {offset + 1}-{shown_end} of {total}"
         query_arg = shlex.quote(query)
-        if shown_end < total:
+        if scope:
+            query_arg = f"{query_arg} -{scope['label'].lower().replace(' ', '-').replace('--', '-')}"
+        if interactive:
+            footer += "  |  Choose an action below"
+        elif shown_end < total:
             footer += f"\nNext page: lex search {query_arg} --page {page + 1}"
             if limit != 10:
                 footer += f" --limit {limit}"
-        if page > 1:
+        if not interactive and page > 1:
             footer += f"\nPrevious page: lex search {query_arg} --page {page - 1}"
             if limit != 10:
                 footer += f" --limit {limit}"
@@ -1419,19 +2024,245 @@ Find Strong's entries by number, transliteration, or English gloss:
             Panel(
                 body,
                 title=f"🔍 Search: {query}",
-                subtitle=f"page {page}",
+                subtitle=f"page {page}/{state['page_count']}",
                 border_style="cyan",
                 padding=(1, 2),
             )
         )
+        if interactive:
+            self.render_action_bar(
+                "Actions",
+                [
+                    ("1-10", "study result"),
+                    ("r #", "read result"),
+                    ("n / p", "page"),
+                    ("e", "export"),
+                    ("q", "quit"),
+                ],
+            )
+
+    def search_export_dir(self):
+        path = os.path.expanduser("~/Documents/lex_exports")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def render_action_bar(self, title, actions):
+        grid = Table.grid(padding=(0, 2))
+        grid.add_column(no_wrap=True)
+        grid.add_column(style="ui.meta")
+        for key, label in actions:
+            grid.add_row(f"[ui.action.key]{key}[/]", label)
+        console.print(Panel(grid, title=title, border_style="ui.action", padding=(0, 1), expand=False))
+
+    def open_export(self, path):
+        if not path:
+            return
+        opener = None
+        for candidate in ("xdg-open", "gio", "kde-open"):
+            candidate_path = shutil.which(candidate)
+            if candidate_path:
+                opener = [candidate_path]
+                if candidate == "gio":
+                    opener.append("open")
+                break
+        if not opener:
+            console.print(f"[dim]Saved file:[/] {path}")
+            return
+        try:
+            subprocess.Popen([*opener, path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            console.print(f"[success]Saved and opened:[/] {path}")
+        except Exception:
+            console.print(f"[success]Saved:[/] {path}")
+
+    def open_exports_folder(self, path=None):
+        folder = path or self.search_export_dir()
+        self.open_export(folder)
+
+    def pdf_safe_text(self, value):
+        text = "" if value is None else str(value)
+        replacements = {
+            "•": "-",
+            "→": "->",
+            "←": "<-",
+            "\u00a0": " ",
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        return html.escape(text)
+
+    def setup_pdf_styles(self, styles):
+        paragraph_style_cls = None
+        try:
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            from reportlab.lib.styles import ParagraphStyle
+            paragraph_style_cls = ParagraphStyle
+            font_paths = {
+                "LexSans": "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+                "LexSansHebrew": "/usr/share/fonts/truetype/noto/NotoSansHebrew-Regular.ttf",
+            }
+            for font_name, font_path in font_paths.items():
+                if os.path.exists(font_path) and font_name not in pdfmetrics.getRegisteredFontNames():
+                    pdfmetrics.registerFont(TTFont(font_name, font_path))
+            base_font = "LexSans" if "LexSans" in pdfmetrics.getRegisteredFontNames() else "Helvetica"
+            hebrew_font = "LexSansHebrew" if "LexSansHebrew" in pdfmetrics.getRegisteredFontNames() else base_font
+        except Exception:
+            base_font = "Helvetica"
+            hebrew_font = base_font
+        for style_name in ["Title", "Heading1", "Heading2", "Heading3", "Normal", "BodyText", "Italic"]:
+            if style_name in styles:
+                styles[style_name].fontName = base_font
+        if "Hebrew" not in styles and paragraph_style_cls:
+            styles.add(paragraph_style_cls(name="Hebrew", parent=styles["BodyText"]))
+        if "Hebrew" in styles:
+            styles["Hebrew"].fontName = hebrew_font
+        return base_font, hebrew_font
+
+    def pdf_paragraph(self, text, style):
+        from reportlab.platypus import Paragraph
+        return Paragraph(self.pdf_safe_text(text), style)
+
+    def search_export_filename(self, state, ext):
+        scope = state.get("scope")
+        scope_part = f"_{scope['label']}" if scope else ""
+        raw = f"lex_search_{state['query']}{scope_part}_p{state['page']}.{ext}"
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "_", raw).strip("_")
+        return os.path.join(self.search_export_dir(), safe)
+
+    def search_export_rows(self, state):
+        rows = []
+        for idx, (ref, text) in enumerate(state["results"], 1):
+            parts = self.parse_reference_parts(ref)
+            display_ref = self.format_display_ref(ref) if parts else ref
+            rows.append({
+                "number": state["offset"] + idx,
+                "reference": display_ref,
+                "text": self.clean_text(text),
+            })
+        return rows
+
+    def export_search_docx(self, state):
+        try:
+            from docx import Document
+        except ImportError:
+            console.print("[warning]DOCX export needs python-docx installed.[/]")
+            return None
+        path = self.search_export_filename(state, "docx")
+        doc = Document()
+        doc.add_heading(f"Lex Search: {state['query']}", level=1)
+        scope = state.get("scope")
+        meta = f"Mode: {state['mode']} | Page: {state['page']}/{state['page_count']} | Showing {state['offset'] + 1}-{state['offset'] + len(state['results'])} of {state['total']}"
+        if scope:
+            meta += f" | Scope: {scope['label']}"
+        doc.add_paragraph(meta)
+        for row in self.search_export_rows(state):
+            doc.add_heading(f"{row['number']}. {row['reference']}", level=2)
+            doc.add_paragraph(row["text"])
+        doc.save(path)
+        return path
+
+    def export_search_pdf(self, state):
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.lib.styles import getSampleStyleSheet
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        except ImportError:
+            console.print("[warning]PDF export needs reportlab installed.[/]")
+            return None
+        path = self.search_export_filename(state, "pdf")
+        doc = SimpleDocTemplate(path, pagesize=letter, rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=54)
+        styles = getSampleStyleSheet()
+        self.setup_pdf_styles(styles)
+        story = [self.pdf_paragraph(f"Lex Search: {state['query']}", styles["Title"])]
+        scope = state.get("scope")
+        meta = f"Mode: {state['mode']} | Page: {state['page']}/{state['page_count']} | Showing {state['offset'] + 1}-{state['offset'] + len(state['results'])} of {state['total']}"
+        if scope:
+            meta += f" | Scope: {scope['label']}"
+        story.extend([self.pdf_paragraph(meta, styles["Normal"]), Spacer(1, 12)])
+        for row in self.search_export_rows(state):
+            story.append(self.pdf_paragraph(f"{row['number']}. {row['reference']}", styles["Heading2"]))
+            story.append(self.pdf_paragraph(row["text"], styles["BodyText"]))
+            story.append(Spacer(1, 10))
+        doc.build(story)
+        return path
+
+    def prompt_search_export(self, state):
+        while True:
+            self.render_action_bar(
+                "Export",
+                [
+                    ("d", "DOCX current page"),
+                    ("f", "PDF current page"),
+                    ("o", "open exports folder"),
+                    ("q", "back"),
+                ],
+            )
+            action = Prompt.ask("Export action", choices=["d", "f", "o", "q"], default="q").lower()
+            if action == "q":
+                return
+            if action == "o":
+                self.open_exports_folder()
+                continue
+            path = self.export_search_docx(state) if action == "d" else self.export_search_pdf(state)
+            if path:
+                self.open_export(path)
+                return
+
+    def search_result_ref(self, state, user_number):
+        if not user_number.isdigit():
+            return None
+        idx = int(user_number) - state["offset"] - 1
+        if idx < 0 or idx >= len(state["results"]):
+            return None
+        return state["results"][idx][0]
+
+    def display_search(self, query, page=1, limit=10, interactive=None):
+        state = self.resolve_search(query, page=page, limit=limit)
+        if not state:
+            return False
+        use_interactive = console.is_terminal if interactive is None else interactive
+        use_interactive = use_interactive and page == 1 and state["page_count"] > 1
+        if not use_interactive:
+            self.render_search_page(state)
+            return True
+        while True:
+            console.clear()
+            self.render_search_page(state, interactive=True)
+            nav = Prompt.ask("Search action", default="q").strip().lower()
+            if nav == "q":
+                return True
+            if nav == "e":
+                self.prompt_search_export(state)
+                Prompt.ask("Press Enter to continue", default="")
+                continue
+            if nav.isdigit():
+                ref = self.search_result_ref(state, nav)
+                if ref:
+                    self.display_study(ref, actions=True)
+                continue
+            read_match = re.match(r"^r\s+(\d+)$", nav)
+            if read_match:
+                ref = self.search_result_ref(state, read_match.group(1))
+                if ref:
+                    self.display_verse(self.format_display_ref(ref))
+                    Prompt.ask("Press Enter to return to search", default="")
+                continue
+            if nav not in {"n", "p"}:
+                continue
+            next_page = state["page"] + 1 if nav == "n" else state["page"] - 1
+            if next_page < 1 or next_page > state["page_count"]:
+                continue
+            next_state = self.resolve_search(query, page=next_page, limit=limit)
+            if next_state:
+                state = next_state
         return True
 
     def display_strongs(self, query):
         if re.match(r'^[GH]\d+$', query.upper()):
-            res = self.db.query("SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?", (query.upper(),))
+            res = self.strongs_db.query("SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?", (query.upper(),))
         else:
             normalized = self.normalize_term(query)
-            res = self.db.query(
+            res = self.strongs_db.query(
                 """
                 SELECT number, word, pronunciation, definition
                 FROM strongs
@@ -1444,7 +2275,7 @@ Find Strong's entries by number, transliteration, or English gloss:
                 safe_query = self.escape_fts_query(query)
                 if not safe_query:
                     return False
-                res = self.db.query(
+                res = self.strongs_db.query(
                     """
                     SELECT s.number, s.word, s.pronunciation, s.definition
                     FROM strongs_fts f
@@ -1473,7 +2304,7 @@ Find Strong's entries by number, transliteration, or English gloss:
             if not exact_matches and not fuzzy_matches:
                 continue
             _, db_key, _ = self.normalize_strongs_key(strongs_id)
-            db_rows = self.db.query(
+            db_rows = self.strongs_db.query(
                 "SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?",
                 (db_key,)
             ) if db_key else []
@@ -1489,7 +2320,7 @@ Find Strong's entries by number, transliteration, or English gloss:
         results = exact_results[:8] if exact_results else fuzzy_results[:8]
         safe_query = self.escape_fts_query(query)
         if safe_query:
-            db_rows = self.db.query(
+            db_rows = self.strongs_db.query(
                 """
                 SELECT strongs.number, strongs.word, strongs.pronunciation, strongs.definition
                 FROM strongs_fts
@@ -1523,7 +2354,7 @@ Find Strong's entries by number, transliteration, or English gloss:
         normalized = query.strip()
         if not normalized:
             return False
-        res = self.db.query(
+        res = self.dictionary_db.query(
             """
             SELECT topic, content, source
             FROM dictionary
@@ -1533,7 +2364,7 @@ Find Strong's entries by number, transliteration, or English gloss:
             (normalized,)
         )
         if not res:
-            res = self.db.query(
+            res = self.dictionary_db.query(
                 """
                 SELECT topic, content, source
                 FROM dictionary
@@ -1547,7 +2378,7 @@ Find Strong's entries by number, transliteration, or English gloss:
             safe_query = self.escape_fts_query(query)
             if not safe_query:
                 return False
-            res = self.db.query(
+            res = self.dictionary_db.query(
                 "SELECT topic, content, source FROM dictionary_fts WHERE dictionary_fts MATCH ? LIMIT 3",
                 (safe_query,)
             )
@@ -1607,6 +2438,21 @@ Find Strong's entries by number, transliteration, or English gloss:
 # Keep parsing and routing here thin. Feature behavior should live on LexAgent
 # so commands can eventually be tested without shelling out.
 def main():
+    raw_argv = sys.argv[1:]
+    if "search" in raw_argv or "serch" in raw_argv:
+        command_idx = raw_argv.index("search") if "search" in raw_argv else raw_argv.index("serch")
+        protected_argv = []
+        for idx, token in enumerate(raw_argv):
+            if (
+                idx > command_idx
+                and token.startswith("-")
+                and not token.startswith("--")
+                and token not in {"-i", "-d", "-c", "-s", "-v"}
+            ):
+                protected_argv.append(f"__lexscope__{token[1:]}")
+            else:
+                protected_argv.append(token)
+        raw_argv = protected_argv
     parser = argparse.ArgumentParser()
     parser.add_argument("query", nargs="*")
     parser.add_argument("-i", "--interlinear", action="store_true")
@@ -1619,7 +2465,15 @@ def main():
     parser.add_argument("--prev", action="store_true")
     parser.add_argument("--page", type=int, default=1)
     parser.add_argument("--limit", type=int, default=10)
-    args = parser.parse_args()
+    parser.add_argument("--animate", dest="animate", action="store_true", default=None)
+    parser.add_argument("--no-animate", dest="animate", action="store_false")
+    args, unknown = parser.parse_known_args(raw_argv)
+    args.query = [f"-{q[len('__lexscope__'):]}" if q.startswith("__lexscope__") else q for q in args.query]
+    if unknown:
+        if args.query and args.query[0] in {"search", "serch"} and all(u.startswith("-") and not u.startswith("--") for u in unknown):
+            args.query.extend(unknown)
+        else:
+            parser.error(f"unrecognized arguments: {' '.join(unknown)}")
     agent = LexAgent()
     query = " ".join(args.query)
 
@@ -1656,15 +2510,24 @@ def main():
             agent.display_study_landing()
             sys.exit(0)
         args.interlinear = True
-    elif query == "search":
+    elif query in {"search", "serch"}:
         agent.display_search_howto()
         sys.exit(0)
-    elif query.startswith("search "):
-        query = query[7:].strip()
+    elif query.startswith("search ") or query.startswith("serch "):
+        query = query.split(" ", 1)[1].strip()
         if not query:
             sys.exit(1)
         if not agent.display_search(query, page=args.page, limit=args.limit):
             console.print("[warning]No scripture search results found.[/]")
+            sys.exit(1)
+        sys.exit(0)
+    elif query == "web":
+        console.print("[warning]Usage: lex web John 3:16[/]")
+        sys.exit(1)
+    elif query.startswith("web "):
+        q = query[4:].strip()
+        if not agent.display_verse_web(q, limit=args.limit):
+            console.print("[warning]No verse web found.[/]")
             sys.exit(1)
         sys.exit(0)
     elif query == "strongs":
@@ -1708,7 +2571,7 @@ def main():
             console.print("[warning]No Strong's entry found for that number.[/]")
             sys.exit(1)
     elif query:
-        if not agent.display_verse(query, interlinear=args.interlinear):
+        if not agent.display_verse(query, interlinear=args.interlinear, animate=args.animate):
             if not agent.display_strongs(query):
                 agent.display_search_howto()
                 sys.exit(1)

@@ -14,19 +14,81 @@ Path:
 
 Used for:
 
-- Strong's entries
-- Easton's dictionary
-- Creed/confession rows
-- TSK cross-references
+- Source/fallback store for legacy combined data.
+
+Lex now prefers domain-specific DBs below and falls back to `lexicon.db` when a split DB is missing.
+
+### `cross_refs.db`
+
+Path:
+
+```text
+~/bible-lexicon-data/cross_refs.db
+```
+
+Used for Treasury of Scripture Knowledge cross-references.
+
+Important tables:
+
+- `cross_refs`
+
+### `strongs.db`
+
+Path:
+
+```text
+~/bible-lexicon-data/strongs.db
+```
+
+Used for Strong's Hebrew/Greek lookup and study-mode lexicon fallback.
 
 Important tables:
 
 - `strongs`
 - `strongs_fts`
+
+### `dictionary.db`
+
+Path:
+
+```text
+~/bible-lexicon-data/dictionary.db
+```
+
+Used for Easton's dictionary results in `lex define <term>`.
+
+Important tables:
+
 - `dictionary`
 - `dictionary_fts`
+
+### `creeds.db`
+
+Path:
+
+```text
+~/bible-lexicon-data/creeds.db
+```
+
+Used for creed/confession browsing and section rendering.
+
+Important tables:
+
 - `creeds`
-- `cross_refs`
+
+### `places.db`
+
+Path:
+
+```text
+~/bible-lexicon-data/places.db
+```
+
+Prepared for future place lookup support.
+
+Important tables:
+
+- `places`
 
 ### `bible_versions/esv.db`
 
@@ -140,6 +202,11 @@ Check database tables:
 sqlite3 ~/bible-lexicon-data/lexicon.db ".tables"
 sqlite3 ~/bible-lexicon-data/bible_versions/esv.db ".tables"
 sqlite3 ~/bible-lexicon-data/encyclopedia.db ".tables"
+sqlite3 ~/bible-lexicon-data/cross_refs.db ".tables"
+sqlite3 ~/bible-lexicon-data/strongs.db ".tables"
+sqlite3 ~/bible-lexicon-data/dictionary.db ".tables"
+sqlite3 ~/bible-lexicon-data/creeds.db ".tables"
+sqlite3 ~/bible-lexicon-data/places.db ".tables"
 ```
 
 Check encyclopedia row count:
@@ -152,6 +219,12 @@ Check Bible row count:
 
 ```bash
 sqlite3 ~/bible-lexicon-data/bible_versions/esv.db "SELECT count(*) FROM bible;"
+```
+
+Rebuild split DBs from `lexicon.db`:
+
+```bash
+python3 ~/bible-lexicon-data/scripts/split_lexicon_db.py
 ```
 
 ## Licensing Reminder
