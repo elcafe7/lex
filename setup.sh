@@ -18,22 +18,35 @@ python3 -c "import rich" 2>/dev/null || pip3 install rich
 
 # Download database if not present
 if [ ! -f "lexicon.db" ]; then
-    echo "Downloading database (45MB)..."
+    echo "Downloading main database (55MB)..."
+    DB_URL="https://github.com/elcafe7/lex/raw/main/lexicon.db"
     if command -v curl &> /dev/null; then
-        curl -L -o lexicon.db "https://github.com/your-repo/releases/latest/download/lexicon.db"
+        curl -L -o lexicon.db "$DB_URL"
     elif command -v wget &> /dev/null; then
-        wget -O lexicon.db "https://github.com/your-repo/releases/latest/download/lexicon.db"
+        wget -O lexicon.db "$DB_URL"
     else
         echo "Error: curl or wget required"
         exit 1
     fi
 fi
 
-# Make lex executable
-chmod +x lex
+# Make lex.py executable
+if [ -f "lex.py" ]; then
+    chmod +x lex.py
+fi
+
+# Create local symlink for easier access if bin exists
+if [ -d "$HOME/.local/bin" ]; then
+    echo "Creating 'lex' symlink in ~/.local/bin..."
+    ln -sf "$PWD/lex.py" "$HOME/.local/bin/lex"
+fi
 
 echo ""
 echo "=== Setup Complete! ==="
 echo ""
-echo "Run: ./lex John 3:16"
-echo "Or:  ./lex demo"
+echo "You can now run Lex using:"
+echo "  ./lex.py John 3:16"
+if [ -f "$HOME/.local/bin/lex" ]; then
+    echo "Or simply:"
+    echo "  lex John 3:16"
+fi
