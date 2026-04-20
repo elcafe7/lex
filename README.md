@@ -1,131 +1,220 @@
-# Lex: The Elegant Bible Terminal
+# Lex
 
-Lex is a local-first Bible study CLI. It combines Scripture reading, study mode, search, Strong's lookups, dictionary/encyclopedia definitions, TSK cross-references, and historical Christian documents in one terminal tool.
+**A local-first Bible study terminal for reading, searching, studying, and exporting Scripture work.**
 
-Current tracked CLI:
-
-```text
-./lex.py
-```
-
-Current version:
-
-```text
-2.3.3-Nav
-```
-
-## Start Here
-
-For non-technical users:
-
-- [User Guide](docs/USER_GUIDE.md)
-
-For developers:
-
-- [Developer Guide](docs/DEVELOPER_GUIDE.md)
-
-Component documentation:
-
-- [Lex CLI](docs/components/LEX_CLI.md)
-- [Runtime Data Stores](docs/components/DATA_STORES.md)
-- [Bible DB Builder](docs/components/BIBLE_DB_BUILDER.md)
-- [Encyclopedia Importer](docs/components/ENCYCLOPEDIA_IMPORTER.md)
-
-Supporting docs:
-
-- [Bible Edition Standard](docs/BIBLE_EDITION_STANDARD.md)
-- [Encyclopedia Import Notes](docs/ENCYCLOPEDIA_IMPORT_NOTES.md)
-- [Licensing Notes](docs/LICENSING.md)
-
-## Common Commands
-
-Open the main screen:
-
-```bash
-lex
-```
-
-Read Scripture:
-
-```bash
-lex read John 3:16
-lex John 3:16
-lex John 1
-lex jn 1:1
-lex 2 jn 1:2
-```
-
-Study a verse:
+Lex is a Python CLI that keeps Bible study fast and offline. It combines Scripture reading, interlinear study, Strong's and STEPBible lexicon notes, Treasury of Scripture Knowledge cross-references, dictionary/encyclopedia lookups, and historical Christian documents in one terminal tool.
 
 ```bash
 lex study John 1:1
+lex search covenant -major
+lex web Romans 1:1
+```
+
+Current CLI: `./lex.py`  
+Current version: `2.3.3-Nav`
+
+## Highlights
+
+| Feature | What it does |
+| --- | --- |
+| Scripture reading | Read a verse with context or a full chapter from the local Bible DB. |
+| Study mode | Show verse context, source text, transliteration, interlinear rows, lexicon notes, and TSK links. |
+| Scoped search | Search all Scripture, one book, a book range, or a canon section such as `-major`, `-gospels`, or `-nt`. |
+| Verse web | Print a verse as the center point with ranked local cross-reference connections. |
+| Exports | Save search pages and study packets as DOCX or PDF. |
+| Creeds | Browse historical Christian documents by tradition and section. |
+| Local data | Runs against local SQLite/JSON data stores with no web request required for normal use. |
+
+## Quick Start
+
+Clone and enter the repo:
+
+```bash
+git clone https://github.com/elcafe7/lex.git
+cd lex
+```
+
+Install the Python packages used by the current CLI:
+
+```bash
+python3 -m pip install rich python-docx reportlab
+```
+
+Run Lex directly:
+
+```bash
+python3 ./lex.py
+python3 ./lex.py John 3:16
+python3 ./lex.py study John 1:1
+```
+
+If you want a shell command named `lex`, create a local symlink somewhere on your `PATH`:
+
+```bash
+ln -sf "$PWD/lex.py" ~/.local/bin/lex
+```
+
+Then:
+
+```bash
+lex
+lex jn 1:1
 lex study rev 1:2
+```
+
+## Reading
+
+References are forgiving. Full names and common abbreviations both work:
+
+```bash
+lex read John 3:16
+lex John 1
+lex jn 1:1
+lex rom 8:1
+lex 2 jn 1:2
+```
+
+Move from the last opened passage:
+
+```bash
+lex --next
+lex --prev
+```
+
+## Study Mode
+
+Study mode is the main workbench:
+
+```bash
+lex study John 1:1
+lex study Genesis 1:1
 lex John 3:16 -i
 ```
 
-Interactive study mode includes actions for next/previous verse, read context,
-verse web, and DOCX/PDF export.
+It renders:
 
-Show a verse-centered connection view:
+- verse context
+- Greek or Hebrew/Aramaic source text
+- transliteration
+- interlinear alignment
+- Strong's and STEPBible-backed lexicon notes
+- local TSK cross-references
 
-```bash
-lex web John 3:16
-lex web Romans 1:1 --limit 8
+In an interactive terminal, study mode ends with a compact action bar:
+
+```text
+n / p  next or previous verse
+r      read context
+w      verse web
+e      export
+q      done
 ```
 
-Study mode can use a soft section cascade in interactive terminals. Use
-`--no-animate` for immediate output or `--animate` to force the pauses:
+Exports are saved under:
 
-```bash
-lex study John 1:1 --no-animate
-lex study John 1:1 --animate
+```text
+~/Documents/lex_exports/studies
 ```
 
-Search Scripture:
+Lex tries to open exported files automatically after saving.
+
+## Search
+
+Search starts with an exact phrase query. If that finds nothing, Lex falls back to an all-terms search.
 
 ```bash
 lex search israel
-lex search "kingdom of god" --page 2
+lex search "kingdom of god"
+lex search covenant --page 2
+lex search covenant --limit 20
+```
+
+Limit search by book, book range, or group:
+
+```bash
 lex search covenant -jeremiah
 lex search beast -daniel-revelation
 lex search resurrection -nt
 lex search covenant -major
 ```
 
-In an interactive terminal, search uses a compact action bar for result study,
-read mode, paging, and export. Search and study exports are saved under:
+Useful group scopes:
+
+```text
+-ot                 -old-testament
+-nt                 -new-testament
+-law                -pentateuch        -torah
+-history
+-wisdom             -poetry
+-major              -major-prophets
+-minor              -minor-prophets
+-prophets
+-gospels
+-epistles           -letters
+-pauline
+-general-epistles
+```
+
+Interactive search uses a compact action bar:
+
+```text
+1-10   study result
+r #    read result
+n / p  page
+e      export
+q      quit
+```
+
+Search exports are saved under:
 
 ```text
 ~/Documents/lex_exports
 ```
 
-Look up Strong's:
+## Verse Web
+
+Verse web mode shows a passage as the visual center, then prints ranked local cross-reference connections with previews:
+
+```bash
+lex web John 3:16
+lex web Romans 1:1 --limit 8
+```
+
+## Lexicons, Definitions, And Creeds
+
+Strong's lookup:
 
 ```bash
 lex G3056
+lex H7225
 lex strongs love
 ```
 
-Define a term:
+Dictionary and encyclopedia lookup:
 
 ```bash
 lex define covenant
 lex define heliodorus
 ```
 
-Browse creeds and confessions:
+Creeds and confessions:
 
 ```bash
 lex creed
 lex creed nicene
-lex creed baltimore
+lex creed westminster confession
 ```
 
-Show credits and data licenses:
+## Documentation
 
-```bash
-lex --credits
-```
+- [User Guide](docs/USER_GUIDE.md)
+- [Developer Guide](docs/DEVELOPER_GUIDE.md)
+- [Lex CLI Component](docs/components/LEX_CLI.md)
+- [Runtime Data Stores](docs/components/DATA_STORES.md)
+- [Bible DB Builder](docs/components/BIBLE_DB_BUILDER.md)
+- [Encyclopedia Importer](docs/components/ENCYCLOPEDIA_IMPORTER.md)
+- [Bible Edition Standard](docs/BIBLE_EDITION_STANDARD.md)
+- [Licensing Notes](docs/LICENSING.md)
 
 ## Data Sources
 
@@ -143,20 +232,23 @@ Lex currently uses local data from:
 
 The encyclopedia import is incomplete: the current local ISBE import only covers Volume II, `Clement-Heresh`.
 
-## License
+## License And Data Terms
 
-Recommended model:
-
-- Lex application code: MIT.
-- Bundled/generated data: source-specific terms.
+Lex application code is intended to be MIT licensed. Bundled and generated data remains under each upstream source's own license or terms.
 
 Do not represent generated databases or third-party datasets as MIT licensed. See [Licensing Notes](docs/LICENSING.md).
 
-## Developer Verification
+## Developer Checks
 
 ```bash
 python3 -m py_compile ./lex.py
 python3 ./lex.py
 python3 ./lex.py --credits
 python3 ./lex.py study James 1:1
+python3 ./lex.py search covenant -major --limit 2
+python3 ./lex.py 2 jn 1:2
 ```
+
+## Project Status
+
+Lex is usable as a local CLI today. Packaging is still intentionally simple: the tracked entrypoint is `lex.py`, and the current repo includes generated local databases needed by that script. A proper Python package/release workflow is a good next milestone.
