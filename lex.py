@@ -45,7 +45,21 @@ def get_lex_path(relative_path, fallback_base=HOME_FALLBACK):
     return os.path.join(fallback_base, relative_path)
 
 LEXICON_DB_PATH = get_lex_path("lexicon.db")
-BIBLE_DB_PATH = get_lex_path("bible_versions/esv.db")
+
+# Bible Versions Configuration
+BIBLE_VERSIONS = {
+    "esv": {"name": "English Standard Version", "file": "bible_versions/esv.db"},
+    "kjv": {"name": "King James Version (Oxford 1769)", "file": "bible_versions/kjv.db"},
+    "kj16": {"name": "King James Version (1611)", "file": "bible_versions/kj16.db"},
+    "nasb": {"name": "New American Standard Bible (1995)", "file": "bible_versions/nasb.db"},
+    "gen": {"name": "Geneva Bible (1587)", "file": "bible_versions/gen.db"},
+}
+
+def get_bible_path(bible_id):
+    if bible_id in BIBLE_VERSIONS:
+        return get_lex_path(BIBLE_VERSIONS[bible_id]["file"])
+    return get_lex_path("bible_versions/esv.db")
+
 ENCYCLOPEDIA_DB_PATH = get_lex_path("encyclopedia.db")
 CROSS_REFS_DB_PATH = get_lex_path("cross_refs.db")
 STRONGS_DB_PATH = get_lex_path("strongs.db")
@@ -700,9 +714,17 @@ class LexDB:
 class LexAgent:
     # LexAgent owns all local data access and terminal rendering. The CLI parser
     # at the bottom should stay thin and dispatch into these feature methods.
-    def __init__(self):
+    def __init__(self, bible_id="esv"):
         self.db = LexDB(LEXICON_DB_PATH)
-        self.bible_db = LexDB(BIBLE_DB_PATH if os.path.exists(BIBLE_DB_PATH) else LEXICON_DB_PATH)
+        bible_path = get_bible_path(bible_id)
+        self.bible_db = LexDB(bible_path if os.path.exists(bible_path) else LEXICON_DB_PATH)
+        
+        # Determine reference prefix from bible metadata
+        self.bible_prefix = "esv"
+        prefix_res = self.bible_db.query("SELECT value FROM metadata WHERE key='reference_prefix'")
+        if prefix_res:
+            self.bible_prefix = prefix_res[0][0]
+        
         self.encyclopedia_db = LexDB(ENCYCLOPEDIA_DB_PATH) if os.path.exists(ENCYCLOPEDIA_DB_PATH) else None
         self.cross_refs_db = LexDB(CROSS_REFS_DB_PATH if os.path.exists(CROSS_REFS_DB_PATH) else LEXICON_DB_PATH)
         self.strongs_db = LexDB(STRONGS_DB_PATH if os.path.exists(STRONGS_DB_PATH) else LEXICON_DB_PATH)
@@ -854,13 +876,18 @@ class LexAgent:
                     self._interlinear_index[ref] = row
             self._ordered_refs = [
                 row["r"] for row in data
-                if row.get("r", "").startswith("esv:") and row.get("r", "").count(":") == 3 and not row.get("h")
+                if row.get("r", "").startswith(f"{self.bible_prefix}:") and row.get("r", "").count(":") == 3 and not row.get("h")
             ]
         return self._interlinear_index
 
     def get_ordered_refs(self):
         if self._ordered_refs is None:
-            self.get_interlinear_index()
+            # If interlinear data isn't available for this version, load refs from the DB
+            if not os.path.exists(INTERLINEAR_PATH) or self.bible_prefix != "esv":
+                res = self.bible_db.query("SELECT reference FROM bible WHERE reference NOT LIKE '%:0' ORDER BY id")
+                self._ordered_refs = [row[0] for row in res]
+            else:
+                self.get_interlinear_index()
         return self._ordered_refs or []
 
     def get_interlinear_strongs(self):
@@ -996,10 +1023,12 @@ class LexAgent:
         # User-facing references are intentionally forgiving here. The DB still
         # uses canonical "version:Book:Chapter:Verse" strings internally.
         q_clean = q.lower().strip()
-        pattern = r'^([1-3]?\s?[a-zA-Z\s.]+)\s+(\d+)(?:[\s:.](\d+))?$'
+        # Handle "1 John 1:9" or "John 3:16" or "1 Kings 1 1"
+        pattern = r'^([1-3]?\s?[a-zA-Z\s.]+?)\s+(\d+)(?:[\s:.](\d+))?$'
         match = re.match(pattern, q_clean)
         if match:
             b, c, v = match.groups()
+            b = b.strip()
             b_slug = re.sub(r"[^a-z0-9]+", "-", b).strip("-")
             b_compact = re.sub(r"[^a-z0-9]+", "", b)
             b_name = BOOK_SCOPE_ALIASES.get(b_slug) or BOOK_SCOPE_ALIASES.get(b_compact) or b.title()
@@ -1451,7 +1480,11 @@ Find Strong's entries by number, transliteration, or English gloss:
                         if row:
                             context_ids.append(row[0])
                 self.render_verse_context(context_ids, ref, book, chap, verse)
-                if interlinear: self.display_study(ref, animate=animate)
+                if interlinear: 
+                    if self.bible_prefix in {"esv", "kjv", "kj16", "nasb", "gen"}:
+                        self.display_study(ref, animate=animate)
+                    else:
+                        console.print(f"[info]Interlinear study mode is currently not optimized for {self.bible_prefix}.[/]")
                 self.save_history(ref)
             else:
                 self.render_chapter(res, book, chap)
@@ -1831,7 +1864,20 @@ Find Strong's entries by number, transliteration, or English gloss:
                 self.display_study(current_ref, actions=False)
 
     def display_study(self, db_ref, animate=None, actions=None):
-        row = self.get_interlinear_index().get(db_ref)
+        index = self.get_interlinear_index()
+        row = index.get(db_ref)
+        
+        # If no exact match (likely due to version prefix mismatch), try to find by book:chap:verse
+        if not row or not row.get("p"):
+            parts = self.parse_reference_parts(db_ref)
+            if parts:
+                generic_ref = f"{parts['book']}:{parts['chapter']}:{parts['verse']}"
+                # The index keys currently look like "esv:Genesis:1:1"
+                for k, v in index.items():
+                    if k.endswith(f":{generic_ref}"):
+                        row = v
+                        break
+
         if not row or not row.get("p"):
             console.print(Panel("No local interlinear data found for this verse.", border_style="warning"))
             return False
@@ -2865,7 +2911,7 @@ def main():
                 idx > command_idx
                 and token.startswith("-")
                 and not token.startswith("--")
-                and token not in {"-i", "-d", "-c", "-s", "-v", "-light", "-dark", "-auto"}
+                and token not in {"-i", "-d", "-c", "-s", "-v", "-light", "-dark", "-auto", "-B", "--bible"}
             ):
                 protected_argv.append(f"__lexscope__{token[1:]}")
             else:
@@ -2878,6 +2924,7 @@ def main():
     parser.add_argument("-c", "--creed", action="store_true")
     parser.add_argument("-s", "--strongs", action="store_true")
     parser.add_argument("-v", "--version", action="store_true")
+    parser.add_argument("-B", "--bible", type=str, default="esv", choices=BIBLE_VERSIONS.keys(), help="Select Bible version")
     theme_group = parser.add_mutually_exclusive_group()
     theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light")
     theme_group.add_argument("-dark", dest="theme_mode", action="store_const", const="dark")
@@ -2900,7 +2947,7 @@ def main():
             args.query.extend(unknown)
         else:
             parser.error(f"unrecognized arguments: {' '.join(unknown)}")
-    agent = LexAgent()
+    agent = LexAgent(bible_id=args.bible)
     query = " ".join(args.query)
 
     if args.version:
