@@ -3,7 +3,7 @@ import os
 import sqlite3
 
 
-ROOT = os.path.expanduser("~/bible-lexicon-data")
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "runtime-data")
 SOURCE_DB = os.path.join(ROOT, "lexicon.db")
 
 TARGETS = {

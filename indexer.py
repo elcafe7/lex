@@ -4,8 +4,8 @@ import os
 import sys
 import re
 
-DB_PATH = os.path.expanduser("~/bible-lexicon-data/lexicon.db")
-BASE_DIR = os.path.expanduser("~/bible-lexicon-data")
+BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtime-data")
+DB_PATH = os.path.join(BASE_DIR, "lexicon.db")
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)

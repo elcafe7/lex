@@ -9,7 +9,7 @@ Lex depends on local SQLite and JSON files. Most features are data-driven, so mi
 Path:
 
 ```text
-~/bible-lexicon-data/lexicon.db
+runtime-data/lexicon.db
 ```
 
 Used for:
@@ -23,7 +23,7 @@ Lex now prefers domain-specific DBs below and falls back to `lexicon.db` when a 
 Path:
 
 ```text
-~/bible-lexicon-data/cross_refs.db
+runtime-data/cross_refs.db
 ```
 
 Used for Treasury of Scripture Knowledge cross-references.
@@ -37,7 +37,7 @@ Important tables:
 Path:
 
 ```text
-~/bible-lexicon-data/strongs.db
+runtime-data/strongs.db
 ```
 
 Used for Strong's Hebrew/Greek lookup and study-mode lexicon fallback.
@@ -52,7 +52,7 @@ Important tables:
 Path:
 
 ```text
-~/bible-lexicon-data/dictionary.db
+runtime-data/dictionary.db
 ```
 
 Used for Easton's dictionary results in `lex define <term>`.
@@ -67,7 +67,7 @@ Important tables:
 Path:
 
 ```text
-~/bible-lexicon-data/creeds.db
+runtime-data/creeds.db
 ```
 
 Used for creed/confession browsing and section rendering.
@@ -81,7 +81,7 @@ Important tables:
 Path:
 
 ```text
-~/bible-lexicon-data/places.db
+runtime-data/places.db
 ```
 
 Prepared for future place lookup support.
@@ -95,7 +95,7 @@ Important tables:
 Path:
 
 ```text
-~/bible-lexicon-data/bible_versions/esv.db
+runtime-data/bible_versions/esv.db
 ```
 
 Used for:
@@ -127,7 +127,7 @@ esv:John:3:16
 Path:
 
 ```text
-~/bible-lexicon-data/encyclopedia.db
+runtime-data/encyclopedia.db
 ```
 
 Used for:
@@ -224,26 +224,26 @@ Used for:
 Check database tables:
 
 ```bash
-sqlite3 ~/bible-lexicon-data/lexicon.db ".tables"
-sqlite3 ~/bible-lexicon-data/bible_versions/esv.db ".tables"
-sqlite3 ~/bible-lexicon-data/encyclopedia.db ".tables"
-sqlite3 ~/bible-lexicon-data/cross_refs.db ".tables"
-sqlite3 ~/bible-lexicon-data/strongs.db ".tables"
-sqlite3 ~/bible-lexicon-data/dictionary.db ".tables"
-sqlite3 ~/bible-lexicon-data/creeds.db ".tables"
-sqlite3 ~/bible-lexicon-data/places.db ".tables"
+sqlite3 runtime-data/lexicon.db ".tables"
+sqlite3 runtime-data/bible_versions/esv.db ".tables"
+sqlite3 runtime-data/encyclopedia.db ".tables"
+sqlite3 runtime-data/cross_refs.db ".tables"
+sqlite3 runtime-data/strongs.db ".tables"
+sqlite3 runtime-data/dictionary.db ".tables"
+sqlite3 runtime-data/creeds.db ".tables"
+sqlite3 runtime-data/places.db ".tables"
 ```
 
 Check encyclopedia row count:
 
 ```bash
-sqlite3 ~/bible-lexicon-data/encyclopedia.db "SELECT count(*) FROM encyclopedia;"
+sqlite3 runtime-data/encyclopedia.db "SELECT count(*) FROM encyclopedia;"
 ```
 
 Check Bible row count:
 
 ```bash
-sqlite3 ~/bible-lexicon-data/bible_versions/esv.db "SELECT count(*) FROM bible;"
+sqlite3 runtime-data/bible_versions/esv.db "SELECT count(*) FROM bible;"
 ```
 
 Rebuild split DBs from `lexicon.db`:

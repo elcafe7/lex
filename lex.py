@@ -30,9 +30,9 @@ VERSION = "2.3.3-Nav"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 CONFIG_FILE = os.path.expanduser("~/.lex_config.json")
 
-# Local-first path resolution. Clones ship the compact runtime JSON bundle
-# under runtime-data/, while local developer worktrees may also have full
-# upstream data checkouts beside lex.py.
+# Local-first path resolution. Clones ship the compact runtime data bundle
+# (SQLite DBs and JSON) under runtime-data/, while local developer worktrees
+# may also have full upstream data checkouts beside lex.py.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RUNTIME_DATA_DIR = os.path.join(BASE_DIR, "runtime-data")
 HOME_FALLBACK = os.path.expanduser("~/bible-lexicon-data")
@@ -565,33 +565,34 @@ def build_theme(theme_mode):
     if theme_mode == "light":
         text_style = "rgb(31,31,31)"
         strong_text_style = "bold rgb(31,31,31)"
-        muted_text_style = "rgb(82,82,82)"
-        accent_style = "rgb(47,92,160)"
-        accent_strong_style = "bold rgb(47,92,160)"
-        success_style = "rgb(31,105,57)"
-        warning_style = "orange3"
-        border_style = "rgb(154,154,154)"
+        muted_text_style = "rgb(100,100,100)"
+        accent_style = "rgb(180,30,40)" # Crimson / Red
+        accent_strong_style = "bold rgb(180,30,40)"
+        success_style = "rgb(30,100,50)" # Deep Green
+        warning_style = "rgb(160,100,0)" # Ochre
+        border_style = "rgb(200,190,170)" # Warm divider
         verse_ref_style = accent_strong_style
-        verse_ref_muted_style = "rgb(92,92,92)"
-        highlight_style = "rgb(31,31,31) on rgb(248,226,165) underline"
-        marker_style = "bold rgb(31,31,31) on rgb(248,226,165)"
-        source_style = "rgb(47,92,160)"
-        translit_style = "italic grey35"
+        verse_ref_muted_style = "rgb(130,120,110)"
+        highlight_style = "rgb(31,31,31) on rgb(240,220,150) underline"
+        marker_style = "bold rgb(31,31,31) on rgb(240,220,150)"
+        source_style = "rgb(47,92,160)" # Biblical blue
+        translit_style = "italic rgb(100,90,80)"
     else:
-        text_style = "white"
+        text_style = "grey93"
         strong_text_style = "bold white"
-        muted_text_style = "dim white"
-        accent_style = "cyan"
-        accent_strong_style = "bold cyan"
-        success_style = "bold green"
-        warning_style = "magenta"
-        border_style = "gold3"
-        verse_ref_style = "bold gold3"
-        verse_ref_muted_style = "dim gold3"
-        highlight_style = "bold black on gold3"
-        marker_style = "bold black on gold3"
-        source_style = "bold cyan"
-        translit_style = "italic yellow"
+        muted_text_style = "grey50"
+        accent_style = "dark_orange"
+        accent_strong_style = "bold dark_orange"
+        success_style = "bold spring_green3"
+        warning_style = "bold sandy_brown"
+        border_style = "grey27"
+        verse_ref_style = "bold orange3"
+        verse_ref_muted_style = "grey42"
+        highlight_style = "bold grey93 on grey19"
+        marker_style = "bold grey93 on grey19"
+        source_style = "bold sky_blue3"
+        translit_style = "italic grey62"
+
     return Theme({
         "text": text_style,
         "text.strong": strong_text_style,
@@ -617,14 +618,14 @@ def build_theme(theme_mode):
         "lexicon.num": accent_strong_style,
         "lexicon.word": success_style,
         "place.name": warning_style,
-        "dict.topic": "purple4" if theme_mode == "light" else "bold violet",
+        "dict.topic": "rgb(110,60,160)" if theme_mode == "light" else "bold orchid",
         "interlinear.strongs": accent_style,
         "interlinear.translit": translit_style,
     })
 
 ACTIVE_THEME_MODE = resolve_theme_mode(sys.argv[1:])
 custom_theme = build_theme(ACTIVE_THEME_MODE)
-console_base_style = "rgb(31,31,31) on rgb(249,247,242)" if ACTIVE_THEME_MODE == "light" else "white on black"
+console_base_style = "rgb(31,31,31) on rgb(249,247,242)" if ACTIVE_THEME_MODE == "light" else "grey93 on grey11"
 
 def detect_console_width():
     for candidate in (os.environ.get("COLUMNS"),):
@@ -1188,7 +1189,7 @@ Do not represent the ESV text, UBS resources, STEPBible data, or generated datab
 See: `~/bible-lexicon-data/docs/LICENSING.md`
 """
         )
-        console.print(Panel(Group(table, "", note), border_style="cyan", padding=(1, 2)))
+        console.print(Panel(Group(table, "", note), border_style="ui.border", padding=(1, 2)))
 
     def display_study_landing(self):
         md = """
@@ -1215,7 +1216,7 @@ morphology, and Strong's-backed lexicon notes.
 ---
 *Read the text. Inspect the words. Stay in one tool.*
 """
-        console.print(Panel(Markdown(md), title="🔤 Study Mode", border_style="green", expand=False))
+        console.print(Panel(Markdown(md), title="🔤 Study Mode", border_style="ui.border", expand=False))
 
     def display_read_landing(self):
         md = """
@@ -1245,7 +1246,7 @@ and `lex --next`.
 ---
 *Open the text fast. Move without friction. Study when needed.*
 """
-        console.print(Panel(Markdown(md), title="📖 Read Mode", border_style="gold3", expand=False))
+        console.print(Panel(Markdown(md), title="📖 Read Mode", border_style="ui.border", expand=False))
 
     def display_search_howto(self):
         md = """
@@ -1336,7 +1337,7 @@ If you need plain text with no Lex colors:
 
 *   `LEX_NO_COLOR=1 lex John 3:16`
 """
-        console.print(Panel(Markdown(md), title="🔎 Search", border_style="cyan", expand=False))
+        console.print(Panel(Markdown(md), title="🔎 Search", border_style="ui.border", expand=False))
 
     def display_strongs_howto(self):
         md = """
@@ -1349,7 +1350,7 @@ Find Strong's entries by number, transliteration, or English gloss:
 *   `lex strongs God`
 *   `lex G3056`
 """
-        console.print(Panel(Markdown(md), title="🔤 Strong's Lookup", border_style="blue", expand=False))
+        console.print(Panel(Markdown(md), title="🔤 Strong's Lookup", border_style="ui.border", expand=False))
 
     # -----------------------------------------------------------------------
     # Bible reading and navigation rendering
@@ -1507,7 +1508,7 @@ Find Strong's entries by number, transliteration, or English gloss:
                 spark.append("  ", style="dim")
             spark.append("●", style="gold3" if idx == 1 else "cyan")
             spark.append(f" {to_ref}", style="dim")
-        console.print(Panel(spark, title="Connection Trail", border_style="cyan"))
+        console.print(Panel(spark, title="Connection Trail", border_style="ui.border"))
         console.print(f"[dim]Open a link: lex read <ref>  |  Study center: lex study {book} {chap}:{verse}[/]")
         self.save_history(db_ref)
         return True
