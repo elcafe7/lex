@@ -235,6 +235,14 @@ lex -B kjv John 3:16    # Modern KJV
 
 By default, Lex uses the **ESV (English Standard Version)**.
 
+### Setting a Permanent Default
+To set a version as your permanent default so you don't have to type `-B` every time:
+
+```bash
+lex -B kjv  # Sets KJV as your permanent default
+lex -B esv  # Switches back to ESV
+```
+
 ## Keeping Lex Updated
 
 You can update your local code and Bible databases to the latest version available on GitHub with one command:
