@@ -818,6 +818,42 @@ class LexAgent:
         if prefix_res:
             self.bible_prefix = prefix_res[0][0]
         
+        # Build dynamic book mapping from the active database references
+        self.canon_map = {}
+        self.reverse_canon_map = {}
+        # 1. First, index everything actually IN the database
+        books_res = self.bible_db.query("SELECT DISTINCT reference FROM bible")
+        for (ref,) in books_res:
+            parts = ref.split(":")
+            if len(parts) >= 2:
+                db_book = parts[1]
+                # Map the compact version of the DB string to itself
+                self.canon_map[re.sub(r"[^a-z0-9]+", "", db_book.lower())] = db_book
+                # Default reverse map to itself
+                self.reverse_canon_map[db_book] = db_book
+
+        # 2. Map all standard aliases and full names to the DB's preferred string
+        # For each canonical book, find if any of its aliases are in the DB.
+        # If so, map all other aliases to that same DB identifier.
+        for book in BIBLE_BOOKS:
+            # Gather all keys that refer to this book
+            aliases = [a for a, f in BOOK_SCOPE_ALIASES.items() if f == book]
+            aliases.append(re.sub(r"[^a-z0-9]+", "", book.lower()))
+            
+            # Find if any of these are in the DB
+            db_target = None
+            for a in aliases:
+                if a in self.canon_map:
+                    db_target = self.canon_map[a]
+                    break
+            
+            if db_target:
+                for a in aliases:
+                    self.canon_map[a] = db_target
+                # Also map reverse for study mode
+                canon_target = "Psalm" if book == "Psalms" else book
+                self.reverse_canon_map[db_target] = canon_target
+
         self.encyclopedia_db = LexDB(ENCYCLOPEDIA_DB_PATH) if os.path.exists(ENCYCLOPEDIA_DB_PATH) else None
         self.cross_refs_db = LexDB(CROSS_REFS_DB_PATH if os.path.exists(CROSS_REFS_DB_PATH) else LEXICON_DB_PATH)
         self.strongs_db = LexDB(STRONGS_DB_PATH if os.path.exists(STRONGS_DB_PATH) else LEXICON_DB_PATH)
@@ -1122,9 +1158,18 @@ class LexAgent:
         if match:
             b, c, v = match.groups()
             b = b.strip()
-            b_slug = re.sub(r"[^a-z0-9]+", "-", b).strip("-")
-            b_compact = re.sub(r"[^a-z0-9]+", "", b)
-            b_name = BOOK_SCOPE_ALIASES.get(b_slug) or BOOK_SCOPE_ALIASES.get(b_compact) or b.title()
+            b_slug = re.sub(r"[^a-z0-9]+", "-", b.lower()).strip("-")
+            b_compact = re.sub(r"[^a-z0-9]+", "", b.lower())
+            
+            # 1. Try dynamic canon map from active DB
+            # 2. Try static aliases
+            # 3. Fallback to title case
+            b_name = self.canon_map.get(b_compact) or self.canon_map.get(b_slug) or BOOK_SCOPE_ALIASES.get(b_slug) or BOOK_SCOPE_ALIASES.get(b_compact) or b.title()
+            
+            # If the resolved name exists in our canon map, use the specific DB casing/spelling
+            b_name_lower = re.sub(r"[^a-z0-9]+", "", b_name.lower())
+            b_name = self.canon_map.get(b_name_lower, b_name)
+            
             return f"{b_name}:{c}:{v}" if v else f"{b_name}:{c}", b_name, c, v
         return None, None, None, None
 
@@ -1538,10 +1583,14 @@ Find Strong's entries by number, transliteration, or English gloss:
     def display_verse(self, query, interlinear=False, animate=None):
         ref_norm, book, chap, verse = self.normalize_ref(query)
         if not ref_norm: return False
+        
+        # Ensure we use the DB-specific book name in the LIKE query
+        db_book = self.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
+        
         if verse:
             res = self.bible_db.query(
                 "SELECT MIN(id), reference, text FROM bible WHERE reference LIKE ? GROUP BY reference LIMIT 1",
-                (f"%:{book}:{chap}:{verse}",)
+                (f"%:{db_book}:{chap}:{verse}",)
             )
         else:
             res = self.bible_db.query(
@@ -1556,7 +1605,7 @@ Find Strong's entries by number, transliteration, or English gloss:
                 )
                 ORDER BY id
                 """,
-                (f"%:{book}:{chap}:%",)
+                (f"%:{db_book}:{chap}:%",)
             )
         if res:
             if verse:
@@ -1577,10 +1626,7 @@ Find Strong's entries by number, transliteration, or English gloss:
                             context_ids.append(row[0])
                 self.render_verse_context(context_ids, ref, book, chap, verse)
                 if interlinear: 
-                    if self.bible_prefix in {"esv", "kjv", "kj16", "nasb", "gen"}:
-                        self.display_study(ref, animate=animate)
-                    else:
-                        console.print(f"[info]Interlinear study mode is currently not optimized for {self.bible_prefix}.[/]")
+                    self.display_study(ref, animate=animate)
                 self.save_history(ref)
             else:
                 self.render_chapter(res, book, chap)
@@ -1967,10 +2013,13 @@ Find Strong's entries by number, transliteration, or English gloss:
         if not row or not row.get("p"):
             parts = self.parse_reference_parts(db_ref)
             if parts:
-                generic_ref = f"{parts['book']}:{parts['chapter']}:{parts['verse']}"
-                # The index keys currently look like "esv:Genesis:1:1"
+                # Use reverse canon map to get the canonical book name (e.g. "Ps" -> "Psalm")
+                canon_book = self.reverse_canon_map.get(parts["book"], parts["book"])
+                generic_suffix = f":{canon_book}:{parts['chapter']}:{parts['verse']}"
+                
+                # The index keys in interlinear JSON look like "esv:Genesis:1:1" or "esv:Psalm:1:1"
                 for k, v in index.items():
-                    if k.endswith(f":{generic_ref}"):
+                    if k.endswith(generic_suffix):
                         row = v
                         break
 
