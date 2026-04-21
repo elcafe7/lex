@@ -30,33 +30,49 @@ Current version: `2.3.3-Nav`
 
 ## Quick Start
 
-Clone and enter the repo:
+Clone the repo into whatever folder you want Lex to live in:
 
 ```bash
 git clone https://github.com/elcafe7/lex.git
 cd lex
 ```
 
-Run the setup script to install dependencies and configure the local environment:
+Install Python dependencies if your machine does not already have them:
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+Register the `lex` command for your Bash shell:
 
 ```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-The setup script will:
-1. Check for Python 3 and the `rich` library.
-2. Ensure the main database (`lexicon.db`) is present.
-3. Make `lex.py` executable.
-4. Optionally create a `lex` symlink in `~/.local/bin` for easy access.
+The setup script does not download databases or JSON components. It only:
 
-Now you can run Lex from anywhere (if symlinked) or directly:
+1. Makes `lex.py` executable.
+2. Writes/updates `alias lex='<clone-folder>/lex.py'` in `~/.bashrc`.
+3. Creates `~/.local/bin/lex` as a convenience symlink.
+
+Restart your terminal, or run:
+
+```bash
+source ~/.bashrc
+```
+
+Now you can run Lex from anywhere or directly from the clone:
 
 ```bash
 lex John 3:16
 # OR
 ./lex.py study John 1:1
 ```
+
+The GitHub repo includes the runtime SQLite databases and the compact JSON
+bundle under `runtime-data/`, so normal install does not need a second data
+download step.
 
 ## Reading
 

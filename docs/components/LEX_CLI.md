@@ -22,7 +22,9 @@
 
 ## Key Runtime Paths
 
-The script currently hardcodes runtime paths near the top of the file:
+The script resolves runtime paths near the top of the file. A normal GitHub
+clone uses bundled JSON under `runtime-data/`; local developer checkouts can
+also use full upstream data directories beside `lex.py`.
 
 - `LEXICON_DB_PATH`: `~/bible-lexicon-data/lexicon.db`
 - `BIBLE_DB_PATH`: `~/bible-lexicon-data/bible_versions/esv.db`
@@ -32,11 +34,11 @@ The script currently hardcodes runtime paths near the top of the file:
 - `DICTIONARY_DB_PATH`: `~/bible-lexicon-data/dictionary.db`
 - `CREEDS_DB_PATH`: `~/bible-lexicon-data/creeds.db`
 - `PLACES_DB_PATH`: `~/bible-lexicon-data/places.db`
-- `INTERLINEAR_PATH`: `~/bible-lexicon-data/esv-data/data/esv/esv-interlinear.json`
-- `INTERLINEAR_STRONGS_PATH`: `~/bible-lexicon-data/esv-data/data/interlinear/strongs.json`
-- `STEP_GREEK_PATH`: STEPBible Greek lexicon JSON
-- `STEP_HEBREW_PATH`: STEPBible Hebrew lexicon JSON
-- `HISTORICAL_DOCS_DIR`: TheologAI historical documents
+- `INTERLINEAR_PATH`: `runtime-data/esv-data/data/esv/esv-interlinear.json`
+- `INTERLINEAR_STRONGS_PATH`: `runtime-data/esv-data/data/interlinear/strongs.json`
+- `STEP_GREEK_PATH`: bundled STEPBible Greek lexicon JSON
+- `STEP_HEBREW_PATH`: bundled STEPBible Hebrew lexicon JSON
+- `HISTORICAL_DOCS_DIR`: bundled TheologAI historical documents
 
 ## Internal Structure
 

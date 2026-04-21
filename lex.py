@@ -28,15 +28,18 @@ from rich.prompt import Prompt, IntPrompt
 VERSION = "2.3.3-Nav"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 
-# Local-first path resolution: check the directory where lex.py lives first.
-# This makes the repo portable when cloned.
+# Local-first path resolution. Clones ship the compact runtime JSON bundle
+# under runtime-data/, while local developer worktrees may also have full
+# upstream data checkouts beside lex.py.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+RUNTIME_DATA_DIR = os.path.join(BASE_DIR, "runtime-data")
 HOME_FALLBACK = os.path.expanduser("~/bible-lexicon-data")
 
 def get_lex_path(relative_path, fallback_base=HOME_FALLBACK):
-    local_path = os.path.join(BASE_DIR, relative_path)
-    if os.path.exists(local_path):
-        return local_path
+    for base_path in (RUNTIME_DATA_DIR, BASE_DIR):
+        local_path = os.path.join(base_path, relative_path)
+        if os.path.exists(local_path):
+            return local_path
     return os.path.join(fallback_base, relative_path)
 
 LEXICON_DB_PATH = get_lex_path("lexicon.db")

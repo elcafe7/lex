@@ -145,7 +145,13 @@ Current limitation: only ISBE Volume II is imported.
 
 ### ESV Interlinear
 
-Path:
+Clone path:
+
+```text
+runtime-data/esv-data/data/esv/esv-interlinear.json
+```
+
+Developer checkout fallback:
 
 ```text
 ~/bible-lexicon-data/esv-data/data/esv/esv-interlinear.json
@@ -158,7 +164,13 @@ Used for:
 
 ### Interlinear Strong's
 
-Path:
+Clone path:
+
+```text
+runtime-data/esv-data/data/interlinear/strongs.json
+```
+
+Developer checkout fallback:
 
 ```text
 ~/bible-lexicon-data/esv-data/data/interlinear/strongs.json
@@ -171,7 +183,14 @@ Used for:
 
 ### STEPBible Lexicons
 
-Paths:
+Clone paths:
+
+```text
+runtime-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesg-greek.json
+runtime-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesh-hebrew.json
+```
+
+Developer checkout fallbacks:
 
 ```text
 ~/bible-lexicon-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesg-greek.json
@@ -184,7 +203,13 @@ Used for:
 
 ### Historical Documents
 
-Path:
+Clone path:
+
+```text
+runtime-data/theolog-ai/data/historical-documents
+```
+
+Developer checkout fallback:
 
 ```text
 ~/bible-lexicon-data/theolog-ai/data/historical-documents

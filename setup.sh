@@ -1,52 +1,63 @@
-#!/bin/bash
-# Lex Setup Script - Complete installation
+#!/usr/bin/env bash
+# Lex command installer. This does not download data; clone the repo wherever
+# you want Lex to live, then run this script from that clone.
 
-set -e
+set -euo pipefail
 
 echo "=== Lex: The Elegant Bible Terminal ==="
 echo ""
 
-# Check Python
-if ! command -v python3 &> /dev/null; then
-    echo "Error: Python 3 not found. Install from python.org"
+LEX_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LEX_BIN="$LEX_DIR/lex.py"
+BASHRC="$HOME/.bashrc"
+ALIAS_LINE="alias lex='$LEX_BIN'"
+
+if [ ! -f "$LEX_BIN" ]; then
+    echo "Error: lex.py not found next to setup.sh"
     exit 1
 fi
 
-# Check/install Rich
-echo "Checking dependencies..."
-python3 -c "import rich" 2>/dev/null || pip3 install rich
+chmod +x "$LEX_BIN"
 
-# Download database if not present
-if [ ! -f "lexicon.db" ]; then
-    echo "Downloading main database (55MB)..."
-    DB_URL="https://github.com/elcafe7/lex/raw/main/lexicon.db"
-    if command -v curl &> /dev/null; then
-        curl -L -o lexicon.db "$DB_URL"
-    elif command -v wget &> /dev/null; then
-        wget -O lexicon.db "$DB_URL"
-    else
-        echo "Error: curl or wget required"
-        exit 1
-    fi
-fi
+mkdir -p "$HOME/.local/bin"
+ln -sf "$LEX_BIN" "$HOME/.local/bin/lex"
 
-# Make lex.py executable
-if [ -f "lex.py" ]; then
-    chmod +x lex.py
-fi
+touch "$BASHRC"
+python3 - "$BASHRC" "$ALIAS_LINE" <<'PY'
+from pathlib import Path
+import sys
 
-# Create local symlink for easier access if bin exists
-if [ -d "$HOME/.local/bin" ]; then
-    echo "Creating 'lex' symlink in ~/.local/bin..."
-    ln -sf "$PWD/lex.py" "$HOME/.local/bin/lex"
-fi
+bashrc = Path(sys.argv[1])
+alias_line = sys.argv[2]
+lines = bashrc.read_text().splitlines()
+updated = False
+next_lines = []
+
+for line in lines:
+    if line.strip().startswith("alias lex="):
+        if not updated:
+            next_lines.append(alias_line)
+            updated = True
+        continue
+    next_lines.append(line)
+
+if not updated:
+    if next_lines and next_lines[-1].strip():
+        next_lines.append("")
+    next_lines.append("# Lex CLI")
+    next_lines.append(alias_line)
+
+bashrc.write_text("\n".join(next_lines) + "\n")
+PY
 
 echo ""
-echo "=== Setup Complete! ==="
+echo "=== Lex Command Installed ==="
 echo ""
-echo "You can now run Lex using:"
-echo "  ./lex.py John 3:16"
-if [ -f "$HOME/.local/bin/lex" ]; then
-    echo "Or simply:"
-    echo "  lex John 3:16"
-fi
+echo "Alias written to: $BASHRC"
+echo "Symlink written to: $HOME/.local/bin/lex"
+echo ""
+echo "Restart your terminal or run:"
+echo "  source ~/.bashrc"
+echo ""
+echo "Then use:"
+echo "  lex John 3:16"
