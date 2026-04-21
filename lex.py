@@ -1784,7 +1784,14 @@ Find Strong's entries by number, transliteration, or English gloss:
                 proof_count = str(len(section["proofs"])) if section["proofs"] else "-"
                 table.add_row(str(i), section["title"], proof_count)
             console.print(table)
-            choice = Prompt.ask("Select section, or q to quit", default="1").strip().lower()
+            if not sys.stdin.isatty():
+                console.print(f"[dim]Use an interactive terminal to browse sections for: lex creed {topic}[/]")
+                return True
+            try:
+                choice = Prompt.ask("Select section, or q to quit", default="1").strip().lower()
+            except EOFError:
+                console.print(f"[dim]Use an interactive terminal to browse sections for: lex creed {topic}[/]")
+                return True
             if choice == "q":
                 return True
             if not choice.isdigit():
