@@ -3027,6 +3027,10 @@ def main():
 
     if args.version:
         console.print(f"[bold gold3]Lex[/] version [bold]{VERSION}[/]")
+        console.print("\n[bold]Supported Bible Versions (-B):[/]")
+        for vid, info in BIBLE_VERSIONS.items():
+            status = "[success]Installed[/]" if os.path.exists(get_bible_path(vid)) else "[error]Missing[/]"
+            console.print(f"  • [bold cyan]{vid:6}[/] : {info['name']:35} {status}")
         sys.exit(0)
 
     if args.update or query == "update":
