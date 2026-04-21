@@ -1174,8 +1174,9 @@ class LexAgent:
         also.add_row("Lexicon:", "lex G3056  or  lex logos")
         also.add_row("Creeds:", "lex creed")
         also.add_row("Define:", "lex define grace")
-        also.add_row("Versions:", f"lex -v  (List {len(BIBLE_VERSIONS)} supported bibles)")
-        also.add_row("Select Bible:", "lex -B <id> John 3:16")
+        also.add_row("Versions:", "lex -v  (Interactive version menu)")
+        also.add_row("Switch Bible:", "lex version kjv  or  lex -v nasb")
+        also.add_row("Select Once:", "lex -B lxx John 1:1")
 
         config = Table.grid(padding=(0, 2))
         config.add_column(style="ui.action.key", no_wrap=True)
@@ -3018,8 +3019,8 @@ def main():
     parser.add_argument("-d", "--define", action="store_true")
     parser.add_argument("-c", "--creed", action="store_true")
     parser.add_argument("-s", "--strongs", action="store_true")
-    parser.add_argument("-v", "--version", action="store_true")
-    parser.add_argument("-B", "--bible", type=str, default=None, choices=BIBLE_VERSIONS.keys(), help="Select Bible version")
+    parser.add_argument("-v", "--version", nargs="?", const="__LIST__", help="List versions or switch to <id>")
+    parser.add_argument("-B", "--bible", type=str, default=None, choices=BIBLE_VERSIONS.keys(), help="Select Bible version for current command")
     parser.add_argument("--update", action="store_true", help="Check for and install updates")
     theme_group = parser.add_mutually_exclusive_group()
     theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light")
@@ -3046,18 +3047,57 @@ def main():
     agent = LexAgent(bible_id=args.bible)
     query = " ".join(args.query)
 
+    # Alias "bible" or "version" to persistent switch
+    if query.startswith("bible ") or query.startswith("version "):
+        target = query.split(" ", 1)[1].strip()
+        if target in BIBLE_VERSIONS:
+            save_bible_preference(target)
+            console.print(f"[success]Default Bible version set to [bold cyan]{target}[/] ({BIBLE_VERSIONS[target]['name']})[/]")
+            sys.exit(0)
+        else:
+            console.print(f"[error]Unknown Bible version: {target}[/]")
+            sys.exit(1)
+
+    # Handle -v / --version
+    if args.version:
+        # Case 1: lex -v <id> -> switch permanently
+        if args.version != "__LIST__" and args.version in BIBLE_VERSIONS:
+            save_bible_preference(args.version)
+            console.print(f"[success]Default Bible version set to [bold cyan]{args.version}[/] ({BIBLE_VERSIONS[args.version]['name']})[/]")
+            sys.exit(0)
+        
+        # Case 2: lex -v -> display numbered menu
+        console.print(Panel(Text(f"Lex version {VERSION}", style="bold gold3"), subtitle="Select Default Bible Version", border_style="cyan"))
+        
+        vids = list(BIBLE_VERSIONS.keys())
+        menu_table = Table.grid(padding=(0, 2))
+        menu_table.add_column(style="bold yellow")
+        menu_table.add_column(style="bold cyan")
+        menu_table.add_column()
+        
+        current_pref = load_bible_preference()
+        
+        for i, vid in enumerate(vids, 1):
+            info = BIBLE_VERSIONS[vid]
+            is_current = " [bold green](current)[/]" if vid == current_pref else ""
+            menu_table.add_row(f"{i}.", vid, f"{info['name']}{is_current}")
+            
+        console.print(menu_table)
+        console.print("\n[dim]Select a number to switch default, or 'q' to exit.[/]")
+        
+        choice = Prompt.ask("Selection", choices=[str(i) for i in range(1, len(vids)+1)] + ["q"], default="q", show_choices=False)
+        
+        if choice != "q":
+            selected_vid = vids[int(choice) - 1]
+            save_bible_preference(selected_vid)
+            console.print(f"[success]Default Bible version set to [bold cyan]{selected_vid}[/] ({BIBLE_VERSIONS[selected_vid]['name']})[/]")
+            
+        sys.exit(0)
+
     # Handle persistent bible selection: "lex -B kjv" with no query
     if args.bible and not query:
         save_bible_preference(args.bible)
         console.print(f"[success]Default Bible version set to [bold cyan]{args.bible}[/] ({BIBLE_VERSIONS[args.bible]['name']})[/]")
-        sys.exit(0)
-
-    if args.version:
-        console.print(f"[bold gold3]Lex[/] version [bold]{VERSION}[/]")
-        console.print("\n[bold]Supported Bible Versions (-B):[/]")
-        for vid, info in BIBLE_VERSIONS.items():
-            status = "[success]Installed[/]" if os.path.exists(get_bible_path(vid)) else "[error]Missing[/]"
-            console.print(f"  • [bold cyan]{vid:6}[/] : {info['name']:35} {status}")
         sys.exit(0)
 
     if args.update or query == "update":

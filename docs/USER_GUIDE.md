@@ -216,34 +216,34 @@ When reading a long creed or confession:
 
 ## Bible Versions
 
-Lex supports multiple Bible editions. You can list all installed versions with:
+Lex supports multiple Bible editions. You can use any of these three ways to switch versions:
+
+### 1. Interactive Menu
+To see all versions and select a new default through a simple menu:
 
 ```bash
-lex --version
+lex -v
 ```
 
-Switch versions using the `-B` (Bible) flag:
+### 2. Direct Switch (Permanent)
+To change your default version instantly:
 
 ```bash
-lex -B kj16 John 3:16   # Original 1611 KJV
-lex -B lxx Genesis 1:1  # Greek Septuagint
-lex -B vulg John 1:1    # Latin Vulgate
-lex -B nasb John 3:16   # NASB 1995
-lex -B gen John 3:16    # 1587 Geneva
-lex -B kjv John 3:16    # Modern KJV
+lex version kjv  # Sets KJV as default
+lex -v nasb      # Sets NASB as default
+```
+
+### 3. Quick Select (One-time)
+To use a different version for just one command without changing your default:
+
+```bash
+lex -B lxx Genesis 1:1  # Read the Septuagint once
 ```
 
 By default, Lex uses the **ESV (English Standard Version)**.
 
-### Setting a Permanent Default
-To set a version as your permanent default so you don't have to type `-B` every time:
-
-```bash
-lex -B kjv  # Sets KJV as your permanent default
-lex -B esv  # Switches back to ESV
-```
-
 ## Keeping Lex Updated
+
 
 You can update your local code and Bible databases to the latest version available on GitHub with one command:
 
