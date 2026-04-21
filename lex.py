@@ -1859,7 +1859,14 @@ Find Strong's entries by number, transliteration, or English gloss:
             )
             last_tradition = tradition
         console.print(table)
-        choice = Prompt.ask("Select ID, or q to quit", default="1").strip().lower()
+        if not sys.stdin.isatty():
+            console.print("[dim]Use: lex creed <document name>[/]")
+            return True
+        try:
+            choice = Prompt.ask("Select ID, or q to quit", default="1").strip().lower()
+        except EOFError:
+            console.print("[dim]Use: lex creed <document name>[/]")
+            return True
         if choice == "q":
             return True
         if not choice.isdigit():
