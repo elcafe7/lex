@@ -224,6 +224,34 @@ lex --credits
 
 Short version: Lex code is intended to be MIT licensed, but the data comes from multiple sources and remains under each source's own license or terms.
 
+## Terminal Themes
+
+Lex tries to match your terminal background automatically. It checks common
+theme environment variables, `COLORFGBG`, Apple Terminal and iTerm profiles on
+macOS, GNOME/KDE appearance settings on Linux, and then platform appearance.
+
+Use these commands when the automatic choice is wrong:
+
+```bash
+lex -light
+lex -dark
+lex -auto
+```
+
+`lex -light` and `lex -dark` are sticky. They save the choice in
+`~/.lex_config.json` and future launches keep using it. `lex -auto` clears that
+saved setting and returns to automatic detection.
+
+For one command only, use `LEX_THEME`:
+
+```bash
+LEX_THEME=light lex John 3:16
+LEX_THEME=dark lex search covenant
+```
+
+Use `LEX_NO_COLOR=1` when you intentionally want plain output with no Lex
+colors.
+
 ## Common Problems
 
 If `lex` shows no result for a reference, try spelling the book name fully:

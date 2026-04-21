@@ -34,6 +34,7 @@ also use full upstream data directories beside `lex.py`.
 - `DICTIONARY_DB_PATH`: `~/bible-lexicon-data/dictionary.db`
 - `CREEDS_DB_PATH`: `~/bible-lexicon-data/creeds.db`
 - `PLACES_DB_PATH`: `~/bible-lexicon-data/places.db`
+- `CONFIG_FILE`: `~/.lex_config.json`
 - `INTERLINEAR_PATH`: `runtime-data/esv-data/data/esv/esv-interlinear.json`
 - `INTERLINEAR_STRONGS_PATH`: `runtime-data/esv-data/data/interlinear/strongs.json`
 - `STEP_GREEK_PATH`: bundled STEPBible Greek lexicon JSON
@@ -78,6 +79,15 @@ Search and study exports use `python-docx` for DOCX and ReportLab for PDF. PDFs 
 Creed mode uses SQLite rows when available, but falls back to JSON files when the DB row is only a placeholder.
 
 Define mode shows both dictionary and encyclopedia results when both are available.
+
+Theme selection happens before Rich initializes the global console. Lex checks,
+in order: explicit CLI flags, `LEX_THEME`, saved config, generic terminal/theme
+environment hints, `COLORFGBG`, Apple Terminal/iTerm profile backgrounds on
+macOS, GNOME/KDE appearance settings on Linux, platform appearance fallback, and
+finally dark mode. `lex -light` and `lex -dark` force a palette for the current
+run and persist it in `~/.lex_config.json` for relaunches. `lex -auto` clears
+the saved preference and returns to detection. Lex ignores global `NO_COLOR` for
+themed terminal output; set `LEX_NO_COLOR=1` to intentionally disable Lex color.
 
 ## Known Risks
 

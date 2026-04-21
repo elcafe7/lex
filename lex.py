@@ -10,6 +10,7 @@ import time
 import html
 import subprocess
 import shutil
+import plistlib
 from rich.align import Align
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -27,6 +28,7 @@ from rich.prompt import Prompt, IntPrompt
 # with config/env-driven paths without touching feature code.
 VERSION = "2.3.3-Nav"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
+CONFIG_FILE = os.path.expanduser("~/.lex_config.json")
 
 # Local-first path resolution. Clones ship the compact runtime JSON bundle
 # under runtime-data/, while local developer worktrees may also have full
@@ -310,24 +312,376 @@ CREED_NOTES = {
 
 # Rich styles used across panels/tables. Keep style names stable; rendering
 # methods reference these string keys directly.
-custom_theme = Theme({
-    "info": "dim cyan",
-    "warning": "magenta",
-    "success": "bold green",
-    "ui.action": "blue",
-    "ui.action.key": "bold blue",
-    "ui.meta": "dim",
-    "verse.ref": "bold gold3",
-    "verse.text": "white",
-    "lexicon.num": "bold blue",
-    "lexicon.word": "bold green",
-    "place.name": "bold orange3",
-    "dict.topic": "bold violet",
-    "interlinear.strongs": "dim cyan",
-    "interlinear.translit": "italic yellow",
-})
+def load_config():
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
 
-console = Console(theme=custom_theme)
+def save_config(config):
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as fh:
+            json.dump(config, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+    except OSError:
+        pass
+
+def save_theme_preference(theme_mode):
+    config = load_config()
+    config["theme"] = theme_mode
+    save_config(config)
+
+def clear_theme_preference():
+    config = load_config()
+    config.pop("theme", None)
+    save_config(config)
+
+def normalize_theme_value(value):
+    value = (value or "").strip().lower()
+    if not value:
+        return None
+    if value in {"light", "bright", "day"}:
+        return "light"
+    if value in {"dark", "black", "night"}:
+        return "dark"
+    if re.search(r"(^|[^a-z])(light|bright|day)([^a-z]|$)", value):
+        return "light"
+    if re.search(r"(^|[^a-z])(dark|black|night)([^a-z]|$)", value):
+        return "dark"
+    return None
+
+def rgb_luminance(red, green, blue):
+    def linearize(channel):
+        return channel / 12.92 if channel <= 0.03928 else ((channel + 0.055) / 1.055) ** 2.4
+    r, g, b = linearize(red), linearize(green), linearize(blue)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+def theme_from_rgb(red, green, blue):
+    return "light" if rgb_luminance(red, green, blue) >= 0.45 else "dark"
+
+def rgb_from_archived_color(data):
+    if not isinstance(data, (bytes, bytearray)):
+        return None
+    matches = re.findall(rb"([01](?:\.\d+)?) ([01](?:\.\d+)?) ([01](?:\.\d+)?) ([01](?:\.\d+)?)", data)
+    if not matches:
+        return None
+    red, green, blue, _alpha = (float(part) for part in matches[-1])
+    return red, green, blue
+
+def theme_from_colorfgbg():
+    colorfgbg = os.environ.get("COLORFGBG", "")
+    if colorfgbg:
+        try:
+            background = int(colorfgbg.split(";")[-1])
+            return "light" if background in range(7, 16) else "dark"
+        except ValueError:
+            pass
+    return None
+
+def theme_from_env_hints():
+    for key in (
+        "LEX_THEME",
+        "TERMINAL_THEME",
+        "COLOR_SCHEME",
+        "THEME",
+        "VSCODE_COLOR_THEME",
+        "ITERM_PROFILE",
+        "WT_PROFILE",
+        "TERM_PROGRAM",
+    ):
+        theme = normalize_theme_value(os.environ.get(key))
+        if theme:
+            return theme
+    return None
+
+def theme_from_apple_terminal_profile():
+    if sys.platform != "darwin" or os.environ.get("TERM_PROGRAM") != "Apple_Terminal":
+        return None
+    try:
+        exported = subprocess.run(
+            ["defaults", "export", "com.apple.Terminal", "-"],
+            capture_output=True,
+            timeout=0.75,
+            check=False,
+        )
+        if exported.returncode != 0 or not exported.stdout:
+            return None
+        prefs = plistlib.loads(exported.stdout)
+    except (OSError, plistlib.InvalidFileException, subprocess.SubprocessError):
+        return None
+
+    profile_name = (
+        os.environ.get("TERM_PROFILE")
+        or prefs.get("Startup Window Settings")
+        or prefs.get("Default Window Settings")
+    )
+    profile = (prefs.get("Window Settings") or {}).get(profile_name or "")
+    if not isinstance(profile, dict):
+        return normalize_theme_value(profile_name)
+
+    rgb = rgb_from_archived_color(profile.get("BackgroundColor"))
+    if rgb:
+        return theme_from_rgb(*rgb)
+
+    return normalize_theme_value(profile_name) or "light"
+
+def theme_from_iterm_profile():
+    if sys.platform != "darwin" or os.environ.get("TERM_PROGRAM") != "iTerm.app":
+        return None
+    try:
+        exported = subprocess.run(
+            ["defaults", "export", "com.googlecode.iterm2", "-"],
+            capture_output=True,
+            timeout=0.75,
+            check=False,
+        )
+        if exported.returncode != 0 or not exported.stdout:
+            return None
+        prefs = plistlib.loads(exported.stdout)
+    except (OSError, plistlib.InvalidFileException, subprocess.SubprocessError):
+        return None
+
+    profiles = prefs.get("New Bookmarks") or []
+    profile_hint = os.environ.get("ITERM_PROFILE")
+    default_guid = prefs.get("Default Bookmark Guid")
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            continue
+        name = profile.get("Name")
+        guid = profile.get("Guid")
+        if profile_hint and name != profile_hint:
+            continue
+        if not profile_hint and default_guid and guid != default_guid:
+            continue
+        red = profile.get("Background Color", {}).get("Red Component")
+        green = profile.get("Background Color", {}).get("Green Component")
+        blue = profile.get("Background Color", {}).get("Blue Component")
+        if None not in (red, green, blue):
+            return theme_from_rgb(float(red), float(green), float(blue))
+        return normalize_theme_value(name)
+    return normalize_theme_value(profile_hint)
+
+def theme_from_linux_desktop():
+    if not sys.platform.startswith("linux"):
+        return None
+
+    commands = (
+        ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
+        ["gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"],
+        ["kreadconfig6", "--group", "General", "--key", "ColorScheme"],
+        ["kreadconfig5", "--group", "General", "--key", "ColorScheme"],
+    )
+    for command in commands:
+        executable = shutil.which(command[0])
+        if not executable:
+            continue
+        try:
+            proc = subprocess.run(
+                [executable, *command[1:]],
+                capture_output=True,
+                text=True,
+                timeout=0.5,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if proc.returncode == 0:
+            theme = normalize_theme_value(proc.stdout.strip().strip("'\""))
+            if theme:
+                return theme
+
+    return None
+
+def theme_from_macos_appearance():
+    if sys.platform != "darwin":
+        return None
+    try:
+        proc = subprocess.run(
+            ["defaults", "read", "-g", "AppleInterfaceStyle"],
+            capture_output=True,
+            text=True,
+            timeout=0.5,
+            check=False,
+        )
+        if proc.returncode == 0 and proc.stdout.strip().lower() == "dark":
+            return "dark"
+        return "light"
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+def detect_terminal_theme():
+    for detector in (
+        theme_from_env_hints,
+        theme_from_colorfgbg,
+        theme_from_apple_terminal_profile,
+        theme_from_iterm_profile,
+        theme_from_linux_desktop,
+        theme_from_macos_appearance,
+    ):
+        theme = detector()
+        if theme in {"light", "dark"}:
+            return theme
+
+    return "dark"
+
+def resolve_theme_mode(raw_argv):
+    if "-light" in raw_argv:
+        return "light"
+    if "-dark" in raw_argv:
+        return "dark"
+    if "-auto" in raw_argv:
+        return detect_terminal_theme()
+
+    env_theme = os.environ.get("LEX_THEME", "").strip().lower()
+    if env_theme in {"light", "dark"}:
+        return env_theme
+
+    saved_theme = load_config().get("theme")
+    if saved_theme in {"light", "dark"}:
+        return saved_theme
+
+    return detect_terminal_theme()
+
+def has_theme_override(raw_argv):
+    if "-auto" in raw_argv:
+        return False
+    if "-light" in raw_argv or "-dark" in raw_argv:
+        return True
+
+    env_theme = os.environ.get("LEX_THEME", "").strip().lower()
+    if env_theme in {"light", "dark"}:
+        return True
+
+    return load_config().get("theme") in {"light", "dark"}
+
+def resolve_no_color(raw_argv):
+    if os.environ.get("LEX_NO_COLOR"):
+        return True
+    return False
+
+def build_theme(theme_mode):
+    if theme_mode == "light":
+        text_style = "rgb(31,31,31)"
+        strong_text_style = "bold rgb(31,31,31)"
+        muted_text_style = "rgb(82,82,82)"
+        accent_style = "rgb(47,92,160)"
+        accent_strong_style = "bold rgb(47,92,160)"
+        success_style = "rgb(31,105,57)"
+        warning_style = "orange3"
+        border_style = "rgb(154,154,154)"
+        verse_ref_style = accent_strong_style
+        verse_ref_muted_style = "rgb(92,92,92)"
+        highlight_style = "rgb(31,31,31) on rgb(248,226,165) underline"
+        marker_style = "bold rgb(31,31,31) on rgb(248,226,165)"
+        source_style = "rgb(47,92,160)"
+        translit_style = "italic grey35"
+    else:
+        text_style = "white"
+        strong_text_style = "bold white"
+        muted_text_style = "dim white"
+        accent_style = "cyan"
+        accent_strong_style = "bold cyan"
+        success_style = "bold green"
+        warning_style = "magenta"
+        border_style = "gold3"
+        verse_ref_style = "bold gold3"
+        verse_ref_muted_style = "dim gold3"
+        highlight_style = "bold black on gold3"
+        marker_style = "bold black on gold3"
+        source_style = "bold cyan"
+        translit_style = "italic yellow"
+    return Theme({
+        "text": text_style,
+        "text.strong": strong_text_style,
+        "text.muted": muted_text_style,
+        "info": accent_style,
+        "warning": warning_style,
+        "success": success_style,
+        "ui.action": accent_style,
+        "ui.action.key": accent_strong_style,
+        "ui.border": border_style,
+        "ui.meta": muted_text_style,
+        "search.hit": highlight_style,
+        "verse.marker": marker_style,
+        "verse.ref": verse_ref_style,
+        "verse.ref.muted": verse_ref_muted_style,
+        "verse.text": text_style,
+        "verse.text.focus": strong_text_style,
+        "verse.text.muted": muted_text_style,
+        "verse.border": border_style,
+        "source.text": source_style,
+        "source.translit": translit_style,
+        "source.border": border_style,
+        "lexicon.num": accent_strong_style,
+        "lexicon.word": success_style,
+        "place.name": warning_style,
+        "dict.topic": "purple4" if theme_mode == "light" else "bold violet",
+        "interlinear.strongs": accent_style,
+        "interlinear.translit": translit_style,
+    })
+
+ACTIVE_THEME_MODE = resolve_theme_mode(sys.argv[1:])
+custom_theme = build_theme(ACTIVE_THEME_MODE)
+console_base_style = "rgb(31,31,31) on rgb(249,247,242)" if ACTIVE_THEME_MODE == "light" else "white on black"
+
+def detect_console_width():
+    for candidate in (os.environ.get("COLUMNS"),):
+        try:
+            width = int(candidate)
+            if width >= 40:
+                return width
+        except (TypeError, ValueError):
+            pass
+    try:
+        width = os.get_terminal_size(sys.stdout.fileno()).columns
+        if width >= 40:
+            return width
+    except OSError:
+        pass
+    width = shutil.get_terminal_size((100, 24)).columns
+    return max(40, width)
+
+class BackgroundFillWriter:
+    def __init__(self, stream, fill_sequence):
+        self.stream = stream
+        self.fill_sequence = fill_sequence
+
+    def write(self, data):
+        if self.fill_sequence:
+            data = data.replace("\n", f"{self.fill_sequence}\n")
+        return self.stream.write(data)
+
+    def flush(self):
+        return self.stream.flush()
+
+    def isatty(self):
+        return self.stream.isatty()
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+def line_fill_sequence():
+    if resolve_no_color(sys.argv[1:]) or not sys.stdout.isatty():
+        return ""
+    return "\033[48;5;231m\033[K" if ACTIVE_THEME_MODE == "light" else "\033[40m\033[K"
+
+console = Console(
+    color_system="256",
+    theme=custom_theme,
+    style=console_base_style,
+    no_color=resolve_no_color(sys.argv[1:]),
+    width=detect_console_width(),
+    file=BackgroundFillWriter(sys.stdout, line_fill_sequence()),
+)
+
+def fill_terminal_row(text, style="text"):
+    rendered = Text(text, style=style)
+    remaining = max(0, console.width - rendered.cell_len)
+    if remaining:
+        rendered.append(" " * remaining, style=style)
+    return rendered
 
 # ---------------------------------------------------------------------------
 # Database and application coordinator
@@ -462,7 +816,7 @@ class LexAgent:
         for match in pattern.finditer(text):
             if match.start() > pos:
                 result.append(text[pos:match.start()], style="verse.text")
-            result.append(match.group(0), style="bold black on gold3")
+            result.append(match.group(0), style="search.hit")
             pos = match.end()
         if pos < len(text):
             result.append(text[pos:], style="verse.text")
@@ -666,7 +1020,7 @@ class LexAgent:
 """,
             style="bold gold3",
         )
-        title = Text("Lex: The Elegant Bible Terminal", style="bold white")
+        title = Text("Lex: The Elegant Bible Terminal", style="text.strong")
         tagline = Text("Master Admin Study Tool for the Source Code of the Universe", style="bold cyan")
         positioning = Text(
             "Read the canon. Inspect the languages. Traverse the tradition.",
@@ -682,7 +1036,7 @@ class LexAgent:
 
         primary = Table.grid(padding=(0, 2))
         primary.add_column(style="bold green", no_wrap=True)
-        primary.add_column(style="white")
+        primary.add_column(style="text")
         primary.add_row("Read:", "lex read John 3:16  (Context with navigation)")
         primary.add_row("Study:", "lex study John 3:16  (Interlinear + lexicon)")
         primary.add_row("Search:", 'lex search "mustard seed"  (Ranked search results)')
@@ -690,13 +1044,22 @@ class LexAgent:
 
         also = Table.grid(padding=(0, 2))
         also.add_column(style="bold gold3", no_wrap=True)
-        also.add_column(style="white")
+        also.add_column(style="text")
         also.add_row("Quick Read:", "lex John 3:16")
         also.add_row("Quick Study:", "lex John 3:16 -i")
         also.add_row("Verse Web:", "lex web John 3:16")
         also.add_row("Lexicon:", "lex G3056  or  lex logos")
         also.add_row("Creeds:", "lex creed")
         also.add_row("Define:", "lex define grace")
+
+        config = Table.grid(padding=(0, 2))
+        config.add_column(style="ui.action.key", no_wrap=True)
+        config.add_column(style="text")
+        config.add_row("lex -light", "Use and remember the light terminal theme")
+        config.add_row("lex -dark", "Use and remember the dark terminal theme")
+        config.add_row("lex -auto", "Clear the saved theme and auto-detect again")
+        config.add_row("LEX_THEME=light lex", "Use a theme for one shell command")
+        config.add_row("LEX_NO_COLOR=1 lex", "Print plain output without Lex colors")
 
         launch = Table.grid(padding=(0, 1))
         launch.add_column(style="dim")
@@ -728,13 +1091,16 @@ class LexAgent:
                     "",
                     Align.center(metrics),
                     "",
-                    Text("Start with a verb.", style="bold white"),
+                    Text("Start with a verb.", style="text.strong"),
                     "",
                     Text("Primary", style="bold cyan"),
                     primary,
                     "",
                     Text("Also Available", style="bold cyan"),
                     also,
+                    "",
+                    Text("Config", style="bold cyan"),
+                    config,
                     "",
                     nav,
                     "",
@@ -754,7 +1120,7 @@ class LexAgent:
     def display_credits(self):
         table = Table(title="Lex Credits and Data Licenses", box=None, show_lines=True)
         table.add_column("Component", style="bold cyan", no_wrap=True)
-        table.add_column("Source / Repo", style="white", overflow="fold")
+        table.add_column("Source / Repo", style="text", overflow="fold")
         table.add_column("License / Terms", style="gold3", overflow="fold")
         table.add_row(
             "Lex CLI code",
@@ -947,6 +1313,28 @@ Jeremiah through Revelation. Book names use lowercase words joined by hyphens:
 *   `-general-epistles`
 
 Free-text search no longer runs from bare input.
+
+## Terminal Theme Config
+
+Lex tries to detect whether your terminal background is light or dark. You can
+override it when the automatic choice is wrong:
+
+*   `lex -light` - switch to light mode and remember it
+*   `lex -dark` - switch to dark mode and remember it
+*   `lex -auto` - remove the saved manual setting and detect again
+
+The saved setting lives in `~/.lex_config.json`. If you choose `-light` or
+`-dark`, Lex will keep using that theme on future launches until you run
+`lex -auto` or choose the other theme.
+
+For one command only, use an environment variable:
+
+*   `LEX_THEME=light lex John 3:16`
+*   `LEX_THEME=dark lex search covenant`
+
+If you need plain text with no Lex colors:
+
+*   `LEX_NO_COLOR=1 lex John 3:16`
 """
         console.print(Panel(Markdown(md), title="🔎 Search", border_style="cyan", expand=False))
 
@@ -974,7 +1362,7 @@ Find Strong's entries by number, transliteration, or English gloss:
 
     def display_read_nav(self, book, chap, verse=None):
         study_ref = f"{book} {chap}:{verse or 1}"
-        console.print(f"[dim]lex --prev  |  lex --next  |  lex study {study_ref}[/]")
+        console.print(fill_terminal_row(f"lex --prev  |  lex --next  |  lex study {study_ref}", "ui.meta"))
 
     def should_animate(self, animate):
         if animate is not None:
@@ -988,8 +1376,8 @@ Find Strong's entries by number, transliteration, or English gloss:
             verse_no = str(parts["verse"]) if parts else self.format_display_ref(ref)
             is_target = ref == target_ref
             marker = ">" if is_target else " "
-            label_style = "bold black on gold3" if is_target else "dim gold3"
-            text_style = "bold white" if is_target else "dim"
+            label_style = "verse.marker" if is_target else "verse.ref.muted"
+            text_style = "verse.text.focus" if is_target else "verse.text.muted"
             body.append(f"{marker} {verse_no.rjust(3)} ", style=label_style)
             body.append(f"{self.clean_text(text)}\n", style=text_style)
         console.print(
@@ -997,7 +1385,7 @@ Find Strong's entries by number, transliteration, or English gloss:
                 body,
                 title=f"📖 {book} {chap}:{verse}",
                 subtitle="context",
-                border_style="gold3",
+                border_style="verse.border",
                 padding=(1, 2),
             )
         )
@@ -1008,14 +1396,14 @@ Find Strong's entries by number, transliteration, or English gloss:
         for ref, text in rows:
             parts = self.parse_reference_parts(ref)
             verse_no = str(parts["verse"]) if parts else self.format_display_ref(ref)
-            body.append(f"{verse_no.rjust(3)} ", style="bold gold3")
+            body.append(f"{verse_no.rjust(3)} ", style="verse.ref")
             body.append(f"{self.clean_text(text)}\n\n", style="verse.text")
         console.print(
             Panel(
                 body,
                 title=f"📖 {book} {chap}",
                 subtitle=f"{len(rows)} verses",
-                border_style="gold3",
+                border_style="verse.border",
                 padding=(1, 2),
             )
         )
@@ -1086,15 +1474,15 @@ Find Strong's entries by number, transliteration, or English gloss:
         refs = self.get_tsk_crossrefs(db_ref)[:max(1, min(limit, 24))]
 
         center = Text()
-        center.append(f"{book} {chap}:{verse}\n", style="bold gold3")
-        center.append(clean_verse, style="bold white")
+        center.append(f"{book} {chap}:{verse}\n", style="verse.ref")
+        center.append(clean_verse, style="text.strong")
 
         console.print(
             Panel(
                 Align.center(center),
                 title="✦ Scripture Web ✦",
                 subtitle="ranked local TSK connections",
-                border_style="gold3",
+                border_style="verse.border",
                 padding=(1, 2),
             )
         )
@@ -1196,15 +1584,15 @@ Find Strong's entries by number, transliteration, or English gloss:
             return
         translit_words = [token["translit"] for token in source_tokens if token["translit"]]
         body = Text()
-        body.append(" ".join(source_words), style="bold cyan")
+        body.append(" ".join(source_words), style="source.text")
         if translit_words:
-            body.append("\n\n", style="dim")
-            body.append(" ".join(translit_words), style="italic yellow")
+            body.append("\n\n", style="ui.meta")
+            body.append(" ".join(translit_words), style="source.translit")
         console.print(
             Panel(
                 body,
                 title=f"🔡 {self.detect_source_language(parsed_tokens)}",
-                border_style="cyan",
+                border_style="source.border",
                 padding=(1, 2),
             )
         )
@@ -1444,18 +1832,18 @@ Find Strong's entries by number, transliteration, or English gloss:
     def display_study(self, db_ref, animate=None, actions=None):
         row = self.get_interlinear_index().get(db_ref)
         if not row or not row.get("p"):
-            console.print(Panel("No local interlinear data found for this verse.", border_style="magenta"))
+            console.print(Panel("No local interlinear data found for this verse.", border_style="warning"))
             return False
         parsed_tokens = [self.parse_interlinear_token(token) for token in row["p"]]
         self.pause_study_section(animate)
         self.display_source_text(parsed_tokens)
         self.pause_study_section(animate)
         verse_table = Table(title=f"🔤 Study: {db_ref}", box=None)
-        verse_table.add_column("Eng", style="bold white", overflow="fold")
-        verse_table.add_column("Src", style="cyan", overflow="fold")
-        verse_table.add_column("Lemma", style="green", overflow="fold")
-        verse_table.add_column("Code", style="yellow")
-        verse_table.add_column("Gloss", style="white", overflow="fold")
+        verse_table.add_column("Eng", style="text.strong", overflow="fold")
+        verse_table.add_column("Src", style="source.text", overflow="fold")
+        verse_table.add_column("Lemma", style="lexicon.word", overflow="fold")
+        verse_table.add_column("Code", style="interlinear.strongs")
+        verse_table.add_column("Gloss", style="text", overflow="fold")
         for parsed in parsed_tokens[:30]:
             code = parsed["strongs"] or parsed["morph"] or "-"
             gloss = parsed["gloss"] or parsed["english"] or "-"
@@ -1723,7 +2111,7 @@ Find Strong's entries by number, transliteration, or English gloss:
         console.print(Panel(f"{topic}\nSource: {self.format_creed_source(topic, sections[0]['source'])}\nOriginal: {doc['language']}", border_style="bold green"))
         table = Table(title=f"{topic}: English / {doc['language']}", box=None)
         table.add_column(doc["language"], style="cyan", overflow="fold")
-        table.add_column("English", style="white", overflow="fold")
+        table.add_column("English", style="text", overflow="fold")
         for section in sections:
             body = "\n\n".join(section["body_parts"]).strip()
             original = doc["sections"].get(section["title"])
@@ -1922,7 +2310,7 @@ Find Strong's entries by number, transliteration, or English gloss:
             if original:
                 table = Table(title=f"{topic}: {section['title']}", box=None)
                 table.add_column(original_language, style="cyan", overflow="fold")
-                table.add_column("English", style="white", overflow="fold")
+                table.add_column("English", style="text", overflow="fold")
                 table.add_row(original, body)
                 console.print(table)
                 if proofs:
@@ -2048,13 +2436,13 @@ Find Strong's entries by number, transliteration, or English gloss:
             footer += f"\nPrevious page: lex search {query_arg} --page {page - 1}"
             if limit != 10:
                 footer += f" --limit {limit}"
-        body.append(footer, style="dim")
+        body.append(footer, style="ui.meta")
         console.print(
             Panel(
                 body,
                 title=f"🔍 Search: {query}",
                 subtitle=f"page {page}/{state['page_count']}",
-                border_style="cyan",
+                border_style="ui.border",
                 padding=(1, 2),
             )
         )
@@ -2081,7 +2469,7 @@ Find Strong's entries by number, transliteration, or English gloss:
         grid.add_column(style="ui.meta")
         for key, label in actions:
             grid.add_row(f"[ui.action.key]{key}[/]", label)
-        console.print(Panel(grid, title=title, border_style="ui.action", padding=(0, 1), expand=False))
+        console.print(Panel(grid, title=title, border_style="ui.action", padding=(0, 1), expand=True))
 
     def open_export(self, path):
         if not path:
@@ -2372,7 +2760,7 @@ Find Strong's entries by number, transliteration, or English gloss:
         table.add_column("No.", style="lexicon.num")
         table.add_column("Lemma", style="lexicon.word")
         table.add_column("Pronunciation")
-        table.add_column("English", style="white")
+        table.add_column("English", style="text")
         table.add_column("Definition", overflow="fold")
         for number, word, pronunciation, definition, gloss in results:
             table.add_row(number, word, pronunciation, gloss, definition[:120])
@@ -2476,7 +2864,7 @@ def main():
                 idx > command_idx
                 and token.startswith("-")
                 and not token.startswith("--")
-                and token not in {"-i", "-d", "-c", "-s", "-v"}
+                and token not in {"-i", "-d", "-c", "-s", "-v", "-light", "-dark", "-auto"}
             ):
                 protected_argv.append(f"__lexscope__{token[1:]}")
             else:
@@ -2489,6 +2877,10 @@ def main():
     parser.add_argument("-c", "--creed", action="store_true")
     parser.add_argument("-s", "--strongs", action="store_true")
     parser.add_argument("-v", "--version", action="store_true")
+    theme_group = parser.add_mutually_exclusive_group()
+    theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light")
+    theme_group.add_argument("-dark", dest="theme_mode", action="store_const", const="dark")
+    theme_group.add_argument("-auto", dest="theme_mode", action="store_const", const="auto")
     parser.add_argument("--credits", action="store_true")
     parser.add_argument("--next", action="store_true")
     parser.add_argument("--prev", action="store_true")
@@ -2497,6 +2889,10 @@ def main():
     parser.add_argument("--animate", dest="animate", action="store_true", default=None)
     parser.add_argument("--no-animate", dest="animate", action="store_false")
     args, unknown = parser.parse_known_args(raw_argv)
+    if args.theme_mode == "auto":
+        clear_theme_preference()
+    elif args.theme_mode:
+        save_theme_preference(args.theme_mode)
     args.query = [f"-{q[len('__lexscope__'):]}" if q.startswith("__lexscope__") else q for q in args.query]
     if unknown:
         if args.query and args.query[0] in {"search", "serch"} and all(u.startswith("-") and not u.startswith("--") for u in unknown):

@@ -26,6 +26,7 @@ Current version: `2.3.3-Nav`
 | Verse web | Print a verse as the center point with ranked local cross-reference connections. |
 | Exports | Save search pages and study packets as DOCX or PDF. |
 | Creeds | Browse historical Christian documents by tradition and section. |
+| Terminal themes | Auto-detect light/dark terminal backgrounds, with sticky manual overrides. |
 | Local data | Runs against local SQLite/JSON data stores with no web request required for normal use. |
 
 ## Quick Start
@@ -69,6 +70,32 @@ lex John 3:16
 # OR
 ./lex.py study John 1:1
 ```
+
+## Terminal Themes
+
+Lex automatically chooses a light or dark terminal palette at launch. Detection
+uses common terminal/theme environment variables, `COLORFGBG`, Apple Terminal
+or iTerm profile backgrounds on macOS, GNOME/KDE theme settings on Linux, and
+then platform appearance as a fallback.
+
+To force and remember a palette for future launches:
+
+```bash
+lex -light
+lex -dark
+lex -auto
+```
+
+The saved manual theme lives in `~/.lex_config.json`. If you run `lex -light`
+or `lex -dark`, that choice sticks until you run `lex -auto` or choose the
+other theme. For a one-command override without changing the saved setting:
+
+```bash
+LEX_THEME=light lex John 3:16
+LEX_THEME=dark lex search covenant
+```
+
+Set `LEX_NO_COLOR=1` when you intentionally want plain, uncolored output.
 
 The GitHub repo includes the runtime SQLite databases and the compact JSON
 bundle under `runtime-data/`, so normal install does not need a second data
