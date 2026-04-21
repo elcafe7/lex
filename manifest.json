@@ -2,7 +2,7 @@
   "version": "2.3.3-Nav",
   "assets": {
     "lex.py": {
-      "hash": "7fb126d184531b11d9d19f534a3f8b8c669297ec6792b381b41d5248b1a17e61",
+      "hash": "5673f52ae9f754ace9566d68704ed25a476f3d69da7d6866176b22f3c3b35025",
       "path": "lex.py"
     },
     "runtime-data/creeds.db": {
@@ -149,6 +149,16 @@
       "hash": "7ee93157f95c3a69e9cc9ef448b5761822f90ac801a75aa12c7df948cf55be06",
       "size": 80527,
       "path": "runtime-data/theolog-ai/data/historical-documents/westminster-confession.json"
+    },
+    "runtime-data/bible_versions/vulg.db": {
+      "hash": "da51cf00aa06fd058752842a836cffdac5703a1571dd1787865abd8273a14f1c",
+      "size": 16670720,
+      "path": "runtime-data/bible_versions/vulg.db"
+    },
+    "runtime-data/bible_versions/lxx.db": {
+      "hash": "412cd3edef2fe14c7a6722181699748b12c90435bc0da26de2e5c903bf4fb3b8",
+      "size": 22134784,
+      "path": "runtime-data/bible_versions/lxx.db"
     },
     "runtime-data/bible_versions/nasb.db": {
       "hash": "e5e6933d06fed0fb76ea1e301f18c7fb2ea016419d376c66eb9cecbae7ca8fba",

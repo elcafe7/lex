@@ -125,6 +125,8 @@ BIBLE_VERSIONS = {
     "kj16": {"name": "King James Version (1611)", "file": "bible_versions/kj16.db"},
     "nasb": {"name": "New American Standard Bible (1995)", "file": "bible_versions/nasb.db"},
     "gen": {"name": "Geneva Bible (1587)", "file": "bible_versions/gen.db"},
+    "lxx": {"name": "Septuagint (Rahlfs 1935)", "file": "bible_versions/lxx.db"},
+    "vulg": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db"},
 }
 
 def get_bible_path(bible_id):
@@ -3016,7 +3018,7 @@ def main():
         save_theme_preference(args.theme_mode)
     args.query = [f"-{q[len('__lexscope__'):]}" if q.startswith("__lexscope__") else q for q in args.query]
     if unknown:
-        if args.query and args.query[0] in {"search", "serch"} and all(u.startswith("-") and not u.startswith("--") for u in unknown):
+        if args.query and args.query[0] in {"search", "serch", "read"} and all(u.startswith("-") and not u.startswith("--") for u in unknown):
             args.query.extend(unknown)
         else:
             parser.error(f"unrecognized arguments: {' '.join(unknown)}")

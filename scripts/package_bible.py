@@ -178,6 +178,84 @@ def package_nasb_1995(json_file, db_path):
     conn.close()
     print(f"Packaged NASB 1995 into {db_path}")
 
+import csv
+import sqlite3
+# ... (rest of imports)
+
+def package_lxx(source_db_path, target_db_path):
+    """Packages Greek Septuagint (LXX) from eliranwong's SQLite format."""
+    metadata = {
+        'edition_id': 'lxx',
+        'edition_name': 'Septuagint (Rahlfs 1935)',
+        'language': 'grc',
+        'reference_prefix': 'lxx'
+    }
+    
+    source_conn = sqlite3.connect(source_db_path)
+    source_cursor = source_conn.cursor()
+    
+    # Get book mapping from the source DB
+    # eliranwong format uses book_number in 'verses', names in 'books'
+    books_res = source_conn.execute("SELECT book_number, long_name FROM books").fetchall()
+    book_map = {row[0]: row[1] for row in books_res}
+    
+    target_conn = init_target_db(target_db_path, metadata)
+    
+    bible_entries = []
+    fts_entries = []
+    
+    # eliranwong format: book_number, chapter, verse, text
+    verses = source_conn.execute("SELECT book_number, chapter, verse, text FROM verses").fetchall()
+    for b_num, chap, verse, raw_text in verses:
+        book_name = book_map.get(b_num, str(b_num))
+        
+        # Strip morphological tags like <S>704639</S><m>lxx.P</m>
+        clean_v_text = re.sub(r'<[^>]+>.*?</[^>]+>', '', raw_text) # removes <S>...</S> and <m>...</m>
+        clean_v_text = re.sub(r'<[^>]+>', '', clean_v_text) # removes any remaining single tags
+        clean_v_text = clean_v_text.strip()
+        
+        ref = f"lxx:{book_name}:{chap}:{verse}"
+        bible_entries.append((ref, clean_v_text))
+        fts_entries.append((ref, clean_text(clean_v_text)))
+
+    target_conn.executemany("INSERT INTO bible (reference, text) VALUES (?, ?)", bible_entries)
+    target_conn.executemany("INSERT INTO bible_fts (reference, text) VALUES (?, ?)", fts_entries)
+    target_conn.commit()
+    target_conn.close()
+    source_conn.close()
+    print(f"Packaged LXX into {target_db_path}")
+
+def package_vulgate(csv_path, target_db_path):
+    """Packages Latin Vulgate from scrollmapper's CSV format."""
+    metadata = {
+        'edition_id': 'vulg',
+        'edition_name': 'Clementine Vulgate',
+        'language': 'la',
+        'reference_prefix': 'vulg'
+    }
+    conn = init_target_db(target_db_path, metadata)
+    
+    bible_entries = []
+    fts_entries = []
+    
+    with open(csv_path, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            book = row['Book']
+            chap = row['Chapter']
+            verse = row['Verse']
+            text = row['Text'].strip()
+            
+            ref = f"vulg:{book}:{chap}:{verse}"
+            bible_entries.append((ref, text))
+            fts_entries.append((ref, clean_text(text)))
+
+    conn.executemany("INSERT INTO bible (reference, text) VALUES (?, ?)", bible_entries)
+    conn.executemany("INSERT INTO bible_fts (reference, text) VALUES (?, ?)", fts_entries)
+    conn.commit()
+    conn.close()
+    print(f"Packaged Vulgate into {target_db_path}")
+
 def package_geneva_1587(xml_path, db_path):
     """Packages Geneva Bible 1587 from OSIS XML format."""
     metadata = {
@@ -238,4 +316,6 @@ if __name__ == "__main__":
     elif b_type == "kjv_1611": package_kjv_1611(source, target)
     elif b_type == "nasb95": package_nasb_1995(source, target)
     elif b_type == "gen1587": package_geneva_1587(source, target)
+    elif b_type == "lxx": package_lxx(source, target)
+    elif b_type == "vulg": package_vulgate(source, target)
     else: print(f"Unknown type: {b_type}")
