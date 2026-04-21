@@ -20,6 +20,78 @@ from rich.markdown import Markdown
 from rich.theme import Theme
 from rich.prompt import Prompt, IntPrompt
 
+import urllib.request
+import hashlib
+
+# ... (rest of imports)
+
+# ---------------------------------------------------------------------------
+# Update Manager
+# ---------------------------------------------------------------------------
+class LexUpdateManager:
+    MANIFEST_URL = "https://raw.githubusercontent.com/elcafe7/lex/main/manifest.json"
+    RAW_BASE_URL = "https://raw.githubusercontent.com/elcafe7/lex/main/"
+
+    def __init__(self, console):
+        self.console = console
+
+    def get_local_hash(self, filepath):
+        if not os.path.exists(filepath):
+            return None
+        sha256_hash = hashlib.sha256()
+        with open(filepath, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+
+    def fetch_remote_manifest(self):
+        try:
+            with urllib.request.urlopen(self.MANIFEST_URL) as response:
+                return json.loads(response.read().decode())
+        except Exception as e:
+            self.console.print(f"[warning]Failed to fetch update manifest: {e}[/]")
+            return None
+
+    def check_for_updates(self):
+        remote = self.fetch_remote_manifest()
+        if not remote: return None, None
+        
+        updates_needed = []
+        for rel_path, info in remote.get("assets", {}).items():
+            local_path = os.path.join(BASE_DIR, rel_path)
+            local_hash = self.get_local_hash(local_path)
+            if local_hash != info["hash"]:
+                updates_needed.append(rel_path)
+        
+        return updates_needed, remote["version"]
+
+    def perform_update(self):
+        updates, remote_version = self.check_for_updates()
+        if updates is None:
+            # Error message already printed by check_for_updates
+            return
+            
+        if not updates:
+            self.console.print("[success]Lex is already up to date.[/]")
+            return
+
+        self.console.print(f"[info]Updating Lex to {remote_version}... ({len(updates)} files)[/]")
+        
+        for rel_path in updates:
+            self.console.print(f"  → Downloading {rel_path}...")
+            url = self.RAW_BASE_URL + rel_path
+            target_path = os.path.join(BASE_DIR, rel_path)
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            
+            try:
+                urllib.request.urlretrieve(url, target_path + ".tmp")
+                os.replace(target_path + ".tmp", target_path)
+            except Exception as e:
+                self.console.print(f"[error]Failed to download {rel_path}: {e}[/]")
+                return
+
+        self.console.print(f"[success]Successfully updated Lex to {remote_version}![/]")
+
 # ---------------------------------------------------------------------------
 # Runtime paths and bundled-data adapters
 # ---------------------------------------------------------------------------
@@ -2925,6 +2997,7 @@ def main():
     parser.add_argument("-s", "--strongs", action="store_true")
     parser.add_argument("-v", "--version", action="store_true")
     parser.add_argument("-B", "--bible", type=str, default="esv", choices=BIBLE_VERSIONS.keys(), help="Select Bible version")
+    parser.add_argument("--update", action="store_true", help="Check for and install updates")
     theme_group = parser.add_mutually_exclusive_group()
     theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light")
     theme_group.add_argument("-dark", dest="theme_mode", action="store_const", const="dark")
@@ -2952,6 +3025,11 @@ def main():
 
     if args.version:
         console.print(f"[bold gold3]Lex[/] version [bold]{VERSION}[/]")
+        sys.exit(0)
+
+    if args.update or query == "update":
+        manager = LexUpdateManager(console)
+        manager.perform_update()
         sys.exit(0)
 
     if args.credits:
