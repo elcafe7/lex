@@ -1155,6 +1155,8 @@ class LexAgent:
         also.add_row("Lexicon:", "lex G3056  or  lex logos")
         also.add_row("Creeds:", "lex creed")
         also.add_row("Define:", "lex define grace")
+        also.add_row("Versions:", f"lex -v  (List {len(BIBLE_VERSIONS)} supported bibles)")
+        also.add_row("Select Bible:", "lex -B <id> John 3:16")
 
         config = Table.grid(padding=(0, 2))
         config.add_column(style="ui.action.key", no_wrap=True)
@@ -3132,6 +3134,8 @@ def main():
             if not agent.display_strongs(query):
                 agent.display_search_howto()
                 sys.exit(1)
+    else:
+        agent.display_intro()
 
 if __name__ == "__main__":
     main()
