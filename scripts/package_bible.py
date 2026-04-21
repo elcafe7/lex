@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+"""
+Bible Packager Tool
+Converts structured Bible data (JSON, XML, CSV) into standardized SQLite 
+databases compatible with the Lex CLI engine.
+"""
 import sqlite3
 import json
 import os

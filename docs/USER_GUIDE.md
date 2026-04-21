@@ -214,6 +214,37 @@ When reading a long creed or confession:
 - `m` returns to the section menu.
 - `q` quits.
 
+## Bible Versions
+
+Lex supports multiple Bible editions. You can list all installed versions with:
+
+```bash
+lex --version
+```
+
+Switch versions using the `-B` (Bible) flag:
+
+```bash
+lex -B kj16 John 3:16   # Original 1611 KJV
+lex -B lxx Genesis 1:1  # Greek Septuagint
+lex -B vulg John 1:1    # Latin Vulgate
+lex -B nasb John 3:16   # NASB 1995
+lex -B gen John 3:16    # 1587 Geneva
+lex -B kjv John 3:16    # Modern KJV
+```
+
+By default, Lex uses the **ESV (English Standard Version)**.
+
+## Keeping Lex Updated
+
+You can update your local code and Bible databases to the latest version available on GitHub with one command:
+
+```bash
+lex update
+```
+
+This will automatically check for new versions, verify file integrity using hashes, and download only the files that have changed.
+
 ## Credits And Licenses
 
 Show full data credits:

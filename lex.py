@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Lex: The Elegant Bible Terminal
+A source-aware, local-first CLI tool for Bible study, language inspection, 
+and traversal of the Christian tradition.
+
+Supports multiple Bible versions, interlinear study, global FTS5 search,
+historical creeds/confessions, and manifest-driven auto-updates.
+"""
 import sqlite3
 import os
 import sys

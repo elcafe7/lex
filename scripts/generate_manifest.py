@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+"""
+Manifest Generator
+Scans the Lex codebase and assets to generate a manifest.json file
+containing SHA-256 hashes for the auto-update system.
+"""
 import os
 import json
 import hashlib

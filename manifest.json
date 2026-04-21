@@ -2,7 +2,7 @@
   "version": "2.3.3-Nav",
   "assets": {
     "lex.py": {
-      "hash": "364c55adbc4970703a68cdd4d92eb67d73e0a3170bf3f985e9bd637211b599a1",
+      "hash": "3a73646ff8be2ccd656af3ae6353c5d302dcd0fc516af74f654b78515cb61ab1",
       "path": "lex.py"
     },
     "runtime-data/creeds.db": {

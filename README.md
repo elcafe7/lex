@@ -20,6 +20,8 @@ Current version: `2.3.3-Nav`
 
 | Feature | What it does |
 | --- | --- |
+| Multiple Versions | Switch between ESV, KJV, KJV 1611, NASB 1995, Geneva 1587, Septuagint (LXX), and Vulgate. |
+| Auto-Updates | Keep code and databases in sync with one command: `lex update`. |
 | Scripture reading | Read a verse with context or a full chapter from the local Bible DB. |
 | Study mode | Show verse context, source text, transliteration, interlinear rows, lexicon notes, and TSK links. |
 | Scoped search | Search all Scripture, one book, a book range, or a canon section such as `-major`, `-gospels`, or `-nt`. |
@@ -51,25 +53,30 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-The setup script does not download databases or JSON components. It only:
-
-1. Makes `lex.py` executable.
-2. Writes/updates `alias lex='<clone-folder>/lex.py'` in `~/.bashrc`.
-3. Creates `~/.local/bin/lex` as a convenience symlink.
-
-Restart your terminal, or run:
+Restart your terminal, or run `source ~/.bashrc`. Now you can run:
 
 ```bash
-source ~/.bashrc
+lex              # Open the dashboard
+lex update       # Sync latest code and data
+lex -v           # List supported bible versions
+lex -B kj16 John 3:16  # Read from the original 1611 KJV
 ```
 
-Now you can run Lex from anywhere or directly from the clone:
+## Bible Versions
 
-```bash
-lex John 3:16
-# OR
-./lex.py study John 1:1
-```
+Switch versions using the `-B` (Bible) flag:
+
+| ID | Version Name | Edition / Year |
+| --- | --- | --- |
+| `esv` | English Standard Version | Default |
+| `kjv` | King James Version | Oxford 1769 |
+| `kj16` | King James Version | Original 1611 |
+| `nasb` | New American Standard | 1995 Edition |
+| `gen` | Geneva Bible | 1587 Edition |
+| `lxx` | Septuagint | Rahlfs 1935 (Greek) |
+| `vulg` | Clementine Vulgate | Latin |
+
+Example: `lex -B lxx Genesis 1:1`
 
 ## Terminal Themes
 

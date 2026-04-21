@@ -22,6 +22,8 @@ readlink -f /usr/local/bin/lex
 - [Lex CLI component](components/LEX_CLI.md): command dispatch, rendering, read/study/search/creed/define behavior.
 - [Encyclopedia importer component](components/ENCYCLOPEDIA_IMPORTER.md): builds `encyclopedia.db` from ISBE OCR text.
 - [Bible DB builder component](components/BIBLE_DB_BUILDER.md): builds `bible_versions/esv.db` from `lexicon.db`.
+- [Bible Packager tool](scripts/package_bible.py): converts JSON/CSV/XML sources into per-edition `.db` files.
+- [Manifest generator](scripts/generate_manifest.py): generates `manifest.json` with file hashes for the update system.
 - [Data stores component](components/DATA_STORES.md): SQLite/JSON files Lex expects at runtime.
 - [Bible edition standard](BIBLE_EDITION_STANDARD.md): schema expectations for per-edition Bible databases.
 - [Encyclopedia import notes](ENCYCLOPEDIA_IMPORT_NOTES.md): future work for completing ISBE coverage.
@@ -31,10 +33,17 @@ readlink -f /usr/local/bin/lex
 
 1. `main()` parses CLI flags and query words.
 2. `LexAgent` opens the local SQLite databases and lazily loads JSON datasets.
-3. Read/search commands use `bible_versions/esv.db`.
-4. Study mode uses Bible rows plus ESV interlinear JSON, `strongs.db`, STEPBible lexicons, and TSK rows from `cross_refs.db`.
+3. Read/search commands use the database specified by `-B` (defaulting to `bible_versions/esv.db`).
+4. Study mode uses selected Bible rows plus ESV interlinear JSON, `strongs.db`, STEPBible lexicons, and TSK rows from `cross_refs.db`. Cross-version study is supported by mapping refs to the ESV interlinear base.
 5. Creed mode uses `creeds.db` rows, with JSON fallback for placeholder historical documents.
 6. Define mode queries Easton's dictionary from `dictionary.db` and ISBE entries from `encyclopedia.db`.
+
+## Update System
+
+Lex uses a manifest-driven update system:
+- `manifest.json` tracks the `version` and the `sha256` hash of every tracked code and data file.
+- `lex update` fetches the remote manifest from GitHub and syncs only changed or missing files.
+- Atomic updates are achieved by downloading to `.tmp` files and then performing an `os.replace`.
 
 ## Verification Commands
 
