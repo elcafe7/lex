@@ -434,6 +434,14 @@ def clear_theme_preference():
     config.pop("theme", None)
     save_config(config)
 
+def save_bible_preference(bible_id):
+    config = load_config()
+    config["bible"] = bible_id
+    save_config(config)
+
+def load_bible_preference():
+    return load_config().get("bible", "esv")
+
 def normalize_theme_value(value):
     value = (value or "").strip().lower()
     if not value:
@@ -796,7 +804,10 @@ class LexDB:
 class LexAgent:
     # LexAgent owns all local data access and terminal rendering. The CLI parser
     # at the bottom should stay thin and dispatch into these feature methods.
-    def __init__(self, bible_id="esv"):
+    def __init__(self, bible_id=None):
+        if bible_id is None:
+            bible_id = load_bible_preference()
+        
         self.db = LexDB(LEXICON_DB_PATH)
         bible_path = get_bible_path(bible_id)
         self.bible_db = LexDB(bible_path if os.path.exists(bible_path) else LEXICON_DB_PATH)
@@ -3008,7 +3019,7 @@ def main():
     parser.add_argument("-c", "--creed", action="store_true")
     parser.add_argument("-s", "--strongs", action="store_true")
     parser.add_argument("-v", "--version", action="store_true")
-    parser.add_argument("-B", "--bible", type=str, default="esv", choices=BIBLE_VERSIONS.keys(), help="Select Bible version")
+    parser.add_argument("-B", "--bible", type=str, default=None, choices=BIBLE_VERSIONS.keys(), help="Select Bible version")
     parser.add_argument("--update", action="store_true", help="Check for and install updates")
     theme_group = parser.add_mutually_exclusive_group()
     theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light")
@@ -3034,6 +3045,12 @@ def main():
             parser.error(f"unrecognized arguments: {' '.join(unknown)}")
     agent = LexAgent(bible_id=args.bible)
     query = " ".join(args.query)
+
+    # Handle persistent bible selection: "lex -B kjv" with no query
+    if args.bible and not query:
+        save_bible_preference(args.bible)
+        console.print(f"[success]Default Bible version set to [bold cyan]{args.bible}[/] ({BIBLE_VERSIONS[args.bible]['name']})[/]")
+        sys.exit(0)
 
     if args.version:
         console.print(f"[bold gold3]Lex[/] version [bold]{VERSION}[/]")
