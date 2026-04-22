@@ -52,7 +52,16 @@ pip install git+https://github.com/elcafe7/lex.git
 
 This will make the `lex` command available globally. On the first run, Lex will automatically download the required Bible databases (approx 280MB) to `~/bible-lexicon-data`.
 
-### Option 3: Manual Installation (Git)
+### Option 3: Scoop (Windows)
+
+If you use [Scoop](https://scoop.sh/) on Windows, you can install Lex from the custom bucket:
+
+```powershell
+scoop bucket add lex https://github.com/elcafe7/scoop-lex
+scoop install lex
+```
+
+### Option 4: Manual Installation (Git)
 
 Clone the repo into whatever folder you want Lex to live in:
 
