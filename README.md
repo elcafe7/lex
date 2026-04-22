@@ -33,6 +33,19 @@ Current version: `2.3.3-Nav`
 
 ## Quick Start
 
+### Option 1: Homebrew (Recommended for macOS and Linux)
+
+If you have [Homebrew](https://brew.sh/) installed, you can install Lex directly from the official tap:
+
+```bash
+brew tap elcafe7/lex
+brew install lex
+```
+
+This will automatically handle all dependencies and set up the `lex` command in your path.
+
+### Option 2: Manual Installation (Git)
+
 Clone the repo into whatever folder you want Lex to live in:
 
 ```bash
@@ -40,20 +53,21 @@ git clone https://github.com/elcafe7/lex.git
 cd lex
 ```
 
-Install Python dependencies if your machine does not already have them:
+Install Python dependencies:
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
-Register the `lex` command for your Bash shell:
+Register the `lex` command:
 
 ```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-Restart your terminal, or run `source ~/.bashrc`. Now you can run:
+Restart your terminal, or run `source ~/.bashrc`.
+ Now you can run:
 
 ```bash
 lex              # Open the dashboard
