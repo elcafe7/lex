@@ -14,7 +14,7 @@ lex web Romans 1:1
 ```
 
 Current CLI: `./lex.py`  
-Current version: `2.3.3-Nav`
+Current version: `2.3.4`
 
 ## Highlights
 
@@ -42,9 +42,17 @@ brew tap elcafe7/lex
 brew install lex
 ```
 
-This will automatically handle all dependencies and set up the `lex` command in your path.
+### Option 2: Pip (Python Package Manager)
 
-### Option 2: Manual Installation (Git)
+Install Lex directly from GitHub using pip:
+
+```bash
+pip install git+https://github.com/elcafe7/lex.git
+```
+
+This will make the `lex` command available globally. On the first run, Lex will automatically download the required Bible databases (approx 280MB) to `~/bible-lexicon-data`.
+
+### Option 3: Manual Installation (Git)
 
 Clone the repo into whatever folder you want Lex to live in:
 

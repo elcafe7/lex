@@ -40,8 +40,9 @@ class LexUpdateManager:
     MANIFEST_URL = "https://raw.githubusercontent.com/elcafe7/lex/main/manifest.json"
     RAW_BASE_URL = "https://raw.githubusercontent.com/elcafe7/lex/main/"
 
-    def __init__(self, console):
+    def __init__(self, console, data_dir=None):
         self.console = console
+        self.data_dir = data_dir or RUNTIME_DATA_DIR
 
     def get_local_hash(self, filepath):
         if not os.path.exists(filepath):
@@ -66,29 +67,51 @@ class LexUpdateManager:
         
         updates_needed = []
         for rel_path, info in remote.get("assets", {}).items():
-            local_path = os.path.join(BASE_DIR, rel_path)
+            # If the rel_path is lex.py itself, we usually don't want to update it
+            # via this manager if installed as a package, but for now we follow old logic
+            # for local clones.
+            if rel_path == "lex.py":
+                local_path = os.path.join(BASE_DIR, rel_path)
+            else:
+                # rel_path usually starts with 'runtime-data/'
+                # we strip that and join with our data_dir
+                actual_rel = rel_path.replace("runtime-data/", "", 1)
+                local_path = os.path.join(self.data_dir, actual_rel)
+                
             local_hash = self.get_local_hash(local_path)
             if local_hash != info["hash"]:
                 updates_needed.append(rel_path)
         
         return updates_needed, remote["version"]
 
+    def ensure_data(self):
+        """Ensures that essential data files exist. If not, trigger a full update."""
+        critical_file = os.path.join(self.data_dir, "lexicon.db")
+        if not os.path.exists(critical_file):
+            self.console.print("[info]First run detected: Downloading Bible databases (approx 280MB)...[/]")
+            self.perform_update()
+
     def perform_update(self):
         updates, remote_version = self.check_for_updates()
         if updates is None:
-            # Error message already printed by check_for_updates
             return
             
         if not updates:
             self.console.print("[success]Lex is already up to date.[/]")
             return
 
-        self.console.print(f"[info]Updating Lex to {remote_version}... ({len(updates)} files)[/]")
+        self.console.print(f"[info]Updating Lex data to {remote_version}... ({len(updates)} files)[/]")
         
         for rel_path in updates:
             self.console.print(f"  → Downloading {rel_path}...")
             url = self.RAW_BASE_URL + rel_path
-            target_path = os.path.join(BASE_DIR, rel_path)
+            
+            if rel_path == "lex.py":
+                target_path = os.path.join(BASE_DIR, rel_path)
+            else:
+                actual_rel = rel_path.replace("runtime-data/", "", 1)
+                target_path = os.path.join(self.data_dir, actual_rel)
+                
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             
             try:
@@ -106,23 +129,25 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.3.3-Nav"
+VERSION = "2.3.4"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 CONFIG_FILE = os.path.expanduser("~/.lex_config.json")
 
 # Local-first path resolution. Clones ship the compact runtime data bundle
 # (SQLite DBs and JSON) under runtime-data/, while local developer worktrees
 # may also have full upstream data checkouts beside lex.py.
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 RUNTIME_DATA_DIR = os.path.join(BASE_DIR, "runtime-data")
 HOME_FALLBACK = os.path.expanduser("~/bible-lexicon-data")
 
-def get_lex_path(relative_path, fallback_base=HOME_FALLBACK):
-    for base_path in (RUNTIME_DATA_DIR, BASE_DIR):
-        local_path = os.path.join(base_path, relative_path)
-        if os.path.exists(local_path):
-            return local_path
-    return os.path.join(fallback_base, relative_path)
+# Determine which data directory to use
+if os.path.exists(RUNTIME_DATA_DIR) and os.path.exists(os.path.join(RUNTIME_DATA_DIR, "lexicon.db")):
+    DATA_DIR = RUNTIME_DATA_DIR
+else:
+    DATA_DIR = HOME_FALLBACK
+
+def get_lex_path(relative_path):
+    return os.path.join(DATA_DIR, relative_path)
 
 LEXICON_DB_PATH = get_lex_path("lexicon.db")
 
@@ -3088,6 +3113,18 @@ def main():
     elif args.theme_mode:
         save_theme_preference(args.theme_mode)
     args.query = [f"-{q[len('__lexscope__'):]}" if q.startswith("__lexscope__") else q for q in args.query]
+    
+    # Initialize Update Manager and ensure data exists
+    manager = LexUpdateManager(console, data_dir=DATA_DIR)
+    
+    # If the user is running an update, we handle it and exit
+    if args.update or (len(args.query) > 0 and args.query[0] == "update"):
+        manager.perform_update()
+        sys.exit(0)
+        
+    # Ensure critical data exists (downloads if missing)
+    manager.ensure_data()
+
     if unknown:
         if args.query and args.query[0] in {"search", "serch", "read"} and all(u.startswith("-") and not u.startswith("--") for u in unknown):
             args.query.extend(unknown)
@@ -3147,11 +3184,6 @@ def main():
     if args.bible and not query:
         save_bible_preference(args.bible)
         console.print(f"[success]Default Bible version set to [bold cyan]{args.bible}[/] ({BIBLE_VERSIONS[args.bible]['name']})[/]")
-        sys.exit(0)
-
-    if args.update or query == "update":
-        manager = LexUpdateManager(console)
-        manager.perform_update()
         sys.exit(0)
 
     if args.credits:

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lex-bible"
+version = "2.3.4"
+authors = [
+  { name="elcafe7", email="nate@jesuspeoplesf.com" },
+]
+description = "The Elegant Bible Terminal - CLI tool for Bible study"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Intended Audience :: Education",
+    "Intended Audience :: Religion",
+    "Topic :: Religion",
+]
+dependencies = [
+    "rich",
+    "python-docx",
+    "reportlab",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/elcafe7/lex"
+"Bug Tracker" = "https://github.com/elcafe7/lex/issues"
+
+[project.scripts]
+lex = "lex:main"
+
+[tool.setuptools]
+py-modules = ["lex"]
