@@ -117,6 +117,10 @@ class LexUpdateManager:
             try:
                 urllib.request.urlretrieve(url, target_path + ".tmp")
                 os.replace(target_path + ".tmp", target_path)
+                
+                # If we just updated the main script, ensure it's still executable
+                if rel_path == "lex.py":
+                    os.chmod(target_path, 0o755)
             except Exception as e:
                 self.console.print(f"[error]Failed to download {rel_path}: {e}[/]")
                 return
