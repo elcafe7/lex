@@ -1181,23 +1181,44 @@ class LexAgent:
         # User-facing references are intentionally forgiving here. The DB still
         # uses canonical "version:Book:Chapter:Verse" strings internally.
         q_clean = q.lower().strip()
-        # Handle "1 John 1:9" or "John 3:16" or "1 Kings 1 1"
-        pattern = r'^([1-3]?\s?[a-zA-Z\s.]+?)\s+(\d+)(?:[\s:.](\d+))?$'
-        match = re.match(pattern, q_clean)
+        
+        # 1. Try standard spaced reference: '1 John 3:16', 'John 3:16', '1 Jn 3'
+        # Book is anything before the last set of digits
+        pattern_spaced = r'^([1-3]?\s?[a-z\s.]+?)\s+(\d+)(?:[\s:.](\d+))?$'
+        match = re.match(pattern_spaced, q_clean)
+        
+        # 2. Try compact reference: '1cor13', 'jn3:16'
+        if not match:
+            pattern_compact = r'^([1-3]?[a-z\s.]+?)(\d+)(?:[\s:.](\d+))?$'
+            match = re.match(pattern_compact, q_clean)
+
         if match:
             b, c, v = match.groups()
             b = b.strip()
+            # For slugs and compact keys, we want to normalize the book part
+            # '1 john' -> '1-john' and '1john'
             b_slug = re.sub(r"[^a-z0-9]+", "-", b.lower()).strip("-")
             b_compact = re.sub(r"[^a-z0-9]+", "", b.lower())
             
             # 1. Try dynamic canon map from active DB
-            # 2. Try static aliases
-            # 3. Fallback to title case
-            b_name = self.canon_map.get(b_compact) or self.canon_map.get(b_slug) or BOOK_SCOPE_ALIASES.get(b_slug) or BOOK_SCOPE_ALIASES.get(b_compact) or b.title()
+            b_name = self.canon_map.get(b_compact) or self.canon_map.get(b_slug)
             
-            # If the resolved name exists in our canon map, use the specific DB casing/spelling
-            b_name_lower = re.sub(r"[^a-z0-9]+", "", b_name.lower())
-            b_name = self.canon_map.get(b_name_lower, b_name)
+            # 2. Try static aliases
+            if not b_name:
+                b_name = BOOK_SCOPE_ALIASES.get(b_compact) or BOOK_SCOPE_ALIASES.get(b_slug)
+            
+            # 3. Handle cases where the number might be separate in our mapping: '1-john' vs '1john'
+            if not b_name and b_slug.startswith(("1-", "2-", "3-")):
+                alt_compact = b_slug.replace("-", "", 1)
+                b_name = self.canon_map.get(alt_compact) or BOOK_SCOPE_ALIASES.get(alt_compact)
+            
+            # 4. Fallback to title case
+            if not b_name:
+                b_name = b.title()
+            
+            # Final resolution to ensure we use the exact DB book name
+            b_name_key = re.sub(r"[^a-z0-9]+", "", b_name.lower())
+            b_name = self.canon_map.get(b_name_key, b_name)
             
             return f"{b_name}:{c}:{v}" if v else f"{b_name}:{c}", b_name, c, v
         return None, None, None, None
