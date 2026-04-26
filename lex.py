@@ -103,6 +103,11 @@ class LexUpdateManager:
 
         self.console.print(f"[info]Updating Lex data to {remote_version}... ({len(updates)} files)[/]")
         
+        # Pull lex.py to the end if present to avoid mid-update execution drift
+        if "lex.py" in updates:
+            updates.remove("lex.py")
+            updates.append("lex.py")
+
         for rel_path in updates:
             self.console.print(f"  → Downloading {rel_path}...")
             url = self.RAW_BASE_URL + rel_path
@@ -134,7 +139,7 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.4.1"
+VERSION = "2.4.2"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 CONFIG_FILE = os.path.expanduser("~/.lex_config.json")
 
@@ -234,16 +239,20 @@ TSK_TO_BOOK = {abbr.rstrip("."): book for book, abbr in TSK_BOOK_ABBR.items()}
 BIBLE_BOOKS = list(TSK_BOOK_ABBR.keys())
 BIBLE_BOOK_INDEX = {book: idx for idx, book in enumerate(BIBLE_BOOKS)}
 
+# Pre-compile normalization pattern for performance
+NORM_RE = re.compile(r"[^a-z0-9]+")
+
 BOOK_SCOPE_ALIASES = {}
 for book in BIBLE_BOOKS:
-    book_key = re.sub(r"[^a-z0-9]+", "-", book.lower()).strip("-")
-    compact_key = re.sub(r"[^a-z0-9]+", "", book.lower())
+    low = book.lower()
+    book_key = NORM_RE.sub("-", low).strip("-")
+    compact_key = NORM_RE.sub("", low)
     BOOK_SCOPE_ALIASES[book_key] = book
     BOOK_SCOPE_ALIASES[compact_key] = book
     abbr = TSK_BOOK_ABBR.get(book, "").rstrip(".").lower()
     if abbr:
-        BOOK_SCOPE_ALIASES[re.sub(r"[^a-z0-9]+", "-", abbr).strip("-")] = book
-        BOOK_SCOPE_ALIASES[re.sub(r"[^a-z0-9]+", "", abbr)] = book
+        BOOK_SCOPE_ALIASES[NORM_RE.sub("-", abbr).strip("-")] = book
+        BOOK_SCOPE_ALIASES[NORM_RE.sub("", abbr)] = book
 
 BOOK_SCOPE_ALIASES.update({
     "ge": "Genesis",
@@ -380,7 +389,6 @@ BOOK_SCOPE_GROUPS = {
     "new-testament": BIBLE_BOOKS[39:],
     "law": BIBLE_BOOKS[:5],
     "pentateuch": BIBLE_BOOKS[:5],
-    "penteteuch": BIBLE_BOOKS[:5],
     "torah": BIBLE_BOOKS[:5],
     "history": BIBLE_BOOKS[5:17],
     "wisdom": BIBLE_BOOKS[17:22],
@@ -392,10 +400,10 @@ BOOK_SCOPE_GROUPS = {
     "prophets": BIBLE_BOOKS[22:39],
     "gospels": BIBLE_BOOKS[39:43],
     "gospel": BIBLE_BOOKS[39:43],
-    "epistles": BIBLE_BOOKS[45:65],
-    "letters": BIBLE_BOOKS[45:65],
+    "epistles": BIBLE_BOOKS[44:66],
+    "letters": BIBLE_BOOKS[44:66],
     "pauline": BIBLE_BOOKS[44:57],
-    "general-epistles": BIBLE_BOOKS[57:65],
+    "general-epistles": BIBLE_BOOKS[57:66],
 }
 
 # Original-language creed text is only stored for short documents where

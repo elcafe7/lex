@@ -1,8 +1,8 @@
 {
-  "version": "2.4.1",
+  "version": "2.4.2",
   "assets": {
     "lex.py": {
-      "hash": "b8e0403d6cabb2084339008501bad3e8732f27927d44dbf31efb3f129f42c226",
+      "hash": "ca7c8e5772ac3c135551cbd24d946fe3c75fabf8c329ba71f991ebda556098bd",
       "path": "lex.py"
     },
     "runtime-data/creeds.db": {
