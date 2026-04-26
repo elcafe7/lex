@@ -139,7 +139,7 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.4.2"
+VERSION = "2.4.3"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 CONFIG_FILE = os.path.expanduser("~/.lex_config.json")
 
@@ -3219,24 +3219,23 @@ Find Strong's entries by number, transliteration, or English gloss:
         if not normalized:
             return False
             
-        # 1. Exact Match
+        # 1. Try Exact Match first (Fastest)
         res = self.naves_db.query(
-            "SELECT subject, entry FROM topics WHERE subject_upper = ? LIMIT 1",
+            "SELECT subject, entry FROM topics WHERE subject_upper = ?",
             (normalized.upper(),)
         )
         
-        # 2. Substring Match
+        # 2. If no exact match, try Substring Match or FTS
         if not res:
             res = self.naves_db.query(
-                "SELECT subject, entry FROM topics WHERE subject_upper LIKE ? ORDER BY subject LIMIT 1",
+                "SELECT subject, entry FROM topics WHERE subject_upper LIKE ? ORDER BY subject LIMIT 50",
                 (f"%{normalized.upper()}%",)
             )
             
-        # 3. FTS Match
         if not res:
             try:
                 res = self.naves_db.query(
-                    "SELECT subject, entry FROM topics_fts WHERE entry MATCH ? LIMIT 1",
+                    "SELECT subject, entry FROM topics_fts WHERE entry MATCH ? LIMIT 20",
                     (normalized,)
                 )
             except: pass
@@ -3244,18 +3243,34 @@ Find Strong's entries by number, transliteration, or English gloss:
         if not res:
             return False
 
-        subject, entry = res[0]
-        
-        console.print(Rule(style="ui.border"))
-        console.print(f" [dict.topic]{subject}[/dict.topic]")
-        console.print(Rule(style="ui.border"))
-        console.print("")
-        
-        console.print(self.format_naves_entry(entry))
-        
-        console.print("")
-        console.print(Rule(style="ui.meta"))
-        return True
+        if len(res) == 1:
+            subject, entry = res[0]
+            console.print(Rule(style="ui.border"))
+            console.print(f" [dict.topic]{subject}[/dict.topic]")
+            console.print(Rule(style="ui.border"))
+            console.print("")
+            console.print(self.format_naves_entry(entry))
+            console.print("")
+            console.print(Rule(style="ui.meta"))
+            return True
+        else:
+            # Multiple results - show picker
+            table = Table(title=f"Nave's Results for '{query}'", border_style="ui.border", box=None)
+            table.add_column("ID", justify="right", style="ui.action.key")
+            table.add_column("Subject", style="dict.topic")
+            for i, row in enumerate(res, 1):
+                table.add_row(str(i), row[0])
+            console.print(table)
+            
+            try:
+                choice = console.input(f"\n [ui.action]Select ID [1-{len(res)}]: [/]").strip()
+                idx = int(choice) - 1
+                if 0 <= idx < len(res):
+                    self.display_naves(res[idx][0]) # Recursive call to show the single entry
+                    return True
+            except:
+                pass
+            return True
 
     def display_commentary(self, query):
         ref_norm, book, chap, verse = self.normalize_ref(query)
