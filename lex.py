@@ -1290,6 +1290,8 @@ class LexAgent:
         also.add_row("Quick Read:", "lex John 3:16")
         also.add_row("Quick Study:", "lex John 3:16 -i")
         also.add_row("Verse Web:", "lex web John 3:16")
+        also.add_row("Commentary:", "lex commentary John 3:16")
+        also.add_row("Nave's Topics:", "lex topic church  or  lex naves grace")
         also.add_row("Lexicon:", "lex G3056  or  lex logos")
         also.add_row("Creeds:", "lex creed")
         also.add_row("Define:", "lex define grace")
@@ -1582,6 +1584,49 @@ If you need plain text with no Lex colors:
 *   `LEX_NO_COLOR=1 lex John 3:16`
 """
         console.print(Panel(Markdown(md), title="🔎 Search", border_style="ui.border", expand=False))
+
+    def display_topic_howto(self):
+        md = """
+# Nave's Topical Bible
+
+Browse over 20,000 topics and 100,000 scripture references. This is a 
+re-implementation of the classic Nave's index using a high-signal 
+blueprint layout.
+
+## Basic Usage
+
+*   `lex topic church`
+*   `lex topic "second coming"` (Quotes required for multiple words)
+*   `lex naves grace` (Alias for the same command)
+
+## Deep Search
+
+If a topic title isn't found exactly, Lex will automatically perform a
+semantic full-text search across the content of all entries to find 
+relevant thematic clusters.
+"""
+        console.print(Markdown(md))
+
+    def display_commentary_howto(self):
+        md = """
+# Biblical Commentaries
+
+Traverse the Christian tradition with Matthew Henry and John Calvin. 
+Commentary lookups provide historical context and theological depth 
+alongside your scripture study.
+
+## Basic Usage
+
+*   `lex commentary John 3:16`
+*   `lex commentary Romans 1` (Fetches entire chapter notes)
+*   `lex commentary gen 1:1` (Supports standard abbreviations)
+
+## High-Signal View
+
+Notes from multiple traditions are displayed in sequential themed blocks 
+(Henry in Blue, Calvin in Magenta) for immediate visual comparison.
+"""
+        console.print(Markdown(md))
 
     def display_strongs_howto(self):
         md = """
@@ -3435,15 +3480,18 @@ def main():
                 console.print("[warning]No Strong's entries found for that term.[/]")
                 sys.exit(1)
         sys.exit(0)
-    elif query.startswith("topic ") or query.startswith("naves "):
+    elif query.startswith("topic") or query.startswith("naves"):
         q = query.replace("topic ", "").replace("naves ", "").strip()
-        if not agent.display_naves(q):
+        if not q or q in {"topic", "naves"}:
+            agent.display_topic_howto()
+        elif not agent.display_naves(q):
             console.print("[warning]No Nave's Topical Bible entry found.[/]")
-            sys.exit(1)
         sys.exit(0)
-    elif query.startswith("commentary "):
+    elif query.startswith("commentary"):
         q = query.replace("commentary ", "").strip()
-        if not agent.display_commentary(q):
+        if not q or q == "commentary":
+            agent.display_commentary_howto()
+        elif not agent.display_commentary(q):
             sys.exit(1)
         sys.exit(0)
 
