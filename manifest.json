@@ -1,49 +1,64 @@
 {
-  "version": "2.3.5",
+  "version": "2.4.0",
   "assets": {
     "lex.py": {
-      "hash": "6f9755306e24ace536dc04a36952e58841ffa61752cb3716ea48ccc619386ef6",
+      "hash": "245fc7a0604784abf60e5a03387fbf5e4d739babf46ec53e4cddd873a8415913",
       "path": "lex.py"
-    },
-    "runtime-data/lexicon.db": {
-      "hash": "19102741f5e39ef941b3866ebcae55afdb1d4c75bfb2395528b5789b7c3a3027",
-      "size": 54857728,
-      "path": "runtime-data/lexicon.db"
-    },
-    "runtime-data/strongs.db": {
-      "hash": "e0020866adedea4b44974e03a9608bac7157f5a30de06ac5013cc0a47e2683b0",
-      "size": 4059136,
-      "path": "runtime-data/strongs.db"
-    },
-    "runtime-data/dictionary.db": {
-      "hash": "76a572bd60220277e13d3613b8f69453ad7cdb2549609de1293d1e56795f136f",
-      "size": 5509120,
-      "path": "runtime-data/dictionary.db"
-    },
-    "runtime-data/encyclopedia.db": {
-      "hash": "d8c0be6bb52ca902f66a1b8b039002827d75f9af00cd929afb217765b264f57a",
-      "size": 11960320,
-      "path": "runtime-data/encyclopedia.db"
     },
     "runtime-data/creeds.db": {
       "hash": "8c9525be7b8316314bcc545d05a829ff4aaaf464c8adfaafc6c899c7ac0f27ae",
       "size": 1703936,
       "path": "runtime-data/creeds.db"
     },
-    "runtime-data/isbe_raw.txt": {
-      "hash": "4f37c643cecc559a4e81dc5f10807011341c0300f56ee37e9c67760bfc8838b4",
-      "size": 6012741,
-      "path": "runtime-data/isbe_raw.txt"
+    "runtime-data/dictionary.db": {
+      "hash": "76a572bd60220277e13d3613b8f69453ad7cdb2549609de1293d1e56795f136f",
+      "size": 5509120,
+      "path": "runtime-data/dictionary.db"
+    },
+    "runtime-data/strongs.db": {
+      "hash": "e0020866adedea4b44974e03a9608bac7157f5a30de06ac5013cc0a47e2683b0",
+      "size": 4059136,
+      "path": "runtime-data/strongs.db"
+    },
+    "runtime-data/cross_refs.db": {
+      "hash": "493a79dc9dda321a0da42a4033a01e763b1f9668ab5413f6f765ed847477855c",
+      "size": 16855040,
+      "path": "runtime-data/cross_refs.db"
     },
     "runtime-data/places.db": {
       "hash": "e5cf3be463a59105e0e56bb605841038bbc518a9744efc9d8cbdf3c951add152",
       "size": 118784,
       "path": "runtime-data/places.db"
     },
-    "runtime-data/cross_refs.db": {
-      "hash": "493a79dc9dda321a0da42a4033a01e763b1f9668ab5413f6f765ed847477855c",
-      "size": 16855040,
-      "path": "runtime-data/cross_refs.db"
+    "runtime-data/encyclopedia.db": {
+      "hash": "d8c0be6bb52ca902f66a1b8b039002827d75f9af00cd929afb217765b264f57a",
+      "size": 11960320,
+      "path": "runtime-data/encyclopedia.db"
+    },
+    "runtime-data/isbe_raw.txt": {
+      "hash": "4f37c643cecc559a4e81dc5f10807011341c0300f56ee37e9c67760bfc8838b4",
+      "size": 6012741,
+      "path": "runtime-data/isbe_raw.txt"
+    },
+    "runtime-data/lexicon.db": {
+      "hash": "19102741f5e39ef941b3866ebcae55afdb1d4c75bfb2395528b5789b7c3a3027",
+      "size": 54857728,
+      "path": "runtime-data/lexicon.db"
+    },
+    "runtime-data/naves.db": {
+      "hash": "1d2417e7ca8bc8e75994fd7efbec25dced2c42c19eb21caedcfa34757b1426d5",
+      "size": 3125248,
+      "path": "runtime-data/naves.db"
+    },
+    "runtime-data/commentaries/john_calvin.db": {
+      "hash": "b652142219bf0ef8dd7a1617c16158125d75d4a394ba5903cae59090d4ae504b",
+      "size": 77000704,
+      "path": "runtime-data/commentaries/john_calvin.db"
+    },
+    "runtime-data/commentaries/matthew_henry.db": {
+      "hash": "9665a156b47fcbf4dbd78c02006aeaeb0fd0464cabef6f67d3905c38fe16a14b",
+      "size": 95625216,
+      "path": "runtime-data/commentaries/matthew_henry.db"
     },
     "runtime-data/esv-data/data/interlinear/strongs.json": {
       "hash": "59e41c6ae8888e1f77ac31ba446769c2e67326a2cd4d5f934edda8dda8469648",
@@ -55,115 +70,65 @@
       "size": 56294707,
       "path": "runtime-data/esv-data/data/esv/esv-interlinear.json"
     },
-    "runtime-data/bible_versions/kjv.db": {
-      "hash": "21b1f14cf6e6698c92df8af6d97d4a153397686ddcd32d1b5073fa376c24e231",
-      "size": 12587008,
-      "path": "runtime-data/bible_versions/kjv.db"
-    },
-    "runtime-data/bible_versions/vulg.db": {
-      "hash": "da51cf00aa06fd058752842a836cffdac5703a1571dd1787865abd8273a14f1c",
-      "size": 16670720,
-      "path": "runtime-data/bible_versions/vulg.db"
-    },
-    "runtime-data/bible_versions/nasb.db": {
-      "hash": "e5e6933d06fed0fb76ea1e301f18c7fb2ea016419d376c66eb9cecbae7ca8fba",
-      "size": 16748544,
-      "path": "runtime-data/bible_versions/nasb.db"
-    },
-    "runtime-data/bible_versions/esv.db": {
-      "hash": "95381930e3b5741dc62fec44dd44004af88fe287a75bd3c8673cf9f55a9199ad",
-      "size": 16625664,
-      "path": "runtime-data/bible_versions/esv.db"
-    },
-    "runtime-data/bible_versions/gen.db": {
-      "hash": "aab2a9f41a053281a3f817129f10addefef90296e9ebb74ad7dcad27e719cebd",
-      "size": 18083840,
-      "path": "runtime-data/bible_versions/gen.db"
-    },
-    "runtime-data/bible_versions/kj16.db": {
-      "hash": "3fc978ce425b51264b579291391f14c428f05f598ecdcb4b8486e43d68d68f6c",
-      "size": 19255296,
-      "path": "runtime-data/bible_versions/kj16.db"
-    },
-    "runtime-data/bible_versions/lxx.db": {
-      "hash": "412cd3edef2fe14c7a6722181699748b12c90435bc0da26de2e5c903bf4fb3b8",
-      "size": 22134784,
-      "path": "runtime-data/bible_versions/lxx.db"
-    },
-    "runtime-data/commentaries/matthew_henry.db": {
-      "hash": "9665a156b47fcbf4dbd78c02006aeaeb0fd0464cabef6f67d3905c38fe16a14b",
-      "size": 95625216,
-      "path": "runtime-data/commentaries/matthew_henry.db"
-    },
-    "runtime-data/commentaries/john_calvin.db": {
-      "hash": "b652142219bf0ef8dd7a1617c16158125d75d4a394ba5903cae59090d4ae504b",
-      "size": 77000704,
-      "path": "runtime-data/commentaries/john_calvin.db"
+    "runtime-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesh-hebrew.json": {
+      "hash": "b8723804c0a6a710c83239197d23b30239d63d5b024a4842f71106021624f469",
+      "size": 3300721,
+      "path": "runtime-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesh-hebrew.json"
     },
     "runtime-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesg-greek.json": {
       "hash": "67f818251764715a6ce9c85520cef6dfcb7ef870a77dccec8cf0e32ba0d46fae",
       "size": 6344559,
       "path": "runtime-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesg-greek.json"
     },
-    "runtime-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesh-hebrew.json": {
-      "hash": "b8723804c0a6a710c83239197d23b30239d63d5b024a4842f71106021624f469",
-      "size": 3300721,
-      "path": "runtime-data/theolog-ai/data/biblical-languages/stepbible-lexicons/tbesh-hebrew.json"
-    },
-    "runtime-data/theolog-ai/data/historical-documents/augsburg-confession.json": {
-      "hash": "40e11ca6284d90660763947c8a100908558899d67fe875e7bd8cb7a99b69a83b",
-      "size": 104231,
-      "path": "runtime-data/theolog-ai/data/historical-documents/augsburg-confession.json"
-    },
-    "runtime-data/theolog-ai/data/historical-documents/baltimore-catechism.json": {
-      "hash": "bd20b6ca9b6b37dcfa5496378efb4196169ca80eaa161770ca766f480d32f799",
-      "size": 321902,
-      "path": "runtime-data/theolog-ai/data/historical-documents/baltimore-catechism.json"
-    },
-    "runtime-data/theolog-ai/data/historical-documents/nicene-creed.json": {
-      "hash": "aa21b6641afcb8b91e878718d27c42c879c18f5440f2a4d69fbc7dc2e3fd7efd",
-      "size": 2258,
-      "path": "runtime-data/theolog-ai/data/historical-documents/nicene-creed.json"
-    },
-    "runtime-data/theolog-ai/data/historical-documents/london-baptist-1689.json": {
-      "hash": "141cb44f76a2f9d198b55d068f052e09f8c74662b970a6356a566595b4b26b29",
-      "size": 201700,
-      "path": "runtime-data/theolog-ai/data/historical-documents/london-baptist-1689.json"
-    },
-    "runtime-data/theolog-ai/data/historical-documents/chalcedonian-definition.json": {
-      "hash": "0092b82c44ba276fdf812e67a313340b009cd9ffbbb042e99bd726b66e9f7be2",
-      "size": 3103,
-      "path": "runtime-data/theolog-ai/data/historical-documents/chalcedonian-definition.json"
-    },
     "runtime-data/theolog-ai/data/historical-documents/belgic-confession.json": {
       "hash": "c8f331118592aa78638b7f4d1e8ff1473106f0565ed85a68e4ccaf5783ced3a2",
       "size": 59820,
       "path": "runtime-data/theolog-ai/data/historical-documents/belgic-confession.json"
     },
-    "runtime-data/theolog-ai/data/historical-documents/39-articles.json": {
-      "hash": "d7ebc9acc6221a1eeb9c1885ce8cf9ce4399fafe300dfa068e325bb48d95c99d",
-      "size": 30674,
-      "path": "runtime-data/theolog-ai/data/historical-documents/39-articles.json"
-    },
-    "runtime-data/theolog-ai/data/historical-documents/council-of-trent.json": {
-      "hash": "b04aa37b10c743a78f687c7f1326b20846ea3e980bed836da6dd9584fff509bc",
-      "size": 839713,
-      "path": "runtime-data/theolog-ai/data/historical-documents/council-of-trent.json"
-    },
-    "runtime-data/theolog-ai/data/historical-documents/philaret-catechism.json": {
-      "hash": "bc3c4f9a1df75063e1a77f3e718ba0b32d0132291227f073e275a6383b81bfcc",
-      "size": 395098,
-      "path": "runtime-data/theolog-ai/data/historical-documents/philaret-catechism.json"
+    "runtime-data/theolog-ai/data/historical-documents/apostles-creed.json": {
+      "hash": "1acca68fb2ad990870a1e58dbfb8c0bcaf521cb2423f6f8537976aa721897cfd",
+      "size": 1486,
+      "path": "runtime-data/theolog-ai/data/historical-documents/apostles-creed.json"
     },
     "runtime-data/theolog-ai/data/historical-documents/westminster-larger-catechism.json": {
       "hash": "343b5303872a3360b6906dd26c6c9b8258c2b28c2c58e0be15ea16b817e1adfd",
       "size": 102020,
       "path": "runtime-data/theolog-ai/data/historical-documents/westminster-larger-catechism.json"
     },
-    "runtime-data/theolog-ai/data/historical-documents/apostles-creed.json": {
-      "hash": "1acca68fb2ad990870a1e58dbfb8c0bcaf521cb2423f6f8537976aa721897cfd",
-      "size": 1486,
-      "path": "runtime-data/theolog-ai/data/historical-documents/apostles-creed.json"
+    "runtime-data/theolog-ai/data/historical-documents/philaret-catechism.json": {
+      "hash": "bc3c4f9a1df75063e1a77f3e718ba0b32d0132291227f073e275a6383b81bfcc",
+      "size": 395098,
+      "path": "runtime-data/theolog-ai/data/historical-documents/philaret-catechism.json"
+    },
+    "runtime-data/theolog-ai/data/historical-documents/athanasian-creed.json": {
+      "hash": "96455a19f1b3df5688f1ddf1bd593bf366af646580aee5850fd273c51bc585d2",
+      "size": 4388,
+      "path": "runtime-data/theolog-ai/data/historical-documents/athanasian-creed.json"
+    },
+    "runtime-data/theolog-ai/data/historical-documents/canons-of-dort.json": {
+      "hash": "3aba2918d00f2c7c1f066303f8f6f94f3feb571694540ae8bf319e90d9393d76",
+      "size": 90198,
+      "path": "runtime-data/theolog-ai/data/historical-documents/canons-of-dort.json"
+    },
+    "runtime-data/theolog-ai/data/historical-documents/nicene-creed.json": {
+      "hash": "aa21b6641afcb8b91e878718d27c42c879c18f5440f2a4d69fbc7dc2e3fd7efd",
+      "size": 2258,
+      "path": "runtime-data/theolog-ai/data/historical-documents/nicene-creed.json"
+    },
+    "runtime-data/theolog-ai/data/historical-documents/council-of-trent.json": {
+      "hash": "b04aa37b10c743a78f687c7f1326b20846ea3e980bed836da6dd9584fff509bc",
+      "size": 839713,
+      "path": "runtime-data/theolog-ai/data/historical-documents/council-of-trent.json"
+    },
+    "runtime-data/theolog-ai/data/historical-documents/chalcedonian-definition.json": {
+      "hash": "0092b82c44ba276fdf812e67a313340b009cd9ffbbb042e99bd726b66e9f7be2",
+      "size": 3103,
+      "path": "runtime-data/theolog-ai/data/historical-documents/chalcedonian-definition.json"
+    },
+    "runtime-data/theolog-ai/data/historical-documents/baltimore-catechism.json": {
+      "hash": "bd20b6ca9b6b37dcfa5496378efb4196169ca80eaa161770ca766f480d32f799",
+      "size": 321902,
+      "path": "runtime-data/theolog-ai/data/historical-documents/baltimore-catechism.json"
     },
     "runtime-data/theolog-ai/data/historical-documents/confession-of-dositheus.json": {
       "hash": "eb4a44394c874e61d9902ecf6b73cb1530384cbdb3796ec7054b9d1666545a87",
@@ -175,25 +140,65 @@
       "size": 30598,
       "path": "runtime-data/theolog-ai/data/historical-documents/westminster-shorter-catechism.json"
     },
+    "runtime-data/theolog-ai/data/historical-documents/heidelberg-catechism.json": {
+      "hash": "5e86b47d797721003747492c44ab5b7e30053ecc6833e1bdc6a38e72f62cba2c",
+      "size": 54192,
+      "path": "runtime-data/theolog-ai/data/historical-documents/heidelberg-catechism.json"
+    },
+    "runtime-data/theolog-ai/data/historical-documents/london-baptist-1689.json": {
+      "hash": "141cb44f76a2f9d198b55d068f052e09f8c74662b970a6356a566595b4b26b29",
+      "size": 201700,
+      "path": "runtime-data/theolog-ai/data/historical-documents/london-baptist-1689.json"
+    },
+    "runtime-data/theolog-ai/data/historical-documents/augsburg-confession.json": {
+      "hash": "40e11ca6284d90660763947c8a100908558899d67fe875e7bd8cb7a99b69a83b",
+      "size": 104231,
+      "path": "runtime-data/theolog-ai/data/historical-documents/augsburg-confession.json"
+    },
+    "runtime-data/theolog-ai/data/historical-documents/39-articles.json": {
+      "hash": "d7ebc9acc6221a1eeb9c1885ce8cf9ce4399fafe300dfa068e325bb48d95c99d",
+      "size": 30674,
+      "path": "runtime-data/theolog-ai/data/historical-documents/39-articles.json"
+    },
     "runtime-data/theolog-ai/data/historical-documents/westminster-confession.json": {
       "hash": "7ee93157f95c3a69e9cc9ef448b5761822f90ac801a75aa12c7df948cf55be06",
       "size": 80527,
       "path": "runtime-data/theolog-ai/data/historical-documents/westminster-confession.json"
     },
-    "runtime-data/theolog-ai/data/historical-documents/canons-of-dort.json": {
-      "hash": "3aba2918d00f2c7c1f066303f8f6f94f3feb571694540ae8bf319e90d9393d76",
-      "size": 90198,
-      "path": "runtime-data/theolog-ai/data/historical-documents/canons-of-dort.json"
+    "runtime-data/bible_versions/vulg.db": {
+      "hash": "da51cf00aa06fd058752842a836cffdac5703a1571dd1787865abd8273a14f1c",
+      "size": 16670720,
+      "path": "runtime-data/bible_versions/vulg.db"
     },
-    "runtime-data/theolog-ai/data/historical-documents/athanasian-creed.json": {
-      "hash": "96455a19f1b3df5688f1ddf1bd593bf366af646580aee5850fd273c51bc585d2",
-      "size": 4388,
-      "path": "runtime-data/theolog-ai/data/historical-documents/athanasian-creed.json"
+    "runtime-data/bible_versions/lxx.db": {
+      "hash": "412cd3edef2fe14c7a6722181699748b12c90435bc0da26de2e5c903bf4fb3b8",
+      "size": 22134784,
+      "path": "runtime-data/bible_versions/lxx.db"
     },
-    "runtime-data/theolog-ai/data/historical-documents/heidelberg-catechism.json": {
-      "hash": "5e86b47d797721003747492c44ab5b7e30053ecc6833e1bdc6a38e72f62cba2c",
-      "size": 54192,
-      "path": "runtime-data/theolog-ai/data/historical-documents/heidelberg-catechism.json"
+    "runtime-data/bible_versions/nasb.db": {
+      "hash": "e5e6933d06fed0fb76ea1e301f18c7fb2ea016419d376c66eb9cecbae7ca8fba",
+      "size": 16748544,
+      "path": "runtime-data/bible_versions/nasb.db"
+    },
+    "runtime-data/bible_versions/gen.db": {
+      "hash": "aab2a9f41a053281a3f817129f10addefef90296e9ebb74ad7dcad27e719cebd",
+      "size": 18083840,
+      "path": "runtime-data/bible_versions/gen.db"
+    },
+    "runtime-data/bible_versions/kj16.db": {
+      "hash": "3fc978ce425b51264b579291391f14c428f05f598ecdcb4b8486e43d68d68f6c",
+      "size": 19255296,
+      "path": "runtime-data/bible_versions/kj16.db"
+    },
+    "runtime-data/bible_versions/kjv.db": {
+      "hash": "21b1f14cf6e6698c92df8af6d97d4a153397686ddcd32d1b5073fa376c24e231",
+      "size": 12587008,
+      "path": "runtime-data/bible_versions/kjv.db"
+    },
+    "runtime-data/bible_versions/esv.db": {
+      "hash": "95381930e3b5741dc62fec44dd44004af88fe287a75bd3c8673cf9f55a9199ad",
+      "size": 16625664,
+      "path": "runtime-data/bible_versions/esv.db"
     }
   }
 }

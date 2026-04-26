@@ -134,7 +134,7 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.3.5"
+VERSION = "2.4.0"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 CONFIG_FILE = os.path.expanduser("~/.lex_config.json")
 
