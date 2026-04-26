@@ -27,6 +27,7 @@ from rich.table import Table
 from rich.markdown import Markdown
 from rich.theme import Theme
 from rich.prompt import Prompt, IntPrompt
+from rich.rule import Rule
 
 import urllib.request
 import hashlib
@@ -177,6 +178,9 @@ STRONGS_DB_PATH = get_lex_path("strongs.db")
 DICTIONARY_DB_PATH = get_lex_path("dictionary.db")
 CREEDS_DB_PATH = get_lex_path("creeds.db")
 PLACES_DB_PATH = get_lex_path("places.db")
+NAVES_DB_PATH = get_lex_path("naves.db")
+HENRY_DB_PATH = get_lex_path("commentaries/matthew_henry.db")
+CALVIN_DB_PATH = get_lex_path("commentaries/john_calvin.db")
 INTERLINEAR_PATH = get_lex_path("esv-data/data/esv/esv-interlinear.json")
 INTERLINEAR_STRONGS_PATH = get_lex_path("esv-data/data/interlinear/strongs.json")
 STEP_GREEK_PATH = get_lex_path("theolog-ai/data/biblical-languages/stepbible-lexicons/tbesg-greek.json")
@@ -906,6 +910,9 @@ class LexAgent:
         self.dictionary_db = LexDB(DICTIONARY_DB_PATH if os.path.exists(DICTIONARY_DB_PATH) else LEXICON_DB_PATH)
         self.creeds_db = LexDB(CREEDS_DB_PATH if os.path.exists(CREEDS_DB_PATH) else LEXICON_DB_PATH)
         self.places_db = LexDB(PLACES_DB_PATH if os.path.exists(PLACES_DB_PATH) else LEXICON_DB_PATH)
+        self.henry_db = LexDB(HENRY_DB_PATH) if os.path.exists(HENRY_DB_PATH) else None
+        self.calvin_db = LexDB(CALVIN_DB_PATH) if os.path.exists(CALVIN_DB_PATH) else None
+        self.naves_db = LexDB(NAVES_DB_PATH) if os.path.exists(NAVES_DB_PATH) else None
         self.last_ref = self.load_history()
         self._interlinear_index = None
         self._ordered_refs = None
@@ -3109,6 +3116,143 @@ Find Strong's entries by number, transliteration, or English gloss:
             console.print(Panel(Markdown(c[:1400]), title=f"📚 {t} ({s})", border_style="cyan"))
         return bool(res)
 
+    def format_naves_entry(self, entry_text):
+        # Precise Regex for Verse References: handles "1 Cor 1:1", "Jhn 3:16", etc.
+        pattern = r'(\b(?:[1-3]\s?)?[A-Z][a-z]{0,3}\s\d+:\d+[0-9:,\-]*|\b(?:[1-3]\s?)?[A-Z]{2,4}\s\d+:\d+[0-9:,\-]*)'
+        
+        formatted_content = Text()
+        lines = entry_text.splitlines()
+        
+        for line in lines:
+            if not line.strip():
+                formatted_content.append("\n")
+                continue
+                
+            stripped = line.lstrip()
+            indent_size = len(line) - len(stripped)
+            
+            # Determine style based on indentation depth
+            if indent_size == 0:
+                style = "category" if ACTIVE_THEME_MODE == "dark" else "text"
+            elif indent_size <= 5:
+                style = "ui.cyan"
+            else:
+                style = "ui.meta"
+                
+            formatted_content.append(" " * indent_size)
+            
+            # Handle Bullets
+            current_content = stripped
+            if stripped.startswith('-'):
+                formatted_content.append("-", style="ui.meta")
+                current_content = stripped[1:]
+                
+            # Highlight Verses without duplication
+            last_pos = 0
+            for match in re.finditer(pattern, current_content):
+                formatted_content.append(current_content[last_pos:match.start()], style=style)
+                formatted_content.append(match.group(0), style="verse.ref")
+                last_pos = match.end()
+                
+            formatted_content.append(current_content[last_pos:], style=style)
+            formatted_content.append("\n")
+            
+        return formatted_content
+
+    def display_naves(self, query):
+        if not self.naves_db:
+            return False
+        normalized = query.strip()
+        if not normalized:
+            return False
+            
+        # 1. Exact Match
+        res = self.naves_db.query(
+            "SELECT subject, entry FROM topics WHERE subject_upper = ? LIMIT 1",
+            (normalized.upper(),)
+        )
+        
+        # 2. Substring Match
+        if not res:
+            res = self.naves_db.query(
+                "SELECT subject, entry FROM topics WHERE subject_upper LIKE ? ORDER BY subject LIMIT 1",
+                (f"%{normalized.upper()}%",)
+            )
+            
+        # 3. FTS Match
+        if not res:
+            try:
+                res = self.naves_db.query(
+                    "SELECT subject, entry FROM topics_fts WHERE entry MATCH ? LIMIT 1",
+                    (normalized,)
+                )
+            except: pass
+
+        if not res:
+            return False
+
+        subject, entry = res[0]
+        
+        console.print(Rule(style="ui.border"))
+        console.print(f" [dict.topic]{subject}[/dict.topic]")
+        console.print(Rule(style="ui.border"))
+        console.print("")
+        
+        console.print(self.format_naves_entry(entry))
+        
+        console.print("")
+        console.print(Rule(style="ui.meta"))
+        return True
+
+    def display_commentary(self, query):
+        ref_norm, book, chap, verse = self.normalize_ref(query)
+        if not ref_norm:
+            return False
+            
+        ref_label = f"{book} {chap}"
+        if verse:
+            ref_label += f":{verse}"
+            
+        console.print(Rule(style="ui.border"))
+        console.print(f" [dict.topic]Commentary: {ref_label}[/dict.topic]")
+        console.print(Rule(style="ui.border"))
+        console.print("")
+        
+        # Ensure we use the DB-specific book name
+        db_book = self.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
+        
+        # Helper to query a commentary DB
+        def get_comm(db, b, c, v):
+            if not db: return []
+            if v:
+                # Find sections that cover this verse
+                return db.query(
+                    "SELECT section_title, markdown, source FROM commentary WHERE book = ? AND chapter = ? AND verse_start <= ? AND verse_end >= ? ORDER BY section_order",
+                    (b, c, v, v)
+                )
+            else:
+                # Get entire chapter
+                return db.query(
+                    "SELECT section_title, markdown, source FROM commentary WHERE book = ? AND chapter = ? ORDER BY section_order",
+                    (b, c)
+                )
+
+        henry_notes = get_comm(self.henry_db, db_book, chap, verse)
+        calvin_notes = get_comm(self.calvin_db, db_book, chap, verse)
+        
+        if not henry_notes and not calvin_notes:
+            console.print(f"[warning]No commentary notes found for {ref_label}.[/]")
+            return False
+
+        # Display in side-by-side or sequential blocks
+        for title, md, src in henry_notes:
+            console.print(Panel(Markdown(md), title=f"📜 {src}: {title}", border_style="blue"))
+            
+        for title, md, src in calvin_notes:
+            console.print(Panel(Markdown(md), title=f"📜 {src}: {title}", border_style="magenta"))
+            
+        return True
+
 # ---------------------------------------------------------------------------
 # CLI dispatch
 # ---------------------------------------------------------------------------
@@ -3290,6 +3434,17 @@ def main():
             if not agent.display_strongs(q):
                 console.print("[warning]No Strong's entries found for that term.[/]")
                 sys.exit(1)
+        sys.exit(0)
+    elif query.startswith("topic ") or query.startswith("naves "):
+        q = query.replace("topic ", "").replace("naves ", "").strip()
+        if not agent.display_naves(q):
+            console.print("[warning]No Nave's Topical Bible entry found.[/]")
+            sys.exit(1)
+        sys.exit(0)
+    elif query.startswith("commentary "):
+        q = query.replace("commentary ", "").strip()
+        if not agent.display_commentary(q):
+            sys.exit(1)
         sys.exit(0)
 
     if args.define or query.startswith("define"):
