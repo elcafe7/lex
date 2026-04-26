@@ -134,7 +134,7 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.4.0"
+VERSION = "2.4.1"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 CONFIG_FILE = os.path.expanduser("~/.lex_config.json")
 
@@ -3480,18 +3480,21 @@ def main():
                 console.print("[warning]No Strong's entries found for that term.[/]")
                 sys.exit(1)
         sys.exit(0)
-    elif query.startswith("topic") or query.startswith("naves"):
-        q = query.replace("topic ", "").replace("naves ", "").strip()
-        if not q or q in {"topic", "naves"}:
-            agent.display_topic_howto()
-        elif not agent.display_naves(q):
-            console.print("[warning]No Nave's Topical Bible entry found.[/]")
+    elif query == "topic" or query == "naves":
+        agent.display_topic_howto()
         sys.exit(0)
-    elif query.startswith("commentary"):
+    elif query.startswith("topic ") or query.startswith("naves "):
+        q = query.replace("topic ", "").replace("naves ", "").strip()
+        if not agent.display_naves(q):
+            console.print("[warning]No Nave's Topical Bible entry found.[/]")
+            sys.exit(1)
+        sys.exit(0)
+    elif query == "commentary":
+        agent.display_commentary_howto()
+        sys.exit(0)
+    elif query.startswith("commentary "):
         q = query.replace("commentary ", "").strip()
-        if not q or q == "commentary":
-            agent.display_commentary_howto()
-        elif not agent.display_commentary(q):
+        if not agent.display_commentary(q):
             sys.exit(1)
         sys.exit(0)
 
