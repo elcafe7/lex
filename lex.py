@@ -1339,8 +1339,7 @@ class LexAgent:
         also.add_row("Quick Study:", "lex John 3:16 -i")
         also.add_row("Verse Web:", "lex web John 3:16")
         also.add_row("Commentary:", "lex commentary John 3:16")
-        also.add_row("Nave's Topics:", "lex topic church  or  lex naves grace")
-        also.add_row("Reverse Nave's:", "lex reverse John 3:16")
+        also.add_row("Nave's Topics:", "lex naves grace  or  lex naves John 3:16")
         also.add_row("Lexicon:", "lex G3056  or  lex logos")
         also.add_row("Creeds:", "lex creed")
         also.add_row("Define:", "lex define grace")
@@ -3656,15 +3655,6 @@ def main():
         q = query.replace("topic ", "").replace("naves ", "").strip()
         if not agent.display_naves(q):
             console.print("[warning]No Nave's Topical Bible entry found.[/]")
-            sys.exit(1)
-        sys.exit(0)
-    elif query == "reverse":
-        console.print("[warning]Usage: lex reverse John 3:16[/]")
-        sys.exit(1)
-    elif query.startswith("reverse "):
-        q = query[8:].strip()
-        if not agent.display_reverse_naves(q):
-            console.print(f"[warning]No Nave's topical associations found for '{q}'.[/]")
             sys.exit(1)
         sys.exit(0)
     elif query == "commentary":
