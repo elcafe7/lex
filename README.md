@@ -1,331 +1,155 @@
-# Lex
-### lex is the elegant bible terminal
+# Lex | The Elegant Bible Terminal 📖
 
 ![Lex Banner](docs/images/banner.png)
 
 **A local-first Bible study terminal for reading, searching, studying, and exporting Scripture work.**
 
-Lex is a Python CLI that keeps Bible study fast and offline. It combines Scripture reading, interlinear study, Strong's and STEPBible lexicon notes, Treasury of Scripture Knowledge cross-references, dictionary/encyclopedia lookups, and historical Christian documents in one terminal tool.
+Lex is a high-signal CLI tool for the modern student of Scripture. It keeps your study fast, offline, and beautiful. By combining multiple Bible versions, interlinear study, Strong's & STEPBible lexicons, the Treasury of Scripture Knowledge, and historical creeds into a single terminal interface, Lex transforms your shell into a distraction-free theological workbench.
 
 ```bash
 lex study John 1:1
-lex search covenant -major
+lex naves grace
 lex web Romans 1:1
 ```
 
-Current CLI: `./lex.py`  
-Current version: `2.3.4`
+Current version: `2.4.5`
 
-## Highlights
+---
 
-| Feature | What it does |
-| --- | --- |
-| Multiple Versions | Switch between ESV, KJV, KJV 1611, NASB 1995, Geneva 1587, Septuagint (LXX), and Vulgate. |
-| Auto-Updates | Keep code and databases in sync with one command: `lex update`. |
-| Scripture reading | Read a verse with context or a full chapter from the local Bible DB. |
-| Study mode | Show verse context, source text, transliteration, interlinear rows, lexicon notes, and TSK links. |
-| Scoped search | Search all Scripture, one book, a book range, or a canon section such as `-major`, `-gospels`, or `-nt`. |
-| Verse web | Print a verse as the center point with ranked local cross-reference connections. |
-| Exports | Save search pages and study packets as DOCX or PDF. |
-| Creeds | Browse historical Christian documents by tradition and section. |
-| Terminal themes | Auto-detect light/dark terminal backgrounds, with sticky manual overrides. |
-| Local data | Runs against local SQLite/JSON data stores with no web request required for normal use. |
+## ⚡ Highlights
 
-## Quick Start
+| Feature | Description |
+| :--- | :--- |
+| **Multi-Version** | ESV, KJV (1769 & 1611), NASB '95, Geneva 1587, Septuagint (LXX), and Vulgate. |
+| **Unified Nave's** | Look up topics (e.g., `lex naves grace`) or find topical associations for any verse (e.g., `lex naves John 3:16`). |
+| **Interlinear Study** | Source text, transliteration, and lexicon notes in a surgically precise terminal view. |
+| **Verse Web** | Visualize local cross-reference connections ranked by relevance with instant previews. |
+| **Historical Creeds** | Instant access to the Nicene Creed, Westminster Confession, and other major historical documents. |
+| **Modern Aesthetics** | Auto-detecting light/dark themes with high-contrast, "Blueprint Technical" or "Studio Light" palettes. |
+| **Export Engine** | Generate professional `.docx` or `.pdf` study packets and search results directly from the CLI. |
+| **Zero Web Dependency** | Runs against local SQLite/JSON stores. Fast, private, and works on a plane. |
 
-### Option 1: Homebrew (Recommended for macOS and Linux)
+---
 
-If you have [Homebrew](https://brew.sh/) installed, you can install Lex directly from the official tap:
+## 🚀 Installation
+
+### 🍎 macOS & 🐧 Linux (Homebrew)
+The recommended way to install Lex and keep it updated.
 
 ```bash
 brew tap elcafe7/lex
 brew install lex
 ```
 
-### Option 2: Pip (Python Package Manager)
-
-Install Lex directly from GitHub using pip:
+### 🐍 Python (Pip)
+Install directly from GitHub:
 
 ```bash
 pip install git+https://github.com/elcafe7/lex.git
 ```
 
-This will make the `lex` command available globally. On the first run, Lex will automatically download the required Bible databases (approx 280MB) to `~/bible-lexicon-data`.
-
-### Option 3: Scoop (Windows)
-
-If you use [Scoop](https://scoop.sh/) on Windows, you can install Lex from the custom bucket:
+### 🪟 Windows (Scoop)
+Use the custom bucket for Windows power users:
 
 ```powershell
 scoop bucket add lex https://github.com/elcafe7/scoop-lex
 scoop install lex
 ```
 
-### Option 4: Manual Installation (Git)
-
-Clone the repo into whatever folder you want Lex to live in:
+### 🛠️ Manual (Git)
+For developers or those who want to run the source directly:
 
 ```bash
 git clone https://github.com/elcafe7/lex.git
 cd lex
-```
-
-Install Python dependencies:
-
-```bash
-python3 -m pip install -r requirements.txt
-```
-
-Register the `lex` command:
-
-```bash
-chmod +x setup.sh
 ./setup.sh
 ```
 
-Restart your terminal, or run `source ~/.bashrc`.
- Now you can run:
+---
+
+## 📖 Basic Usage
+
+### Reading
+References are forgiving. Abbreviations like `jn`, `rom`, or `gn` work perfectly.
 
 ```bash
-lex              # Open the dashboard
-lex update       # Sync latest code and data
-lex -v           # List supported bible versions
-lex -B kj16 John 3:16  # Read from the original 1611 KJV
+lex John 3:16        # Read a specific verse
+lex Romans 8         # Read a whole chapter
+lex --next           # Move to the next verse from your last position
+lex -B lxx Gen 1:1   # Read from the Septuagint
 ```
 
-## Bible Versions
-
-Switch versions using the `-B` (Bible) flag:
-
-| ID | Version Name | Edition / Year |
-| --- | --- | --- |
-| `esv` | English Standard Version | Default |
-| `kjv` | King James Version | Oxford 1769 |
-| `kj16` | King James Version | Original 1611 |
-| `nasb` | New American Standard | 1995 Edition |
-| `gen` | Geneva Bible | 1587 Edition |
-| `lxx` | Septuagint | Rahlfs 1935 (Greek) |
-| `vulg` | Clementine Vulgate | Latin |
-
-Example: `lex -B lxx Genesis 1:1`
-
-## Terminal Themes
-
-Lex automatically chooses a light or dark terminal palette at launch. Detection
-uses common terminal/theme environment variables, `COLORFGBG`, Apple Terminal
-or iTerm profile backgrounds on macOS, GNOME/KDE theme settings on Linux, and
-then platform appearance as a fallback.
-
-To force and remember a palette for future launches:
-
-```bash
-lex -light
-lex -dark
-lex -auto
-```
-
-The saved manual theme lives in `~/.lex_config.json`. If you run `lex -light`
-or `lex -dark`, that choice sticks until you run `lex -auto` or choose the
-other theme. For a one-command override without changing the saved setting:
-
-```bash
-LEX_THEME=light lex John 3:16
-LEX_THEME=dark lex search covenant
-```
-
-Set `LEX_NO_COLOR=1` when you intentionally want plain, uncolored output.
-
-The GitHub repo includes the runtime SQLite databases and the compact JSON
-bundle under `runtime-data/`, so normal install does not need a second data
-download step.
-
-## Reading
-
-References are forgiving. Full names and common abbreviations both work:
-
-```bash
-lex read John 3:16
-lex John 1
-lex jn 1:1
-lex rom 8:1
-lex 2 jn 1:2
-```
-
-Move from the last opened passage:
-
-```bash
-lex --next
-lex --prev
-```
-
-## Study Mode
-
-Study mode is the main workbench:
+### Study Mode (`-i` or `study`)
+This is the main workbench. It renders verse context, interlinear rows, and lexicon definitions.
 
 ```bash
 lex study John 1:1
-lex study Genesis 1:1
 lex John 3:16 -i
 ```
 
-It renders:
-
-- verse context
-- Greek or Hebrew/Aramaic source text
-- transliteration
-- interlinear alignment
-- Strong's and STEPBible-backed lexicon notes
-- local TSK cross-references
-
-In an interactive terminal, study mode ends with a compact action bar:
-
-```text
-n / p  next or previous verse
-r      read context
-w      verse web
-e      export
-q      done
-```
-
-Exports are saved under:
-
-```text
-~/Documents/lex_exports/studies
-```
-
-Lex tries to open exported files automatically after saving.
-
-## Search
-
-Search starts with an exact phrase query. If that finds nothing, Lex falls back to an all-terms search.
+### Search & Scopes
+Lex search is fast and scoped. You can search the whole Bible or narrow it down to specific canons.
 
 ```bash
-lex search israel
 lex search "kingdom of god"
-lex search covenant --page 2
-lex search covenant --limit 20
+lex search covenant -nt        # Search only the New Testament
+lex search covenant -major        # Search only Major Prophets
+lex search "holy spirit" -paul  # Search only Pauline Epistles
 ```
 
-Limit search by book, book range, or group:
+---
+
+## 🏛️ Reference & Theology
+
+### Nave's Topical Bible
+Lex features a unified Nave's engine. Use it to find verses by topic or topics by verse.
 
 ```bash
-lex search covenant -jeremiah
-lex search beast -daniel-revelation
-lex search resurrection -nt
-lex search covenant -major
+lex naves faith        # Show verses tagged with "Faith"
+lex naves John 3:16    # Show all Nave's topics associated with this verse
 ```
 
-Useful group scopes:
-
-```text
--ot                 -old-testament
--nt                 -new-testament
--law                -pentateuch        -torah
--history
--wisdom             -poetry
--major              -major-prophets
--minor              -minor-prophets
--prophets
--gospels
--epistles           -letters
--pauline
--general-epistles
-```
-
-Interactive search uses a compact action bar:
-
-```text
-1-10   study result
-r #    read result
-n / p  page
-e      export
-q      quit
-```
-
-Search exports are saved under:
-
-```text
-~/Documents/lex_exports
-```
-
-## Verse Web
-
-Verse web mode shows a passage as the visual center, then prints ranked local cross-reference connections with previews:
+### Lexicons & Dictionary
+Lookup Strong's numbers or English definitions directly.
 
 ```bash
-lex web John 3:16
-lex web Romans 1:1 --limit 8
+lex G3056              # Lookup Greek 'Logos'
+lex H7225              # Lookup Hebrew 'Reshit'
+lex define propitiation
 ```
 
-## Lexicons, Definitions, And Creeds
-
-Strong's lookup:
-
+### Creeds & Confessions
 ```bash
-lex G3056
-lex H7225
-lex strongs love
-```
-
-Dictionary and encyclopedia lookup:
-
-```bash
-lex define covenant
-lex define heliodorus
-```
-
-Creeds and confessions:
-
-```bash
-lex creed
+lex creed              # List available creeds
 lex creed nicene
-lex creed westminster confession
+lex creed westminster
 ```
 
-## Documentation
+---
 
-- [User Guide](docs/USER_GUIDE.md)
-- [Developer Guide](docs/DEVELOPER_GUIDE.md)
-- [Lex CLI Component](docs/components/LEX_CLI.md)
-- [Runtime Data Stores](docs/components/DATA_STORES.md)
-- [Bible DB Builder](docs/components/BIBLE_DB_BUILDER.md)
-- [Encyclopedia Importer](docs/components/ENCYCLOPEDIA_IMPORTER.md)
-- [Bible Edition Standard](docs/BIBLE_EDITION_STANDARD.md)
-- [Licensing Notes](docs/LICENSING.md)
-
-## Data Sources
-
-Lex currently uses local data from:
-
-- ESV-derived Bible database
-- Treasury of Scripture Knowledge / OpenBible-style cross-references
-- Strong's Hebrew/Greek lexicon data
-- STEPBible Greek/Hebrew lexicons
-- UBS open-license resources
-- Easton's Bible Dictionary
-- International Standard Bible Encyclopedia OCR import
-- TheologAI historical documents
-- Bible geocoding data
-
-The encyclopedia import is incomplete: the current local ISBE import only covers Volume II, `Clement-Heresh`.
-
-## License And Data Terms
-
-Lex application code is intended to be MIT licensed. Bundled and generated data remains under each upstream source's own license or terms.
-
-Do not represent generated databases or third-party datasets as MIT licensed. See [Licensing Notes](docs/LICENSING.md).
-
-## Developer Checks
+## 🎨 Themes & Customization
+Lex automatically chooses a theme based on your terminal background.
 
 ```bash
-python3 -m py_compile ./lex.py
-python3 ./lex.py
-python3 ./lex.py --credits
-python3 ./lex.py study James 1:1
-python3 ./lex.py search covenant -major --limit 2
-python3 ./lex.py 2 jn 1:2
+lex -light             # Force Studio Light theme
+lex -dark              # Force Blueprint Technical theme
+lex -auto              # Revert to automatic detection
 ```
 
-## Project Status
+---
 
-Lex is usable as a local CLI today. Packaging is still intentionally simple: the tracked entrypoint is `lex.py`, and the current repo includes generated local databases needed by that script. A proper Python package/release workflow is a good next milestone.
+## 🗃️ Data Sources
+Lex is built on the shoulders of giants. Data is sourced from:
+- ESV-derived Bible database
+- Treasury of Scripture Knowledge (OpenBible)
+- STEPBible & Strong's Lexicon data
+- Easton's Bible Dictionary & ISBE
+- TheologAI Creedal Database
+
+---
+
+## 📄 License
+Lex code is MIT licensed. Bible data and Lexicon content are subject to their respective upstream licenses. See [LICENSING.md](docs/LICENSING.md) for details.
+
+---
+*Created with care for the Church and the Terminal.*
