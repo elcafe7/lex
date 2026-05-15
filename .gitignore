@@ -39,3 +39,5 @@ ubs-open-license/
 # Bundled minimal runtime JSON required by public GitHub clones.
 !runtime-data/
 !runtime-data/**
+*.db-shm
+*.db-wal
