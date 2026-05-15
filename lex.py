@@ -24,6 +24,7 @@ from rich.console import Console, Group
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
+from rich import box
 from rich.markdown import Markdown
 from rich.theme import Theme
 from rich.prompt import Prompt, IntPrompt
