@@ -16,6 +16,16 @@ Current version: `2.4.5`
 
 ---
 
+## 🖼️ Gallery
+
+<p align="center">
+  <img src="docs/images/study_mode.png" width="800" alt="Study Mode">
+  <br>
+  <i>Study Mode: Interlinear source text, transliteration, and lexicon notes.</i>
+</p>
+
+---
+
 ## ⚡ Highlights
 
 | Feature | Description |
@@ -28,6 +38,14 @@ Current version: `2.4.5`
 | **Modern Aesthetics** | Auto-detecting light/dark themes with high-contrast, "Blueprint Technical" or "Studio Light" palettes. |
 | **Export Engine** | Generate professional `.docx` or `.pdf` study packets and search results directly from the CLI. |
 | **Zero Web Dependency** | Runs against local SQLite/JSON stores. Fast, private, and works on a plane. |
+
+---
+
+<p align="center">
+  <img src="docs/images/verse_web.png" width="800" alt="Verse Web">
+  <br>
+  <i>Verse Web: Visualizing cross-reference connections for Romans 1:1.</i>
+</p>
 
 ---
 
@@ -90,10 +108,14 @@ lex John 3:16 -i
 ### Search & Scopes
 Lex search is fast and scoped. You can search the whole Bible or narrow it down to specific canons.
 
+<p align="center">
+  <img src="docs/images/search_results.png" width="800" alt="Search Results">
+</p>
+
 ```bash
 lex search "kingdom of god"
 lex search covenant -nt        # Search only the New Testament
-lex search covenant -major        # Search only Major Prophets
+lex search beast -major        # Search only Major Prophets
 lex search "holy spirit" -paul  # Search only Pauline Epistles
 ```
 
@@ -104,10 +126,15 @@ lex search "holy spirit" -paul  # Search only Pauline Epistles
 ### Nave's Topical Bible
 Lex features a unified Nave's engine. Use it to find verses by topic or topics by verse.
 
+<p align="center">
+  <img src="docs/images/naves_topics.png" width="800" alt="Nave's Topics">
+</p>
+
 ```bash
 lex naves faith        # Show verses tagged with "Faith"
 lex naves John 3:16    # Show all Nave's topics associated with this verse
 ```
+
 
 ### Lexicons & Dictionary
 Lookup Strong's numbers or English definitions directly.
