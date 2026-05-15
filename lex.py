@@ -235,6 +235,25 @@ TSK_BOOK_ABBR = {
     "James": "Jas.", "1 Peter": "1Pet.", "2 Peter": "2Pet.", "1 John": "1John.",
     "2 John": "2John.", "3 John": "3John.", "Jude": "Jude", "Revelation": "Rev.",
 }
+NAVES_BOOK_ABBR = {
+    "Genesis": "GEN", "Exodus": "EXO", "Leviticus": "LEV", "Numbers": "NUM",
+    "Deuteronomy": "DEU", "Joshua": "JOS", "Judges": "JDG", "Ruth": "RUT",
+    "1 Samuel": "1SA", "2 Samuel": "2SA", "1 Kings": "1KI", "2 Kings": "2KI",
+    "1 Chronicles": "1CH", "2 Chronicles": "2CH", "Ezra": "EZR", "Nehemiah": "NEH",
+    "Esther": "EST", "Job": "JOB", "Psalms": "PSA", "Proverbs": "PRO",
+    "Ecclesiastes": "ECC", "Song of Solomon": "So", "Isaiah": "ISA", "Jeremiah": "JER",
+    "Lamentations": "LAM", "Ezekiel": "EZK", "Daniel": "DAN", "Hosea": "HOS",
+    "Joel": "JOL", "Amos": "AMO", "Obadiah": "OBA", "Jonah": "JON",
+    "Micah": "MIC", "Nahum": "NAM", "Habakkuk": "HAB", "Zephaniah": "ZEP",
+    "Haggai": "HAG", "Zechariah": "ZEC", "Malachi": "MAL", "Matthew": "MAT",
+    "Mark": "MRK", "Luke": "LUK", "John": "JHN", "Acts": "ACT", "Romans": "ROM",
+    "1 Corinthians": "1CO", "2 Corinthians": "2CO", "Galatians": "GAL",
+    "Ephesians": "EPH", "Philippians": "PHP", "Colossians": "COL",
+    "1 Thessalonians": "1TH", "2 Thessalonians": "2TH", "1 Timothy": "1TI",
+    "2 Timothy": "2TI", "Titus": "TIT", "Philemon": "PHM", "Hebrews": "HEB",
+    "James": "JAS", "1 Peter": "1PE", "2 Peter": "2PE", "1 John": "1JN",
+    "2 John": "2JN", "3 John": "3JN", "Jude": "Jude", "Revelation": "REV",
+}
 TSK_TO_BOOK = {abbr.rstrip("."): book for book, abbr in TSK_BOOK_ABBR.items()}
 BIBLE_BOOKS = list(TSK_BOOK_ABBR.keys())
 BIBLE_BOOK_INDEX = {book: idx for idx, book in enumerate(BIBLE_BOOKS)}
@@ -944,7 +963,7 @@ class LexAgent:
         except: pass
 
     def clean_text(self, text):
-        text = re.sub(r' <[GH]\d+>', '', text)
+        text = re.sub(r' [<\[][GH]\d+[>\]]', '', text)
         text = re.sub(r'\*[a-z]+', '', text)
         text = re.sub(r'\byourln\b', 'your', text, flags=re.IGNORECASE)
         text = re.sub(r'\bonld\b', 'on', text, flags=re.IGNORECASE)
@@ -1079,6 +1098,27 @@ class LexAgent:
             else:
                 self.get_interlinear_index()
         return self._ordered_refs or []
+
+    def get_reverse_naves(self, db_ref):
+        parts = self.parse_reference_parts(db_ref)
+        if not parts: return []
+        
+        book = self.reverse_canon_map.get(parts["book"], parts["book"])
+        abbr = NAVES_BOOK_ABBR.get(book)
+        if not abbr: return []
+        
+        # Format: "JHN 3:16" or "JHN 3:16-18"
+        # We search for the specific verse in the entry text
+        pattern = f"%{abbr} {parts['chapter']}:{parts['verse']}%"
+        
+        if not hasattr(self, "naves_db") or not self.naves_db:
+            return []
+            
+        res = self.naves_db.query(
+            "SELECT subject FROM topics WHERE entry LIKE ? ORDER BY subject",
+            (pattern,)
+        )
+        return [row[0] for row in res]
 
     def get_interlinear_strongs(self):
         if self._interlinear_strongs is None:
@@ -1969,11 +2009,14 @@ Find Strong's entries by number, transliteration, or English gloss:
             if parsed["morph"]:
                 pieces.append(parsed["morph"])
             if entry["step"]:
-                pieces.append(re.sub(r"<[^>]+>", "", entry["step"].get("definition", ""))[:280])
+                step_def = entry["step"].get("definition", "")
+                step_def = re.sub(r'<br\s*/?>', ' ', step_def, flags=re.IGNORECASE)
+                step_def = re.sub(r'<[^>]+>', '', step_def)
+                pieces.append(step_def[:1000])
             elif entry["interlinear"]:
-                pieces.append(entry["interlinear"].get("d", "")[:280])
+                pieces.append(entry["interlinear"].get("d", "")[:1000])
             elif entry["db"]:
-                pieces.append(entry["db"][3][:280])
+                pieces.append(entry["db"][3][:1000])
             if entry["step"] and entry["step"].get("translit"):
                 lemma = f"{lemma} ({entry['step']['translit']})"
             elif entry["db"]:
@@ -1994,6 +2037,7 @@ Find Strong's entries by number, transliteration, or English gloss:
             "transliteration": " ".join(token["translit"] for token in source_tokens if token["translit"]),
             "interlinear": parsed_tokens[:30],
             "lex_notes": lex_notes,
+            "topical_refs": self.get_reverse_naves(db_ref),
             "tsk_refs": tsk_refs,
         }
 
@@ -2030,6 +2074,11 @@ Find Strong's entries by number, transliteration, or English gloss:
         doc.add_heading("Lexicon Notes", level=2)
         for note in data["lex_notes"]:
             doc.add_paragraph(f"{note['strongs']} - {note['lemma']}: {note['details']}")
+        
+        if data["topical_refs"]:
+            doc.add_heading("Topical Associations (Nave's)", level=2)
+            doc.add_paragraph(" • ".join(data["topical_refs"]))
+
         doc.add_heading("Treasury of Scripture Knowledge", level=2)
         for ref in data["tsk_refs"]:
             doc.add_paragraph(f"{ref['reference']} ({ref['votes']}): {ref['preview']}")
@@ -2074,6 +2123,11 @@ Find Strong's entries by number, transliteration, or English gloss:
         story.append(self.pdf_paragraph("Lexicon Notes", styles["Heading2"]))
         for note in data["lex_notes"]:
             story.append(self.pdf_paragraph(f"{note['strongs']} - {note['lemma']}: {note['details']}", styles["BodyText"]))
+        
+        if data["topical_refs"]:
+            story.append(self.pdf_paragraph("Topical Associations (Nave's)", styles["Heading2"]))
+            story.append(self.pdf_paragraph(" • ".join(data["topical_refs"]), styles["BodyText"]))
+
         story.append(self.pdf_paragraph("Treasury of Scripture Knowledge", styles["Heading2"]))
         for ref in data["tsk_refs"]:
             story.append(self.pdf_paragraph(f"{ref['reference']} ({ref['votes']}): {ref['preview']}", styles["BodyText"]))
@@ -2192,11 +2246,14 @@ Find Strong's entries by number, transliteration, or English gloss:
             if parsed["morph"]:
                 pieces.append(parsed["morph"])
             if entry["step"]:
-                pieces.append(re.sub(r"<[^>]+>", "", entry["step"].get("definition", ""))[:140])
+                step_def = entry["step"].get("definition", "")
+                step_def = re.sub(r'<br\s*/?>', ' ', step_def, flags=re.IGNORECASE)
+                step_def = re.sub(r'<[^>]+>', '', step_def)
+                pieces.append(step_def[:400])
             elif entry["interlinear"]:
-                pieces.append(entry["interlinear"].get("d", "")[:140])
+                pieces.append(entry["interlinear"].get("d", "")[:400])
             elif entry["db"]:
-                pieces.append(entry["db"][3][:140])
+                pieces.append(entry["db"][3][:400])
             if entry["step"] and entry["step"].get("translit"):
                 lemma = f"{lemma} ({entry['step']['translit']})"
             elif entry["db"]:
@@ -2205,6 +2262,17 @@ Find Strong's entries by number, transliteration, or English gloss:
             if len(seen) >= 12:
                 break
         console.print(lex_table)
+
+        topical_refs = self.get_reverse_naves(db_ref)
+        if topical_refs:
+            self.pause_study_section(animate)
+            topics_text = Text()
+            for idx, topic in enumerate(topical_refs):
+                if idx > 0:
+                    topics_text.append("  •  ", style="dim")
+                topics_text.append(topic, style="dict.topic")
+            console.print(Panel(topics_text, title="🏷️ Topical Associations (Nave's)", border_style="ui.border"))
+
         self.pause_study_section(animate)
         self.display_study_tsk(db_ref, parsed_tokens)
         use_actions = console.is_terminal if actions is None else actions
@@ -3024,7 +3092,51 @@ Find Strong's entries by number, transliteration, or English gloss:
                 )
         for n, w, p, d in res:
             lang = "Greek" if n.startswith('G') else "Hebrew"
-            console.print(Panel(f"[lexicon.word]{w}[/] ({p})\n\n{d}", title=f"📚 {lang} Lexicon: {n}", border_style="blue"))
+            extended_entry = self.lookup_lexicon_entry(n)
+            
+            definition_text = d
+            if extended_entry["step"] and extended_entry["step"].get("definition"):
+                step_def = extended_entry["step"]["definition"]
+                step_def = re.sub(r'<br\s*/?>', '\n', step_def, flags=re.IGNORECASE)
+                step_def = re.sub(r'<b>(.*?)</b>', r'[bold]\1[/]', step_def, flags=re.IGNORECASE|re.DOTALL)
+                step_def = re.sub(r'<i>(.*?)</i>', r'[italic]\1[/]', step_def, flags=re.IGNORECASE|re.DOTALL)
+                step_def = re.sub(r'<ref[^>]*>(.*?)</ref>', r'[cyan]\1[/]', step_def, flags=re.IGNORECASE|re.DOTALL)
+                step_def = re.sub(r'<[^>]+>', '', step_def)
+                source = extended_entry["step"].get("source", "Extended Lexicon")
+                definition_text = f"{step_def}\n\n[dim]---\nSource: {source}\nBrief: {d}[/]"
+
+
+            # Fetch major uses (concordance) from KJV if available
+            major_uses = ""
+            kjv_path = get_bible_path("kjv")
+            if os.path.exists(kjv_path):
+                with sqlite3.connect(kjv_path) as conn:
+                    c = conn.cursor()
+                    pattern = f"%[{n}]%"
+                    c.execute("SELECT reference, text FROM bible WHERE text LIKE ? LIMIT 5", (pattern,))
+                    rows = c.fetchall()
+                    if rows:
+                        major_uses = "\n\n[bold underline]Major Uses (KJV):[/]"
+                        for ref, txt in rows:
+                            disp_ref = self.format_display_ref(ref)
+                            target_tag = f"[{n}]"
+                            # Mark target
+                            highlighted = txt.replace(target_tag, "__TARGET_TAG__")
+                            # Strip all other Strong's tags (handles [G123], <G123>, etc.)
+                            highlighted = re.sub(r'[<\[][GH]\d+[>\]]', '', highlighted)
+                            # Strip remaining HTML
+                            highlighted = re.sub(r'<[^>]+>', '', highlighted)
+                            # Restore target with highlight
+                            highlighted = highlighted.replace("__TARGET_TAG__", f"[bold yellow]{target_tag}[/]")
+                            major_uses += f"\n[cyan]{disp_ref}[/] {highlighted.strip()}"
+                        
+                        c.execute("SELECT COUNT(*) FROM bible WHERE text LIKE ?", (pattern,))
+                        total = c.fetchone()[0]
+                        if total > 5:
+                            major_uses += f"\n[dim]... and {total - 5} more occurrences.[/]"
+
+            definition_text += major_uses
+            console.print(Panel(f"[lexicon.word]{w}[/] ({p})\n\n{definition_text}", title=f"📚 {lang} Lexicon: {n}", border_style="blue"))
         return bool(res)
 
     def display_english_strongs(self, query):
@@ -3498,10 +3610,15 @@ def main():
         if not q:
             agent.display_strongs_howto()
             sys.exit(1)
-        if not agent.display_english_strongs(q):
+        if re.match(r'^[GH]\d+$', q, re.IGNORECASE):
             if not agent.display_strongs(q):
-                console.print("[warning]No Strong's entries found for that term.[/]")
+                console.print("[warning]No Strong's entry found for that number.[/]")
                 sys.exit(1)
+        else:
+            if not agent.display_english_strongs(q):
+                if not agent.display_strongs(q):
+                    console.print("[warning]No Strong's entries found for that term.[/]")
+                    sys.exit(1)
         sys.exit(0)
     elif query == "topic" or query == "naves":
         agent.display_topic_howto()
@@ -3539,10 +3656,15 @@ def main():
         if not query:
             agent.display_strongs_howto()
             sys.exit(1)
-        if not agent.display_english_strongs(query):
+        if re.match(r'^[GH]\d+$', query, re.IGNORECASE):
             if not agent.display_strongs(query):
-                console.print("[warning]No Strong's entries found for that term.[/]")
+                console.print("[warning]No Strong's entry found for that number.[/]")
                 sys.exit(1)
+        else:
+            if not agent.display_english_strongs(query):
+                if not agent.display_strongs(query):
+                    console.print("[warning]No Strong's entries found for that term.[/]")
+                    sys.exit(1)
     elif re.match(r'^[GH]\d+', query, re.IGNORECASE):
         if not agent.display_strongs(query):
             console.print("[warning]No Strong's entry found for that number.[/]")
