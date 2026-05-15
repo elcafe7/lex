@@ -2496,9 +2496,9 @@ Find Strong's entries by number, transliteration, or English gloss:
         if not doc:
             return False
         console.print(Panel(f"{topic}\nSource: {self.format_creed_source(topic, sections[0]['source'])}\nOriginal: {doc['language']}", border_style="bold green"))
-        table = Table(title=f"{topic}: English / {doc['language']}", box=None)
-        table.add_column(doc["language"], style="cyan", overflow="fold")
-        table.add_column("English", style="text", overflow="fold")
+        table = Table(title=f"{topic}: English / {doc['language']}", box=box.ROUNDED, expand=True, show_lines=True)
+        table.add_column(doc["language"], style="cyan", overflow="fold", ratio=1)
+        table.add_column("English", style="text", overflow="fold", ratio=1)
         for section in sections:
             body = "\n\n".join(section["body_parts"]).strip()
             orig_body = doc["sections"].get(section["title"])
