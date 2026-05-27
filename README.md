@@ -51,37 +51,24 @@ Current version: `2.4.5`
 
 ## 🚀 Installation
 
-### 🍎 macOS & 🐧 Linux (Homebrew)
-The recommended way to install Lex and keep it updated.
-
-```bash
-brew tap elcafe7/lex
-brew install lex
-```
-
-### 🐍 Python (Pip)
-Install directly from GitHub:
-
-```bash
-pip install git+https://github.com/elcafe7/lex.git
-```
-
-### 🪟 Windows (Scoop)
-Use the custom bucket for Windows power users:
-
-```powershell
-scoop bucket add lex https://github.com/elcafe7/scoop-lex
-scoop install lex
-```
-
-### 🛠️ Manual (Git)
-For developers or those who want to run the source directly:
+### Recommended: Full Git Install
+Lex is local-first and ships with several hundred MB of SQLite/JSON runtime
+data. The most reliable install is a full Git clone plus the setup script.
+Python 3.12 or newer is required:
 
 ```bash
 git clone https://github.com/elcafe7/lex.git
 cd lex
 ./setup.sh
 ```
+
+`setup.sh` creates a repo-local Python virtual environment, installs the Python
+dependencies, and writes a `lex` wrapper to `~/.local/bin`.
+
+### Package Managers
+Homebrew, pip-from-GitHub, and Scoop installs are not the primary path right
+now because Lex runtime data is large and must be present for offline use. Use
+the full Git install above unless you are testing package-manager formulas.
 
 ---
 

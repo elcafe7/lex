@@ -245,13 +245,21 @@ By default, Lex uses the **ESV (English Standard Version)**.
 ## Keeping Lex Updated
 
 
-You can update your local code and Bible databases to the latest version available on GitHub with one command:
+You can update your local Bible databases to the latest data manifest available
+on GitHub with one command:
 
 ```bash
 lex update
 ```
 
-This will automatically check for new versions, verify file integrity using hashes, and download only the files that have changed.
+This verifies file integrity using hashes and downloads only changed data files.
+Code updates should be handled with Git from the Lex checkout:
+
+```bash
+cd /path/to/lex
+git pull
+./setup.sh
+```
 
 ## Credits And Licenses
 

@@ -41,8 +41,9 @@ readlink -f /usr/local/bin/lex
 ## Update System
 
 Lex uses a manifest-driven update system:
-- `manifest.json` tracks the `version` and the `sha256` hash of every tracked code and data file.
-- `lex update` fetches the remote manifest from GitHub and syncs only changed or missing files.
+- `manifest.json` tracks the `version` and the `sha256` hash of each tracked runtime data file.
+- `lex update` fetches the remote manifest from GitHub and syncs only changed or missing data files.
+- Code updates are handled by Git/package managers; Lex does not overwrite its own installed script.
 - Atomic updates are achieved by downloading to `.tmp` files and then performing an `os.replace`.
 
 ## Verification Commands

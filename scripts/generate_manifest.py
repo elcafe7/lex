@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 Manifest Generator
-Scans the Lex codebase and assets to generate a manifest.json file
-containing SHA-256 hashes for the auto-update system.
+Scans Lex runtime data and generates manifest.json with SHA-256 hashes for the
+data update system. Code updates are handled by Git/Homebrew/pip, not by Lex
+mutating its own installed script.
 """
 import os
 import json
@@ -32,15 +33,11 @@ def generate_manifest():
         "assets": {}
     }
     
-    # Track lex.py itself
-    manifest["assets"]["lex.py"] = {
-        "hash": get_file_hash(LEX_PY),
-        "path": "lex.py"
-    }
-
     # Track all databases and JSON in runtime-data
     runtime_dir = os.path.join(BASE_DIR, "runtime-data")
-    for root, _, files in os.walk(runtime_dir):
+    for root, dirs, files in os.walk(runtime_dir):
+        dirs.sort()
+        files.sort()
         for file in files:
             if file.endswith((".db", ".json", ".txt")):
                 full_path = os.path.join(root, file)

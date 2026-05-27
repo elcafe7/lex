@@ -69,16 +69,11 @@ class LexUpdateManager:
         
         updates_needed = []
         for rel_path, info in remote.get("assets", {}).items():
-            # If the rel_path is lex.py itself, we usually don't want to update it
-            # via this manager if installed as a package, but for now we follow old logic
-            # for local clones.
-            if rel_path == "lex.py":
-                local_path = os.path.join(BASE_DIR, rel_path)
-            else:
-                # rel_path usually starts with 'runtime-data/'
-                # we strip that and join with our data_dir
-                actual_rel = rel_path.replace("runtime-data/", "", 1)
-                local_path = os.path.join(self.data_dir, actual_rel)
+            if not rel_path.startswith("runtime-data/"):
+                continue
+
+            actual_rel = rel_path.replace("runtime-data/", "", 1)
+            local_path = os.path.join(self.data_dir, actual_rel)
                 
             local_hash = self.get_local_hash(local_path)
             if local_hash != info["hash"]:
@@ -91,48 +86,42 @@ class LexUpdateManager:
         critical_file = os.path.join(self.data_dir, "lexicon.db")
         if not os.path.exists(critical_file):
             self.console.print("[info]First run detected: Downloading Bible databases (approx 280MB)...[/]")
-            self.perform_update()
+            if not self.perform_update():
+                self.console.print("[error]Lex data is not installed and the automatic download did not complete.[/]")
+                self.console.print(f"[info]Expected data directory: {self.data_dir}[/]")
+                self.console.print("[info]For the most reliable install, clone the full repository and run ./setup.sh.[/]")
+                return False
+        return os.path.exists(critical_file)
 
     def perform_update(self):
         updates, remote_version = self.check_for_updates()
         if updates is None:
-            return
+            return False
             
         if not updates:
             self.console.print("[success]Lex is already up to date.[/]")
-            return
+            return True
 
         self.console.print(f"[info]Updating Lex data to {remote_version}... ({len(updates)} files)[/]")
-        
-        # Pull lex.py to the end if present to avoid mid-update execution drift
-        if "lex.py" in updates:
-            updates.remove("lex.py")
-            updates.append("lex.py")
 
         for rel_path in updates:
             self.console.print(f"  → Downloading {rel_path}...")
             url = self.RAW_BASE_URL + rel_path
             
-            if rel_path == "lex.py":
-                target_path = os.path.join(BASE_DIR, rel_path)
-            else:
-                actual_rel = rel_path.replace("runtime-data/", "", 1)
-                target_path = os.path.join(self.data_dir, actual_rel)
+            actual_rel = rel_path.replace("runtime-data/", "", 1)
+            target_path = os.path.join(self.data_dir, actual_rel)
                 
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             
             try:
                 urllib.request.urlretrieve(url, target_path + ".tmp")
                 os.replace(target_path + ".tmp", target_path)
-                
-                # If we just updated the main script, ensure it's still executable
-                if rel_path == "lex.py":
-                    os.chmod(target_path, 0o755)
             except Exception as e:
                 self.console.print(f"[error]Failed to download {rel_path}: {e}[/]")
-                return
+                return False
 
         self.console.print(f"[success]Successfully updated Lex to {remote_version}![/]")
+        return True
 
 # ---------------------------------------------------------------------------
 # Runtime paths and bundled-data adapters
@@ -3491,7 +3480,7 @@ def main():
     parser.add_argument("-s", "--strongs", action="store_true")
     parser.add_argument("-v", "--version", nargs="?", const="__LIST__", help="List versions or switch to <id>")
     parser.add_argument("-B", "--bible", type=str, default=None, choices=BIBLE_VERSIONS.keys(), help="Select Bible version for current command")
-    parser.add_argument("--update", action="store_true", help="Check for and install updates")
+    parser.add_argument("--update", action="store_true", help="Check for and install data updates")
     theme_group = parser.add_mutually_exclusive_group()
     theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light")
     theme_group.add_argument("-dark", dest="theme_mode", action="store_const", const="dark")
@@ -3515,11 +3504,13 @@ def main():
     
     # If the user is running an update, we handle it and exit
     if args.update or (len(args.query) > 0 and args.query[0] == "update"):
-        manager.perform_update()
+        if not manager.perform_update():
+            sys.exit(1)
         sys.exit(0)
         
     # Ensure critical data exists (downloads if missing)
-    manager.ensure_data()
+    if not manager.ensure_data():
+        sys.exit(1)
 
     if unknown:
         if args.query and args.query[0] in {"search", "serch", "read"} and all(u.startswith("-") and not u.startswith("--") for u in unknown):
