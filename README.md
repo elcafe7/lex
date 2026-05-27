@@ -70,6 +70,20 @@ Homebrew, pip-from-GitHub, and Scoop installs are not the primary path right
 now because Lex runtime data is large and must be present for offline use. Use
 the full Git install above unless you are testing package-manager formulas.
 
+### Updating
+To update code in a Git checkout:
+
+```bash
+git pull
+./setup.sh
+```
+
+To refresh runtime data only:
+
+```bash
+lex update
+```
+
 ---
 
 ## 📖 Basic Usage
