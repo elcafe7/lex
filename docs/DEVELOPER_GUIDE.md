@@ -10,11 +10,12 @@ The active tracked CLI implementation is:
 ./lex.py
 ```
 
-On this workstation, the user's shell alias resolves to `/usr/local/bin/lex`, which may point at a local copy or symlink of this script. Verify with:
+On this workstation, the user's shell command resolves through wrapper scripts
+that execute this checkout's `lex.py` directly. Verify with:
 
 ```bash
-alias lex
-readlink -f /usr/local/bin/lex
+type -a lex
+head -5 ~/.local/bin/lex
 ```
 
 ## Main Components
@@ -34,7 +35,7 @@ readlink -f /usr/local/bin/lex
 1. `main()` parses CLI flags and query words.
 2. `LexAgent` opens the local SQLite databases and lazily loads JSON datasets.
 3. Read/search commands use the database specified by `-B` (defaulting to `bible_versions/esv.db`).
-4. Study mode uses selected Bible rows plus ESV interlinear JSON, `strongs.db`, STEPBible lexicons, and TSK rows from `cross_refs.db`. Cross-version study is supported by mapping refs to the ESV interlinear base.
+4. Study mode uses ESV Bible rows plus ESV interlinear JSON, `strongs.db`, STEPBible lexicons, and TSK rows from `cross_refs.db`. Other Bible versions can be read with `-B`, but study/interlinear mode must not map those refs to ESV interlinear rows unless version-specific source data exists.
 5. Creed mode uses `creeds.db` rows, with JSON fallback for placeholder historical documents.
 6. Define mode queries Easton's dictionary from `dictionary.db` and ISBE entries from `encyclopedia.db`.
 
@@ -43,7 +44,8 @@ readlink -f /usr/local/bin/lex
 Lex uses a manifest-driven update system:
 - `manifest.json` tracks the `version` and the `sha256` hash of each tracked runtime data file.
 - `lex update` fetches the remote manifest from GitHub and syncs only changed or missing data files.
-- Code updates are handled by Git/package managers; Lex does not overwrite its own installed script.
+- Code updates are handled by Git plus the local wrapper/install flow; Lex does not overwrite its own installed script.
+- Manifest asset paths are accepted only under `runtime-data/` and are resolved with realpath containment checks before writes.
 - Atomic updates are achieved by downloading to `.tmp` files and then performing an `os.replace`.
 
 ## Verification Commands
@@ -58,9 +60,11 @@ Smoke test user commands:
 
 ```bash
 python3 ./lex.py
+python3 ./lex.py --version
 python3 ./lex.py --credits
 python3 ./lex.py read John 3:16
 python3 ./lex.py study James 1:1
+python3 ./lex.py -B lxx Genesis 1:1 -i --no-animate
 python3 ./lex.py search israel --limit 2
 python3 ./lex.py define heliodorus
 python3 ./lex.py creed nicene

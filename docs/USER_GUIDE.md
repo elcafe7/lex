@@ -59,6 +59,15 @@ You can also use quick study mode:
 lex John 3:16 -i
 ```
 
+Interlinear study data is currently ESV-backed. You can read other Bible
+versions with `-B`, but Lex will not mix another version's text with ESV
+interlinear rows:
+
+```bash
+lex -B lxx Genesis 1:1      # Reads the Septuagint
+lex -B lxx Genesis 1:1 -i   # Reads LXX, then reports that interlinear is unavailable for LXX
+```
+
 In an interactive terminal, study sections can appear with a subtle pause between them. Turn this off or force it with:
 
 ```bash
@@ -218,6 +227,12 @@ When reading a long creed or confession:
 
 Lex supports multiple Bible editions. You can use any of these three ways to switch versions:
 
+To print the Lex application version for scripts or package checks:
+
+```bash
+lex --version
+```
+
 ### 1. Interactive Menu
 To see all versions and select a new default through a simple menu:
 
@@ -253,7 +268,8 @@ lex update
 ```
 
 This verifies file integrity using hashes and downloads only changed data files.
-Code updates should be handled with Git from the Lex checkout:
+The updater is intentionally restricted to `runtime-data/`; it does not overwrite
+the CLI code. Code updates should be handled with Git from the Lex checkout:
 
 ```bash
 cd /path/to/lex
@@ -319,4 +335,4 @@ lex 2 jn 1:2
 
 If an encyclopedia term is missing, the local encyclopedia is incomplete. The current ISBE import only covers Volume II, `Clement-Heresh`.
 
-If a study verse has no interlinear data, Lex can still read the verse, but study mode depends on the local interlinear JSON dataset.
+If a study verse has no interlinear data, Lex can still read the verse, but study mode depends on the local ESV interlinear JSON dataset.

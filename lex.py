@@ -63,17 +63,31 @@ class LexUpdateManager:
             self.console.print(f"[warning]Failed to fetch update manifest: {e}[/]")
             return None
 
+    def resolve_asset_path(self, rel_path):
+        if not rel_path.startswith("runtime-data/"):
+            return None
+        actual_rel = rel_path.replace("runtime-data/", "", 1)
+        if not actual_rel or actual_rel.startswith(("/", "\\")):
+            return None
+
+        data_root = os.path.realpath(self.data_dir)
+        target_path = os.path.realpath(os.path.join(data_root, actual_rel))
+        try:
+            if os.path.commonpath([data_root, target_path]) != data_root:
+                return None
+        except ValueError:
+            return None
+        return target_path
+
     def check_for_updates(self):
         remote = self.fetch_remote_manifest()
         if not remote: return None, None
         
         updates_needed = []
         for rel_path, info in remote.get("assets", {}).items():
-            if not rel_path.startswith("runtime-data/"):
+            local_path = self.resolve_asset_path(rel_path)
+            if not local_path:
                 continue
-
-            actual_rel = rel_path.replace("runtime-data/", "", 1)
-            local_path = os.path.join(self.data_dir, actual_rel)
                 
             local_hash = self.get_local_hash(local_path)
             if local_hash != info["hash"]:
@@ -108,8 +122,10 @@ class LexUpdateManager:
             self.console.print(f"  → Downloading {rel_path}...")
             url = self.RAW_BASE_URL + rel_path
             
-            actual_rel = rel_path.replace("runtime-data/", "", 1)
-            target_path = os.path.join(self.data_dir, actual_rel)
+            target_path = self.resolve_asset_path(rel_path)
+            if not target_path:
+                self.console.print(f"[error]Skipping unsafe manifest path: {rel_path}[/]")
+                return False
                 
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             
@@ -2177,12 +2193,20 @@ Find Strong's entries by number, transliteration, or English gloss:
                 self.display_study(current_ref, actions=False)
 
     def display_study(self, db_ref, animate=None, actions=None):
+        parts = self.parse_reference_parts(db_ref)
+        if parts and parts["version"] != "esv":
+            console.print(Panel(
+                f"Interlinear study data is only available for ESV-backed references right now.\n\n"
+                f"Read view is using {parts['version'].upper()}; run `lex study {parts['book']} {parts['chapter']}:{parts['verse']}` without `-B {parts['version']}` for the ESV interlinear packet.",
+                border_style="warning"
+            ))
+            return False
+
         index = self.get_interlinear_index()
         row = index.get(db_ref)
         
         # If no exact match (likely due to version prefix mismatch), try to find by book:chap:verse
         if not row or not row.get("p"):
-            parts = self.parse_reference_parts(db_ref)
             if parts:
                 # Use reverse canon map to get the canonical book name (e.g. "Ps" -> "Psalm")
                 canon_book = self.reverse_canon_map.get(parts["book"], parts["book"])
@@ -3533,6 +3557,10 @@ def main():
 
     # Handle -v / --version
     if args.version:
+        if args.version == "__LIST__" and "--version" in raw_argv:
+            sys.stdout.write(f"Lex {VERSION}\n")
+            sys.exit(0)
+
         # Case 1: lex -v <id> -> switch permanently
         if args.version != "__LIST__" and args.version in BIBLE_VERSIONS:
             save_bible_preference(args.version)
@@ -3556,9 +3584,16 @@ def main():
             menu_table.add_row(f"{i}.", vid, f"{info['name']}{is_current}")
             
         console.print(menu_table)
+
+        if not sys.stdin.isatty():
+            sys.exit(0)
+
         console.print("\n[dim]Select a number to switch default, or 'q' to exit.[/]")
         
-        choice = Prompt.ask("Selection", choices=[str(i) for i in range(1, len(vids)+1)] + ["q"], default="q", show_choices=False)
+        try:
+            choice = Prompt.ask("Selection", choices=[str(i) for i in range(1, len(vids)+1)] + ["q"], default="q", show_choices=False)
+        except EOFError:
+            sys.exit(0)
         
         if choice != "q":
             selected_vid = vids[int(choice) - 1]

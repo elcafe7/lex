@@ -7,10 +7,10 @@
 ## Responsibilities
 
 - Show the main landing page and credits screen.
-- Read verses and chapters from `bible_versions/esv.db`.
+- Read verses and chapters from the selected Bible DB, defaulting to `bible_versions/esv.db`.
 - Soft-animate study output by pausing briefly between major sections.
 - Navigate from the last opened passage with `--next` and `--prev`.
-- Render study mode with context, source-language text, interlinear rows, lexicon notes, and TSK cross-references.
+- Render ESV-backed study mode with context, source-language text, interlinear rows, lexicon notes, and TSK cross-references.
 - Offer study actions for next/previous verse, read context, verse web, and DOCX/PDF export.
 - Render verse web mode with a centerpiece verse and ranked local cross-reference connections.
 - Search Scripture with phrase search, all-terms fallback, highlighting, pagination, book/group scopes, and abbreviation-friendly references.
@@ -61,6 +61,11 @@ The file is organized into these broad sections:
 
 Study mode prefers interlinear rows that contain phrase data. This avoids duplicate heading rows overwriting real verse token data.
 
+Interlinear data is currently ESV-backed. If a user reads another version with
+`-B`, Lex should not fall back to ESV interlinear rows by reference suffix. It
+should either render version-specific source data or report that interlinear
+study is unavailable for that selected version.
+
 Search mode first tries an exact phrase FTS query. If that has no results, it falls back to an all-terms query.
 
 Search scopes are parsed from single-dash tokens after the query:
@@ -89,6 +94,10 @@ run and persist it in `~/.lex_config.json` for relaunches. `lex -auto` clears
 the saved preference and returns to detection. Lex ignores global `NO_COLOR` for
 themed terminal output; set `LEX_NO_COLOR=1` to intentionally disable Lex color.
 
+`lex --version` is reserved for plain, non-interactive application version
+output. `lex -v` opens the Bible-version picker in an interactive terminal and
+prints the version list without prompting when stdin is non-interactive.
+
 ## Known Risks
 
 - The script is large enough that accidental cross-feature regressions are easy.
@@ -106,8 +115,10 @@ After editing:
 
 ```bash
 python3 -m py_compile ./lex.py
+python3 ./lex.py --version
 python3 ./lex.py
 python3 ./lex.py study James 1:1
+python3 ./lex.py -B lxx Genesis 1:1 -i --no-animate
 python3 ./lex.py search israel --limit 2
 python3 ./lex.py search covenant -major --limit 2
 python3 ./lex.py 2 jn 1:2

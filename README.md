@@ -63,7 +63,9 @@ cd lex
 ```
 
 `setup.sh` creates a repo-local Python virtual environment, installs the Python
-dependencies, and writes a `lex` wrapper to `~/.local/bin`.
+dependencies, and writes a `lex` wrapper to `~/.local/bin`. The wrapper runs
+the checkout's `lex.py` directly, so local source changes take effect without a
+separate package reinstall.
 
 ### Package Managers
 Homebrew, pip-from-GitHub, and Scoop installs are not the primary path right
@@ -84,6 +86,10 @@ To refresh runtime data only:
 lex update
 ```
 
+`lex update` is intentionally data-only. Application code updates should come
+from Git plus `./setup.sh`; the updater does not overwrite the installed CLI
+script.
+
 ---
 
 ## 📖 Basic Usage
@@ -100,6 +106,8 @@ lex -B lxx Gen 1:1   # Read from the Septuagint
 
 ### Study Mode (`-i` or `study`)
 This is the main workbench. It renders verse context, interlinear rows, and lexicon definitions.
+Interlinear study data is currently ESV-backed; other Bible versions can be read
+with `-B`, but `-i`/`study` will not borrow ESV interlinear rows for them.
 
 ```bash
 lex study John 1:1

@@ -15,11 +15,13 @@ The tracked CLI entry point is:
 python3 ./lex.py
 ```
 
-On the current workstation, the shell alias `lex` resolves through `/usr/local/bin/lex`. Check the local target before changing install behavior:
+On the current workstation, `lex` should resolve to a wrapper that executes this
+checkout's `lex.py` directly. Check the local target before changing install
+behavior:
 
 ```bash
-alias lex
-readlink -f /usr/local/bin/lex
+type -a lex
+head -5 ~/.local/bin/lex
 ```
 
 Minimum verification after CLI edits:
@@ -28,6 +30,7 @@ Minimum verification after CLI edits:
 python3 -m py_compile ./lex.py
 python3 ./lex.py --version
 python3 ./lex.py read John 3:16
+python3 ./lex.py -B lxx Genesis 1:1 -i --no-animate
 python3 ./lex.py search israel --limit 2
 python3 ./lex.py define heliodorus
 ```
