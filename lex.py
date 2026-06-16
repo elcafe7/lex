@@ -969,11 +969,13 @@ class LexAgent:
         except: pass
 
     def clean_text(self, text):
-        text = re.sub(r' [<\[][GH]\d+[>\]]', '', text)
+        # Strip inline Strong's markers and similar annotation tokens from read text.
+        text = re.sub(r'[\[<][GH]\d+[>\]]', '', text)
         text = re.sub(r'\*[a-z]+', '', text)
         text = re.sub(r'\byourln\b', 'your', text, flags=re.IGNORECASE)
         text = re.sub(r'\bonld\b', 'on', text, flags=re.IGNORECASE)
         text = re.sub(r'\[/?[a-z]+\]', '', text)
+        text = re.sub(r'\s{2,}', ' ', text)
         return text.strip()
 
     def escape_fts_query(self, query):
