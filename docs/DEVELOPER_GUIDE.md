@@ -35,9 +35,10 @@ head -5 ~/.local/bin/lex
 1. `main()` parses CLI flags and query words.
 2. `LexAgent` opens the local SQLite databases and lazily loads JSON datasets.
 3. Read/search commands use the database specified by `-B` (defaulting to `bible_versions/esv.db`).
-4. Study mode uses ESV Bible rows plus ESV interlinear JSON, `strongs.db`, STEPBible lexicons, and TSK rows from `cross_refs.db`. Other Bible versions can be read with `-B`, but study/interlinear mode must not map those refs to ESV interlinear rows unless version-specific source data exists.
-5. Creed mode uses `creeds.db` rows, with JSON fallback for placeholder historical documents.
-6. Define mode queries Easton's dictionary from `dictionary.db` and ISBE entries from `encyclopedia.db`.
+4. Study mode first renders context from the selected Bible DB. English-version OT study stays Masoretic-oriented through ESV Hebrew/Aramaic interlinear JSON, `strongs.db`, STEPBible lexicons, Nave's topics, and TSK rows from `cross_refs.db`. LXX and Vulgate study modes are still in progress and must remain separate explicit selected-version paths (`-B lxx`, `-B vulg`). Study/interlinear mode must not auto-populate LXX or Vulgate rows while studying an English Bible.
+5. Query history is appended to `~/.lex_query_history` for `lex history`; navigation history remains the single-reference `~/.lex_history` file used by `--next` and `--prev`.
+6. Creed mode uses `creeds.db` rows, with JSON fallback for placeholder historical documents.
+7. Define mode queries Easton's dictionary from `dictionary.db` and ISBE entries from `encyclopedia.db`.
 
 ## Update System
 
@@ -63,7 +64,9 @@ python3 ./lex.py
 python3 ./lex.py --version
 python3 ./lex.py --credits
 python3 ./lex.py read John 3:16
+python3 ./lex.py history --limit 5
 python3 ./lex.py study James 1:1
+python3 ./lex.py study Genesis 1:1 --no-animate
 python3 ./lex.py -B lxx Genesis 1:1 -i --no-animate
 python3 ./lex.py search israel --limit 2
 python3 ./lex.py define heliodorus

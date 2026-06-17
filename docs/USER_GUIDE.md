@@ -42,9 +42,30 @@ lex --next
 lex --prev
 ```
 
+## View Command History
+
+Lex keeps a small local history of recent commands so you can see what you have
+been studying or searching:
+
+```bash
+lex history
+lex history --limit 10
+```
+
+History is stored at `~/.lex_query_history`. It is separate from
+`~/.lex_history`, which only stores the last opened reference for `--next` and
+`--prev`.
+
+Clear command history with either form:
+
+```bash
+lex history --clear
+lex history clear
+```
+
 ## Study A Verse
 
-Study mode shows the verse in context, then source-language data, an interlinear table, lexicon notes, and Treasury of Scripture Knowledge cross-references.
+Study mode shows the selected-version verse in context, then source-language data, an interlinear table, lexicon notes, topical associations, and Treasury of Scripture Knowledge cross-references.
 
 ```bash
 lex study John 1:1
@@ -59,13 +80,17 @@ You can also use quick study mode:
 lex John 3:16 -i
 ```
 
-Interlinear study data is currently ESV-backed. You can read other Bible
-versions with `-B`, but Lex will not mix another version's text with ESV
-interlinear rows:
+English-version Old Testament study is Masoretic-oriented through the local ESV
+Hebrew/Aramaic interlinear packet. Septuagint and Vulgate study modes are still
+in progress and should remain separate selected-version paths (`-B lxx` and
+`-B vulg`) as their data layers mature. Lex should not auto-populate LXX or
+Vulgate study data when you are studying an English Bible:
 
 ```bash
 lex -B lxx Genesis 1:1      # Reads the Septuagint
-lex -B lxx Genesis 1:1 -i   # Reads LXX, then reports that interlinear is unavailable for LXX
+lex -B lxx Genesis 1:1 -i   # LXX study path, in progress
+lex -B kjv Genesis 1:1 -i   # Reads KJV context, then reports that KJV interlinear is unavailable
+lex -B vulg John 1:1 -i     # Vulgate study path, in progress
 ```
 
 In an interactive terminal, study sections can appear with a subtle pause between them. Turn this off or force it with:
@@ -85,7 +110,7 @@ e      export
 q      done
 ```
 
-The export menu can save the study packet as DOCX or PDF under:
+The export menu can save a DOCX/PDF study packet or a PPTX verse slide under:
 
 ```text
 ~/Documents/lex_exports/studies
@@ -154,7 +179,7 @@ e      export
 q      quit
 ```
 
-The export menu can save the current result page as DOCX or PDF under:
+The export menu can save the current result page as DOCX, PDF, or PPTX under:
 
 ```text
 ~/Documents/lex_exports
@@ -335,4 +360,4 @@ lex 2 jn 1:2
 
 If an encyclopedia term is missing, the local encyclopedia is incomplete. The current ISBE import only covers Volume II, `Clement-Heresh`.
 
-If a study verse has no interlinear data, Lex can still read the verse, but study mode depends on the local ESV interlinear JSON dataset.
+If a study verse has no source-language data, Lex can still read the verse. English/Masoretic study depends on the local ESV interlinear JSON dataset; LXX and Vulgate study datasets are still being built out separately.

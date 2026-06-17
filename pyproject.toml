@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lex-bible"
-version = "2.4.5"
+version = "2.5"
 authors = [
   { name="elcafe7", email="nate@jesuspeoplesf.com" },
 ]
@@ -24,6 +24,8 @@ dependencies = [
     "rich",
     "python-docx",
     "reportlab",
+    "python-pptx",
+    "Pillow",
 ]
 
 [project.urls]

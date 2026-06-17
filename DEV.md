@@ -30,6 +30,8 @@ Minimum verification after CLI edits:
 python3 -m py_compile ./lex.py
 python3 ./lex.py --version
 python3 ./lex.py read John 3:16
+python3 ./lex.py history --limit 5
+python3 ./lex.py study Genesis 1:1 --no-animate
 python3 ./lex.py -B lxx Genesis 1:1 -i --no-animate
 python3 ./lex.py search israel --limit 2
 python3 ./lex.py define heliodorus

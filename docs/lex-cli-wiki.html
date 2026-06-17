@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lex CLI Wiki</title>
+  <meta name="description" content="End-user and developer reference for the Lex Bible study CLI.">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8f7f3;
+      --panel: #ffffff;
+      --ink: #1f2428;
+      --muted: #687076;
+      --line: #ddd8ce;
+      --accent: #1d6b73;
+      --accent-soft: #e7f1f1;
+      --code-bg: #171b1f;
+      --code-ink: #edf1f4;
+      --warn-bg: #fff6dd;
+      --warn-line: #e5bf58;
+      --radius: 8px;
+      --measure: 78ch;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      letter-spacing: 0;
+    }
+
+    a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      border-right: 1px solid var(--line);
+      background: #f1efe8;
+      padding: 28px 22px;
+    }
+
+    main {
+      width: min(100%, 1120px);
+      padding: 48px 32px 72px;
+    }
+
+    .brand {
+      margin: 0 0 6px;
+      font-size: 1.35rem;
+      line-height: 1.1;
+      font-weight: 750;
+    }
+
+    .subtitle {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+
+    nav a {
+      display: block;
+      padding: 6px 0;
+      color: #354044;
+      text-decoration: none;
+      font-size: .95rem;
+    }
+
+    nav a:hover { color: var(--accent); }
+
+    nav .group {
+      margin: 20px 0 8px;
+      color: var(--muted);
+      font-size: .72rem;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    header.hero {
+      max-width: var(--measure);
+      margin-bottom: 40px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin: 0 0 14px;
+      font-size: clamp(2.2rem, 6vw, 4.6rem);
+      font-weight: 800;
+    }
+
+    h2 {
+      margin: 48px 0 16px;
+      padding-top: 8px;
+      font-size: 1.9rem;
+      border-top: 1px solid var(--line);
+    }
+
+    h3 {
+      margin: 30px 0 10px;
+      font-size: 1.15rem;
+    }
+
+    p, ul, ol { max-width: var(--measure); }
+
+    .lead {
+      margin: 0 0 22px;
+      color: #374247;
+      font-size: 1.12rem;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      padding: 5px 10px;
+      color: #3e484d;
+      font-size: .85rem;
+    }
+
+    section {
+      max-width: 980px;
+      margin-bottom: 10px;
+    }
+
+    .note {
+      max-width: var(--measure);
+      border: 1px solid var(--warn-line);
+      border-radius: var(--radius);
+      background: var(--warn-bg);
+      padding: 14px 16px;
+      color: #473b18;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      max-width: 980px;
+    }
+
+    .command {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      padding: 16px;
+    }
+
+    .command h3 {
+      margin-top: 0;
+      font-size: 1rem;
+    }
+
+    .command p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+
+    code, kbd {
+      border-radius: 4px;
+      background: #ece8df;
+      padding: 2px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: .92em;
+    }
+
+    pre {
+      max-width: var(--measure);
+      overflow-x: auto;
+      border-radius: var(--radius);
+      background: var(--code-bg);
+      color: var(--code-ink);
+      padding: 14px 16px;
+      font-size: .92rem;
+      line-height: 1.5;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      font-size: inherit;
+    }
+
+    table {
+      width: 100%;
+      max-width: 980px;
+      border-collapse: collapse;
+      margin: 14px 0 28px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: table;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #f2efe7;
+      color: #30383c;
+      font-size: .78rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .toc-note {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: .82rem;
+    }
+
+    @media (max-width: 860px) {
+      .layout { display: block; }
+      aside {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      main { padding: 32px 18px 56px; }
+      .grid { grid-template-columns: 1fr; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <p class="brand">Lex CLI Wiki</p>
+      <p class="subtitle">A compact reference for using and maintaining Lex.</p>
+      <nav aria-label="Page navigation">
+        <p class="group">User Guide</p>
+        <a href="#overview">Overview</a>
+        <a href="#install">Install And Update</a>
+        <a href="#reference-syntax">Reference Syntax</a>
+        <a href="#commands">Command Reference</a>
+        <a href="#interactive">Interactive Actions</a>
+        <a href="#exports">Exports</a>
+        <a href="#versions">Bible Versions</a>
+        <a href="#themes">Themes</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+        <p class="group">Developer Guide</p>
+        <a href="#backend-overview">Backend Overview</a>
+        <a href="#data-stores">Runtime Data</a>
+        <a href="#study-boundaries">Study Boundaries</a>
+        <a href="#dispatch">CLI Dispatch</a>
+        <a href="#verification">Verification</a>
+      </nav>
+      <p class="toc-note">Current local docs target Lex 2.5.</p>
+    </aside>
+
+    <main>
+      <header class="hero" id="overview">
+        <p class="eyebrow">Local-first Bible study CLI</p>
+        <h1>Lex CLI Wiki</h1>
+        <p class="lead">Lex reads Scripture, searches local Bible databases, opens interlinear study views, maps cross-references, browses creeds, and exports study work from the terminal.</p>
+        <div class="meta-row" aria-label="Key facts">
+          <span class="pill">Version 2.5</span>
+          <span class="pill">Offline SQLite/JSON runtime data</span>
+          <span class="pill">macOS/Linux terminal workflow</span>
+        </div>
+      </header>
+
+      <section id="install">
+        <h2>Install And Update</h2>
+        <p>The recommended install is a full Git checkout because Lex depends on a large local runtime data bundle.</p>
+        <pre><code>git clone https://github.com/elcafe7/lex.git
+cd lex
+./setup.sh</code></pre>
+        <p><code>setup.sh</code> creates a repo-local virtual environment and writes a <code>lex</code> wrapper into <code>~/.local/bin</code>. That wrapper runs the checkout's <code>lex.py</code> directly.</p>
+        <h3>Update Code</h3>
+        <pre><code>git pull
+./setup.sh</code></pre>
+        <h3>Update Runtime Data</h3>
+        <pre><code>lex update</code></pre>
+        <p><code>lex update</code> is data-only. It syncs manifest-tracked files under <code>runtime-data/</code> and does not overwrite CLI code.</p>
+      </section>
+
+      <section id="reference-syntax">
+        <h2>Reference Syntax</h2>
+        <p>References are intentionally forgiving. Full names, common abbreviations, compact references, and chapter-only references are accepted.</p>
+        <div class="grid">
+          <div class="command">
+            <h3>Single verse</h3>
+            <pre><code>lex John 3:16
+lex jn 3:16
+lex 2 jn 1:2</code></pre>
+          </div>
+          <div class="command">
+            <h3>Chapter</h3>
+            <pre><code>lex Romans 8
+lex read John 1
+lex Gen 1</code></pre>
+          </div>
+          <div class="command">
+            <h3>Verse range</h3>
+            <pre><code>lex Romans 8:28-39
+lex export "Romans 8:28-39" --mode read --format pptx</code></pre>
+          </div>
+          <div class="command">
+            <h3>One-time Bible selection</h3>
+            <pre><code>lex -B kjv John 3:16
+lex -B lxx Genesis 1:1
+lex -B vulg John 1:1</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="commands">
+        <h2>Command Reference</h2>
+        <p>This section is exhaustive for the current local command surface. Optional flags can usually appear before or after the reference.</p>
+
+        <h3>Start, Help, Credits</h3>
+        <table>
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex</code></td><td>Open the main landing screen.</td></tr>
+            <tr><td><code>lex --version</code></td><td>Print the plain application version for scripts.</td></tr>
+            <tr><td><code>lex --credits</code></td><td>Show data credits and source acknowledgements.</td></tr>
+            <tr><td><code>lex update</code> or <code>lex --update</code></td><td>Refresh manifest-managed runtime data.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Read Scripture</h3>
+        <table>
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex John 3:16</code></td><td>Read a verse with nearby context.</td></tr>
+            <tr><td><code>lex read John 3:16</code></td><td>Explicit read command for a verse.</td></tr>
+            <tr><td><code>lex Romans 8</code></td><td>Read a full chapter.</td></tr>
+            <tr><td><code>lex --next</code></td><td>Move to the next verse or chapter from the saved history position.</td></tr>
+            <tr><td><code>lex --prev</code></td><td>Move to the previous verse or chapter from the saved history position.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>History</h3>
+        <table>
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex history</code></td><td>Show recent Lex commands from the local query history.</td></tr>
+            <tr><td><code>lex history --limit 10</code></td><td>Show a smaller number of recent commands.</td></tr>
+            <tr><td><code>lex history --clear</code></td><td>Clear the local query history.</td></tr>
+            <tr><td><code>lex history clear</code></td><td>Alternate clear form.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Study</h3>
+        <table>
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex study John 1:1</code></td><td>Show selected-version context, then source-language study tables, lexicon notes, topical associations, and TSK cross-references.</td></tr>
+            <tr><td><code>lex John 3:16 -i</code></td><td>Quick study mode using the interlinear flag.</td></tr>
+            <tr><td><code>lex study Romans 1:1 --no-animate</code></td><td>Disable pauses between study sections.</td></tr>
+            <tr><td><code>lex study Romans 1:1 --animate</code></td><td>Force pauses between study sections.</td></tr>
+            <tr><td><code>lex -B lxx Genesis 1:1 -i</code></td><td>Explicit LXX study path. This mode is in progress.</td></tr>
+            <tr><td><code>lex -B vulg John 1:1 -i</code></td><td>Explicit Vulgate study path. This mode is in progress.</td></tr>
+          </tbody>
+        </table>
+        <div class="note">English-version Old Testament study is Masoretic-oriented through the local ESV Hebrew/Aramaic interlinear packet. LXX and Vulgate study data should not auto-populate while studying an English Bible.</div>
+
+        <h3>Search</h3>
+        <table>
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex search israel</code></td><td>Search Scripture for a word.</td></tr>
+            <tr><td><code>lex search "kingdom of god"</code></td><td>Search for a phrase, with all-terms fallback.</td></tr>
+            <tr><td><code>lex search israel --page 2</code></td><td>Open a specific result page.</td></tr>
+            <tr><td><code>lex search israel --limit 25</code></td><td>Change result count per page.</td></tr>
+            <tr><td><code>lex search covenant -jeremiah</code></td><td>Scope search to one book.</td></tr>
+            <tr><td><code>lex search beast -daniel-revelation</code></td><td>Scope search to a book range.</td></tr>
+            <tr><td><code>lex search resurrection -nt</code></td><td>Scope search to a canon group.</td></tr>
+          </tbody>
+        </table>
+        <p>Supported group scopes include <code>-ot</code>, <code>-old-testament</code>, <code>-nt</code>, <code>-new-testament</code>, <code>-law</code>, <code>-pentateuch</code>, <code>-torah</code>, <code>-history</code>, <code>-wisdom</code>, <code>-poetry</code>, <code>-major</code>, <code>-major-prophets</code>, <code>-minor</code>, <code>-minor-prophets</code>, <code>-prophets</code>, <code>-gospels</code>, <code>-epistles</code>, <code>-letters</code>, <code>-pauline</code>, and <code>-general-epistles</code>.</p>
+
+        <h3>Verse Web</h3>
+        <table>
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex web John 3:16</code></td><td>Show the verse plus ranked local cross-reference connections.</td></tr>
+            <tr><td><code>lex web Romans 1:1 --limit 8</code></td><td>Control the number of cross-reference rows.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Topics, Lexicons, Dictionary</h3>
+        <table>
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex naves grace</code></td><td>Open a Nave's Topical Bible entry.</td></tr>
+            <tr><td><code>lex topic grace</code></td><td>Alias for Nave's topic lookup.</td></tr>
+            <tr><td><code>lex naves John 3:16</code></td><td>Find topical associations for a verse.</td></tr>
+            <tr><td><code>lex G3056</code></td><td>Look up a Strong's Greek number.</td></tr>
+            <tr><td><code>lex H7225</code></td><td>Look up a Strong's Hebrew number.</td></tr>
+            <tr><td><code>lex strongs love</code></td><td>Search Strong's entries by English gloss.</td></tr>
+            <tr><td><code>lex define covenant</code></td><td>Show local dictionary and encyclopedia entries.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Commentary And Creeds</h3>
+        <table>
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex commentary John 3:16</code></td><td>Show local commentary notes for a verse.</td></tr>
+            <tr><td><code>lex commentary Romans 1</code></td><td>Show local commentary notes for a chapter.</td></tr>
+            <tr><td><code>lex creed</code></td><td>Open the creed and confession navigator.</td></tr>
+            <tr><td><code>lex creed nicene</code></td><td>Open a specific creed or confession by search term.</td></tr>
+            <tr><td><code>lex creed westminster confession</code></td><td>Open a longer historical document by name.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Export</h3>
+        <table>
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex export "John 3:16"</code></td><td>Open an interactive export menu.</td></tr>
+            <tr><td><code>lex export "Romans 8:28-39" --mode read --format pptx</code></td><td>Export read-mode verses to PPTX.</td></tr>
+            <tr><td><code>lex export "Romans 8:28-39" --mode read --format png</code></td><td>Export read-mode verses to PNG images.</td></tr>
+            <tr><td><code>lex export "John 1:1" --mode study --format pdf</code></td><td>Export study packet as PDF.</td></tr>
+            <tr><td><code>lex export "John 1:1" --mode study --format docx</code></td><td>Export study packet as DOCX.</td></tr>
+            <tr><td><code>lex export "John 3:16" --mode web --format pdf</code></td><td>Export verse web data as PDF.</td></tr>
+            <tr><td><code>lex export "John 3:16" --mode web --format docx</code></td><td>Export verse web data as DOCX.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="interactive">
+        <h2>Interactive Actions</h2>
+        <table>
+          <thead><tr><th>Mode</th><th>Keys</th></tr></thead>
+          <tbody>
+            <tr><td>Study</td><td><code>n</code> next verse, <code>p</code> previous verse, <code>r</code> read context, <code>w</code> verse web, <code>e</code> export, <code>q</code> done.</td></tr>
+            <tr><td>Search</td><td><code>1-10</code> study result, <code>r #</code> read result, <code>n</code>/<code>p</code> page, <code>e</code> export, <code>q</code> quit.</td></tr>
+            <tr><td>Creeds</td><td><code>n</code> next section, <code>p</code> previous section, <code>m</code> menu, <code>q</code> quit.</td></tr>
+            <tr><td>Read</td><td>Verse and chapter reads expose export actions in interactive terminals.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="exports">
+        <h2>Exports</h2>
+        <p>Lex writes exports under <code>~/Documents/lex_exports</code>. Study packets go under <code>~/Documents/lex_exports/studies</code>. The app tries to open finished files automatically and prints the path if the desktop blocks that.</p>
+        <table>
+          <thead><tr><th>Mode</th><th>Formats</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Read</td><td>PNG, PPTX</td><td>Use <code>--ratio 16:9</code> or <code>--ratio 1:1</code> for PNG exports.</td></tr>
+            <tr><td>Study</td><td>DOCX, PDF</td><td>Interactive study export also offers a PPTX verse slide.</td></tr>
+            <tr><td>Search</td><td>DOCX, PDF, PPTX</td><td>Exports the current result page from interactive search.</td></tr>
+            <tr><td>Verse Web</td><td>DOCX, PDF</td><td>Exports verse plus cross-reference connection data.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="versions">
+        <h2>Bible Versions</h2>
+        <p>Lex supports ESV, KJV, KJ16, NASB, Geneva, LXX, and Vulgate runtime databases when present locally.</p>
+        <table>
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex -v</code></td><td>Open the interactive Bible version picker.</td></tr>
+            <tr><td><code>lex version kjv</code></td><td>Persistently set the default Bible version.</td></tr>
+            <tr><td><code>lex -v nasb</code></td><td>Persistently set the default Bible version by short flag.</td></tr>
+            <tr><td><code>lex -B lxx Genesis 1:1</code></td><td>Use a Bible version for one command only.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="themes">
+        <h2>Themes</h2>
+        <p>Lex chooses a theme from explicit flags, environment variables, saved config, terminal hints, and platform appearance.</p>
+        <table>
+          <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex -light</code></td><td>Persist Studio Light theme.</td></tr>
+            <tr><td><code>lex -dark</code></td><td>Persist Blueprint Technical theme.</td></tr>
+            <tr><td><code>lex -auto</code></td><td>Clear saved theme and return to automatic detection.</td></tr>
+            <tr><td><code>LEX_THEME=dark lex John 3:16</code></td><td>Override the theme for one command.</td></tr>
+            <tr><td><code>LEX_NO_COLOR=1 lex John 3:16</code></td><td>Disable Lex color intentionally.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="troubleshooting">
+        <h2>Troubleshooting</h2>
+        <table>
+          <thead><tr><th>Symptom</th><th>What To Check</th></tr></thead>
+          <tbody>
+            <tr><td><code>lex</code> not found</td><td>Confirm <code>~/.local/bin</code> is on <code>PATH</code> and rerun <code>./setup.sh</code>.</td></tr>
+            <tr><td>Wrong checkout running</td><td>Run <code>type -a lex</code> and <code>head -5 ~/.local/bin/lex</code>.</td></tr>
+            <tr><td>No reference result</td><td>Try the full book name, such as <code>lex 1 Corinthians 13</code>.</td></tr>
+            <tr><td>No study data</td><td>The verse can still be read, but study requires the matching local source-language dataset.</td></tr>
+            <tr><td>Missing encyclopedia entry</td><td>The local ISBE import is incomplete and currently covers only part of the source material.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="backend-overview">
+        <h2>Developer Backend Overview</h2>
+        <p><code>lex.py</code> is the active tracked CLI. It owns argument parsing, local SQLite access, JSON loading, terminal rendering, update checks, export generation, and interactive action loops.</p>
+        <div class="grid">
+          <div class="command">
+            <h3>Entry Point</h3>
+            <p><code>main()</code> parses CLI flags and dispatches to <code>LexAgent</code> methods.</p>
+          </div>
+          <div class="command">
+            <h3>Database Wrapper</h3>
+            <p><code>LexDB</code> is a small SQLite query helper used by read, search, study, creeds, and dictionaries.</p>
+          </div>
+          <div class="command">
+            <h3>Runtime Agent</h3>
+            <p><code>LexAgent</code> resolves references, opens data stores, lazily loads JSON, renders output, and handles exports.</p>
+          </div>
+          <div class="command">
+            <h3>State</h3>
+            <p>Last navigation position is stored in <code>~/.lex_history</code>. Recent command history is stored in <code>~/.lex_query_history</code>. Theme config is stored in <code>~/.lex_config.json</code>.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="data-stores">
+        <h2>Runtime Data</h2>
+        <p>A normal checkout resolves data under <code>runtime-data/</code>. If the runtime bundle is absent, Lex can fall back to <code>~/bible-lexicon-data</code> for local developer worktrees.</p>
+        <table>
+          <thead><tr><th>Path</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td><code>runtime-data/lexicon.db</code></td><td>Legacy combined data and update sentinel.</td></tr>
+            <tr><td><code>runtime-data/bible_versions/*.db</code></td><td>Per-edition Bible text for read and search.</td></tr>
+            <tr><td><code>runtime-data/esv-data/data/esv/esv-interlinear.json</code></td><td>ESV-backed Hebrew/Greek interlinear rows.</td></tr>
+            <tr><td><code>runtime-data/esv-data/data/interlinear/strongs.json</code></td><td>Interlinear Strong's metadata.</td></tr>
+            <tr><td><code>runtime-data/lxx.db</code></td><td>In-progress LXX morphology study data.</td></tr>
+            <tr><td><code>runtime-data/cross_refs.db</code></td><td>Treasury of Scripture Knowledge cross-reference graph.</td></tr>
+            <tr><td><code>runtime-data/strongs.db</code></td><td>Strong's lookup data.</td></tr>
+            <tr><td><code>runtime-data/dictionary.db</code></td><td>Dictionary entries.</td></tr>
+            <tr><td><code>runtime-data/encyclopedia.db</code></td><td>ISBE encyclopedia entries.</td></tr>
+            <tr><td><code>runtime-data/creeds.db</code></td><td>Creed/confession index rows.</td></tr>
+            <tr><td><code>runtime-data/theolog-ai/data/historical-documents</code></td><td>JSON fallback for full creed/confession texts.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="study-boundaries">
+        <h2>Study Boundaries</h2>
+        <p>Study mode has an important source-tradition boundary.</p>
+        <ul>
+          <li>Render the selected Bible version as the context panel first.</li>
+          <li>English Old Testament study remains Masoretic-oriented through ESV Hebrew/Aramaic interlinear data.</li>
+          <li>LXX study is a separate, in-progress path selected explicitly with <code>-B lxx</code>.</li>
+          <li>Vulgate study is a separate, in-progress path selected explicitly with <code>-B vulg</code>.</li>
+          <li>Do not populate LXX or Vulgate study rows while the selected Bible is English.</li>
+          <li>Do not fall back across source traditions by matching only book/chapter/verse suffixes.</li>
+        </ul>
+      </section>
+
+      <section id="dispatch">
+        <h2>CLI Dispatch</h2>
+        <p><code>main()</code> keeps command routing thin. Feature behavior should live on <code>LexAgent</code> methods.</p>
+        <table>
+          <thead><tr><th>Route</th><th>Backend Method</th></tr></thead>
+          <tbody>
+            <tr><td><code>read</code> or bare reference</td><td><code>display_verse()</code> / <code>render_chapter()</code></td></tr>
+            <tr><td><code>study</code> or <code>-i</code></td><td><code>display_verse(..., interlinear=True)</code> then <code>display_study()</code></td></tr>
+            <tr><td><code>web</code></td><td><code>display_verse_web()</code></td></tr>
+            <tr><td><code>search</code></td><td><code>display_search()</code></td></tr>
+            <tr><td><code>naves</code> / <code>topic</code></td><td><code>display_naves()</code></td></tr>
+            <tr><td><code>strongs</code> / <code>G####</code> / <code>H####</code></td><td><code>display_strongs()</code> or English Strong's search</td></tr>
+            <tr><td><code>define</code></td><td>Dictionary plus encyclopedia lookup</td></tr>
+            <tr><td><code>creed</code></td><td><code>display_creed_navigator()</code></td></tr>
+            <tr><td><code>export</code></td><td><code>prompt_bulk_export()</code> or <code>handle_bulk_export()</code></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verification">
+        <h2>Verification</h2>
+        <p>Minimum local checks after CLI changes:</p>
+        <pre><code>python3 -m py_compile ./lex.py
+python3 ./lex.py --version
+python3 ./lex.py read John 3:16
+python3 ./lex.py study Genesis 1:1 --no-animate
+python3 ./lex.py -B lxx Genesis 1:1 -i --no-animate
+python3 ./lex.py search israel --limit 2
+python3 ./lex.py define heliodorus</code></pre>
+        <p>Before changing install behavior, verify the local wrapper target:</p>
+        <pre><code>type -a lex
+head -5 ~/.local/bin/lex</code></pre>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

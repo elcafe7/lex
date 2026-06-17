@@ -10,12 +10,14 @@
 - Read verses and chapters from the selected Bible DB, defaulting to `bible_versions/esv.db`.
 - Soft-animate study output by pausing briefly between major sections.
 - Navigate from the last opened passage with `--next` and `--prev`.
-- Render ESV-backed study mode with context, source-language text, interlinear rows, lexicon notes, and TSK cross-references.
-- Offer study actions for next/previous verse, read context, verse web, and DOCX/PDF export.
+- Store and display recent user commands with `lex history`.
+- Render study mode with selected-version context, source-language text, interlinear rows, lexicon notes, topical associations, and TSK cross-references.
+- Use the ESV Hebrew/Aramaic interlinear packet for English/Masoretic study. LXX and Vulgate study modes are in progress and should remain separate explicit selected-version paths as their data layers mature.
+- Offer study actions for next/previous verse, read context, verse web, DOCX/PDF packet export, and PPTX verse-slide export.
 - Render verse web mode with a centerpiece verse and ranked local cross-reference connections.
 - Search Scripture with phrase search, all-terms fallback, highlighting, pagination, book/group scopes, and abbreviation-friendly references.
 - Navigate multi-page search results interactively with an action bar for study/read/page/export commands.
-- Export search pages and study packets to DOCX/PDF under `~/Documents/lex_exports`.
+- Export search pages to DOCX/PDF/PPTX, study packets to DOCX/PDF, study verse slides to PPTX, and read-mode output to PNG/PPTX under `~/Documents/lex_exports`.
 - Browse creeds/confessions with tradition grouping and section navigation.
 - Define terms using dictionary and encyclopedia databases.
 - Look up Strong's entries by number or English gloss.
@@ -26,15 +28,18 @@ The script resolves runtime paths near the top of the file. A normal GitHub
 clone uses bundled JSON under `runtime-data/`; local developer checkouts can
 also use full upstream data directories beside `lex.py`.
 
-- `LEXICON_DB_PATH`: `~/bible-lexicon-data/lexicon.db`
-- `BIBLE_DB_PATH`: `~/bible-lexicon-data/bible_versions/esv.db`
-- `ENCYCLOPEDIA_DB_PATH`: `~/bible-lexicon-data/encyclopedia.db`
-- `CROSS_REFS_DB_PATH`: `~/bible-lexicon-data/cross_refs.db`
-- `STRONGS_DB_PATH`: `~/bible-lexicon-data/strongs.db`
-- `DICTIONARY_DB_PATH`: `~/bible-lexicon-data/dictionary.db`
-- `CREEDS_DB_PATH`: `~/bible-lexicon-data/creeds.db`
-- `PLACES_DB_PATH`: `~/bible-lexicon-data/places.db`
+- `LEXICON_DB_PATH`: `runtime-data/lexicon.db`
+- Bible editions: `runtime-data/bible_versions/<edition>.db`
+- `ENCYCLOPEDIA_DB_PATH`: `runtime-data/encyclopedia.db`
+- `CROSS_REFS_DB_PATH`: `runtime-data/cross_refs.db`
+- `STRONGS_DB_PATH`: `runtime-data/strongs.db`
+- `DICTIONARY_DB_PATH`: `runtime-data/dictionary.db`
+- `CREEDS_DB_PATH`: `runtime-data/creeds.db`
+- `PLACES_DB_PATH`: `runtime-data/places.db`
+- `LXX_DB_PATH`: `runtime-data/lxx.db`
 - `CONFIG_FILE`: `~/.lex_config.json`
+- `HISTORY_FILE`: `~/.lex_history` for next/previous navigation
+- `QUERY_HISTORY_FILE`: `~/.lex_query_history` for `lex history`
 - `INTERLINEAR_PATH`: `runtime-data/esv-data/data/esv/esv-interlinear.json`
 - `INTERLINEAR_STRONGS_PATH`: `runtime-data/esv-data/data/interlinear/strongs.json`
 - `STEP_GREEK_PATH`: bundled STEPBible Greek lexicon JSON
@@ -61,10 +66,14 @@ The file is organized into these broad sections:
 
 Study mode prefers interlinear rows that contain phrase data. This avoids duplicate heading rows overwriting real verse token data.
 
-Interlinear data is currently ESV-backed. If a user reads another version with
-`-B`, Lex should not fall back to ESV interlinear rows by reference suffix. It
-should either render version-specific source data or report that interlinear
-study is unavailable for that selected version.
+Study mode should preserve the selected Bible version in the context panel.
+English-version OT study should remain Masoretic-oriented and must not
+auto-populate Septuagint or Vulgate study rows. LXX study should run only for an
+explicit LXX selection, such as `-B lxx`, and is still being built out from its
+own data layer. Vulgate study should likewise be a separate explicit `-B vulg`
+path and is still in progress. Other selected versions should report that
+interlinear study is unavailable rather than falling back across source
+traditions by reference suffix.
 
 Search mode first tries an exact phrase FTS query. If that has no results, it falls back to an all-terms query.
 
@@ -79,7 +88,7 @@ lex search covenant -major
 
 The single-dash scope parser protects search tokens such as `-daniel-revelation` from being consumed as short CLI flags.
 
-Search and study exports use `python-docx` for DOCX and ReportLab for PDF. PDFs register local Noto fonts when available to avoid default Helvetica character loss, especially for Greek/Hebrew study packets.
+Search and study exports use `python-docx` for DOCX, ReportLab for PDF, `python-pptx` for PPTX, and Pillow for PNG read exports. PDFs register local Noto fonts when available to avoid default Helvetica character loss, especially for Greek/Hebrew study packets.
 
 Creed mode uses SQLite rows when available, but falls back to JSON files when the DB row is only a placeholder.
 
@@ -97,6 +106,11 @@ themed terminal output; set `LEX_NO_COLOR=1` to intentionally disable Lex color.
 `lex --version` is reserved for plain, non-interactive application version
 output. `lex -v` opens the Bible-version picker in an interactive terminal and
 prints the version list without prompting when stdin is non-interactive.
+
+`lex history` reads `~/.lex_query_history`, which is a JSON-lines file capped to
+the most recent local commands. It is intentionally separate from
+`~/.lex_history`, which stores only the last navigable reference for `--next`
+and `--prev`.
 
 ## Known Risks
 
@@ -116,6 +130,7 @@ After editing:
 ```bash
 python3 -m py_compile ./lex.py
 python3 ./lex.py --version
+python3 ./lex.py history --limit 5
 python3 ./lex.py
 python3 ./lex.py study James 1:1
 python3 ./lex.py -B lxx Genesis 1:1 -i --no-animate

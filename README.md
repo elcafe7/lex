@@ -12,7 +12,7 @@ lex naves grace
 lex web Romans 1:1
 ```
 
-Current version: `2.4.5`
+Current version: `2.5`
 
 ---
 
@@ -36,7 +36,7 @@ Current version: `2.4.5`
 | **Verse Web** | Visualize local cross-reference connections ranked by relevance with instant previews. |
 | **Historical Creeds** | Instant access to the Nicene Creed, Westminster Confession, and other major historical documents. |
 | **Modern Aesthetics** | Auto-detecting light/dark themes with high-contrast, "Blueprint Technical" or "Studio Light" palettes. |
-| **Export Engine** | Generate professional `.docx` or `.pdf` study packets and search results directly from the CLI. |
+| **Export Engine** | Generate `.docx`/`.pdf` study packets and search results, plus read-mode PNG/PPTX and verse-slide PPTX exports. |
 | **Zero Web Dependency** | Runs against local SQLite/JSON stores. Fast, private, and works on a plane. |
 
 ---
@@ -101,18 +101,27 @@ References are forgiving. Abbreviations like `jn`, `rom`, or `gn` work perfectly
 lex John 3:16        # Read a specific verse
 lex Romans 8         # Read a whole chapter
 lex --next           # Move to the next verse from your last position
+lex history          # Show recent Lex commands
 lex -B lxx Gen 1:1   # Read from the Septuagint
 ```
 
 ### Study Mode (`-i` or `study`)
-This is the main workbench. It renders verse context, interlinear rows, and lexicon definitions.
-Interlinear study data is currently ESV-backed; other Bible versions can be read
-with `-B`, but `-i`/`study` will not borrow ESV interlinear rows for them.
+This is the main workbench. It renders the selected-version verse context first,
+then source text, interlinear rows, lexicon notes, topical associations, and TSK
+cross-references. English-version OT study stays Masoretic-oriented through the
+local ESV Hebrew/Aramaic interlinear packet. Septuagint and Vulgate study modes
+are in progress and should remain separate selected-version paths (`-B lxx` and
+`-B vulg`) as their data layers mature. LXX/Vulgate study data should not
+auto-populate when studying an English Bible.
 
 ```bash
 lex study John 1:1
 lex John 3:16 -i
+lex -B lxx Genesis 1:1 -i
 ```
+
+Interactive study actions include next/previous verse, read context, verse web,
+and export. Study export supports DOCX/PDF packets and a PPTX verse slide.
 
 ### Search & Scopes
 Lex search is fast and scoped. You can search the whole Bible or narrow it down to specific canons.
@@ -177,6 +186,7 @@ lex -auto              # Revert to automatic detection
 ## 🗃️ Data Sources
 Lex is built on the shoulders of giants. Data is sourced from:
 - ESV-derived Bible database
+- CCAT LXX morphology and local Septuagint/apocrypha import
 - Treasury of Scripture Knowledge (OpenBible)
 - STEPBible & Strong's Lexicon data
 - Easton's Bible Dictionary & ISBE
