@@ -145,7 +145,7 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.5"
+VERSION = "2.5.1"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 QUERY_HISTORY_FILE = os.path.expanduser("~/.lex_query_history")
 QUERY_HISTORY_LIMIT = 200
@@ -2143,7 +2143,7 @@ Find Strong's entries by number, transliteration, or English gloss:
             spark.append("●", style="gold3" if idx == 1 else "cyan")
             spark.append(f" {to_ref}", style="dim")
         console.print(Panel(spark, title="Connection Trail", border_style="ui.border"))
-        console.print(f"[dim]Open a link: lex read <ref>  |  Study center: lex study {book} {chap}:{verse}[/]")
+        console.print(f"[dim]Open a link: lex read <ref>  |  Read top 10 refs: lex read all  |  Study center: lex study {book} {chap}:{verse}[/]")
         self.save_history(db_ref)
         return True
 
@@ -2761,6 +2761,28 @@ Find Strong's entries by number, transliteration, or English gloss:
             if next_ref:
                 current_ref = next_ref
                 self.display_study(current_ref, actions=False)
+
+    def display_study_query(self, query, animate=None):
+        ref_norm, book, chap, verse, v_end = self.normalize_ref(query)
+        if not ref_norm:
+            return False
+
+        # Ensure we use the DB-specific book name in the LIKE query
+        db_book = self.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
+
+        # Default to verse 1 if not specified
+        v_num = verse or "1"
+
+        res = self.bible_db.query(
+            "SELECT MIN(id), reference, text FROM bible WHERE reference LIKE ? GROUP BY reference LIMIT 1",
+            (f"%:{db_book}:{chap}:{v_num}",)
+        )
+        if res:
+            target_id, ref, text = res[0]
+            self.display_study(ref, animate=animate)
+            self.save_history(ref)
+            return True
+        return False
 
     def display_study(self, db_ref, animate=None, actions=None):
         parts = self.parse_reference_parts(db_ref)
@@ -4852,6 +4874,26 @@ def main():
     if query == "read":
         agent.display_read_landing()
         sys.exit(0)
+    elif query == "read all" or query == "all":
+        last_ref = agent.last_ref
+        if not last_ref:
+            console.print("[warning]No previous verse reference found in history.[/]")
+            sys.exit(1)
+        refs = agent.get_tsk_crossrefs(last_ref)[:10]
+        if not refs:
+            console.print("[warning]No cross references found in history for the last verse.[/]")
+            sys.exit(1)
+        any_success = False
+        for to_ref, votes in refs:
+            db_ref = agent.parse_tsk_ref(to_ref)
+            if db_ref:
+                display_ref = agent.format_display_ref(db_ref)
+                if agent.display_verse(display_ref, interlinear=args.interlinear, animate=args.animate):
+                    any_success = True
+        if not any_success:
+            console.print("[warning]Failed to display any cross references in read mode.[/]")
+            sys.exit(1)
+        sys.exit(0)
     elif query.startswith("read "):
         query = query[5:].strip()
     elif query == "study":
@@ -4862,7 +4904,22 @@ def main():
         if not query:
             agent.display_study_landing()
             sys.exit(0)
-        args.interlinear = True
+        # Split the query by separators to support sequential study if multiple are provided
+        study_parts = [p.strip() for p in re.split(r'[,;]+', query) if p.strip()]
+        if len(study_parts) > 1:
+            any_success = False
+            for part in study_parts:
+                if agent.display_study_query(part, animate=args.animate):
+                    any_success = True
+            if not any_success:
+                console.print("[warning]No local study data found for those references.[/]")
+                sys.exit(1)
+            sys.exit(0)
+        else:
+            if not agent.display_study_query(query, animate=args.animate):
+                console.print("[warning]No local study data found for that reference.[/]")
+                sys.exit(1)
+            sys.exit(0)
     elif query in {"search", "serch"}:
         agent.display_search_howto()
         sys.exit(0)
@@ -4966,10 +5023,24 @@ def main():
             console.print("[warning]No Strong's entry found for that number.[/]")
             sys.exit(1)
     elif query:
-        if not agent.display_verse(query, interlinear=args.interlinear, animate=args.animate):
-            if not agent.display_strongs(query):
+        # Check if the query has multiple references separated by comma or semicolon
+        ref_parts = [p.strip() for p in re.split(r'[,;]+', query) if p.strip()]
+        if len(ref_parts) > 1:
+            any_success = False
+            for part in ref_parts:
+                if agent.display_verse(part, interlinear=args.interlinear, animate=args.animate):
+                    any_success = True
+                else:
+                    if agent.display_strongs(part):
+                        any_success = True
+            if not any_success:
                 agent.display_search_howto()
                 sys.exit(1)
+        else:
+            if not agent.display_verse(query, interlinear=args.interlinear, animate=args.animate):
+                if not agent.display_strongs(query):
+                    agent.display_search_howto()
+                    sys.exit(1)
     else:
         agent.display_intro()
 

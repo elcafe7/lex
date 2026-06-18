@@ -12,7 +12,7 @@ lex naves grace
 lex web Romans 1:1
 ```
 
-Current version: `2.5`
+Current version: `2.5.1`
 
 ---
 
