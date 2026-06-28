@@ -2784,6 +2784,41 @@ Find Strong's entries by number, transliteration, or English gloss:
             return True
         return False
 
+    def display_study_context(self, db_ref):
+        parts = self.parse_reference_parts(db_ref)
+        if not parts:
+            return
+
+        prev2 = None
+        prev1 = self.get_navigation_reference(db_ref, "prev")
+        if prev1:
+            prev2 = self.get_navigation_reference(prev1, "prev")
+        next1 = self.get_navigation_reference(db_ref, "next")
+        next2 = self.get_navigation_reference(next1, "next") if next1 else None
+
+        rows = []
+        for candidate in [prev2, prev1, db_ref, next1, next2]:
+            if not candidate:
+                continue
+            candidate_parts = self.parse_reference_parts(candidate)
+            if candidate_parts and candidate_parts["book"] != parts["book"]:
+                continue
+            row = self.bible_db.query(
+                "SELECT MIN(id), reference, text FROM bible WHERE reference = ? GROUP BY reference",
+                (candidate,)
+            )
+            if row:
+                rows.append(row[0])
+
+        if rows:
+            self.render_verse_context(
+                rows,
+                db_ref,
+                parts["book"],
+                parts["chapter"],
+                parts["verse"],
+            )
+
     def display_study(self, db_ref, animate=None, actions=None):
         parts = self.parse_reference_parts(db_ref)
         if parts and parts["version"] == "lxx":
@@ -2820,6 +2855,7 @@ Find Strong's entries by number, transliteration, or English gloss:
             console.print(Panel("No local interlinear data found for this verse.", border_style="warning"))
             return False
         parsed_tokens = [self.parse_interlinear_token(token) for token in row["p"]]
+        self.display_study_context(db_ref)
         self.pause_study_section(animate)
         self.display_source_text(parsed_tokens)
         self.pause_study_section(animate)
