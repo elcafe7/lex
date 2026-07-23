@@ -4979,9 +4979,9 @@ def main():
             encyclopedia_found = agent.display_encyclopedia(q)
             if not dictionary_found and not encyclopedia_found:
                 console.print("[warning]No dictionary or encyclopedia entry found.[/]")
-    elif args.creed or query.startswith("creed"):
-        q = query.replace("creed ", "").strip()
-        if not q or q == "creed": agent.display_creed_navigator()
+    elif args.creed or query in {"creed", "creeds"} or query.startswith(("creed ", "creeds ")):
+        q = re.sub(r"^creeds?\s*", "", query).strip()
+        if not q: agent.display_creed_navigator()
         elif not agent.display_creed_navigator(q):
             console.print("[warning]No creed or confession entry found.[/]")
             sys.exit(1)
