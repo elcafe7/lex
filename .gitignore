@@ -44,3 +44,6 @@ ubs-open-license/
 
 # Private pre-public project work
 pre-public/
+
+# Locally-built GitHub release assets for the npm launcher
+dist/

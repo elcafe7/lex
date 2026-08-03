@@ -1,0 +1,44 @@
+{
+  "name": "lex-cli",
+  "version": "2.5.0",
+  "description": "Launcher for Lex, the local-first Bible study terminal",
+  "license": "MIT",
+  "bin": {
+    "lex": "bin/lex.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elcafe7/lex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/elcafe7/lex/issues"
+  },
+  "homepage": "https://github.com/elcafe7/lex#readme",
+  "keywords": [
+    "bible",
+    "cli",
+    "lex",
+    "scripture",
+    "theology"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "lexCli": {
+    "repository": "elcafe7/lex",
+    "releaseTag": "v2.5.0",
+    "assetName": "lex-v2.5.0.tar.gz",
+    "checksumName": "lex-v2.5.0.tar.gz.sha256"
+  }
+}
