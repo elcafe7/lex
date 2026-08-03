@@ -41,3 +41,6 @@ ubs-open-license/
 !runtime-data/**
 *.db-shm
 *.db-wal
+
+# Private pre-public project work
+pre-public/
