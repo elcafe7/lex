@@ -35,3 +35,21 @@ npm tarball.
 The launcher downloads the release archive and its SHA-256 sidecar on first
 execution. Do not publish the npm package before the corresponding GitHub
 release assets are available.
+
+## Release resolution
+
+The launcher asks the GitHub API for the **latest** release (`releases/latest`)
+on each first-run install and builds the asset URLs from that tag, so users
+always get the newest `lex-v<TAG>.tar.gz` + `.sha256` pair. The `releaseTag` /
+`assetName` values in `package.json` are a fallback used when the API lookup
+fails (offline, rate-limited, private network).
+
+Override for testing:
+
+```sh
+LEX_CLI_RELEASE_TAG=v2.5.0 lex        # force a specific tag
+LEX_CLI_RELEASE_BASE_URL=... lex      # force a mirror URL
+```
+
+A cached install at `~/.local/share/lex-cli/` is reused; delete it to force a
+re-download of the latest release.

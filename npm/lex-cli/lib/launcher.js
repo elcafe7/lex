@@ -12,16 +12,28 @@ const { pipeline } = require("node:stream/promises");
 const metadata = require("../package.json");
 const config = metadata.lexCli;
 
-function releaseBaseUrl() {
+function releaseBaseUrl(tag) {
+  const releaseTag = tag || config.releaseTag;
   return process.env.LEX_CLI_RELEASE_BASE_URL ||
-    `https://github.com/${config.repository}/releases/download/${config.releaseTag}`;
+    `https://github.com/${config.repository}/releases/download/${releaseTag}`;
 }
 
-function releaseUrls() {
-  const base = releaseBaseUrl().replace(/\/$/, "");
+function assetNames(tag) {
+  if (tag && !config.assetName.includes(tag)) {
+    return {
+      assetName: `lex-${tag}.tar.gz`,
+      checksumName: `lex-${tag}.tar.gz.sha256`,
+    };
+  }
+  return { assetName: config.assetName, checksumName: config.checksumName };
+}
+
+function releaseUrls(tag) {
+  const base = releaseBaseUrl(tag).replace(/\/$/, "");
+  const names = assetNames(tag);
   return {
-    archive: `${base}/${config.assetName}`,
-    checksum: `${base}/${config.checksumName}`,
+    archive: `${base}/${names.assetName}`,
+    checksum: `${base}/${names.checksumName}`,
   };
 }
 
@@ -32,6 +44,48 @@ function installRoot() {
 
 function archiveRoot() {
   return `lex-${metadata.version}`;
+}
+
+function latestReleaseTag() {
+  const apiUrl = `https://api.github.com/repos/${config.repository}/releases/latest`;
+  return new Promise((resolve, reject) => {
+    https.get(apiUrl, {
+      headers: {
+        "User-Agent": "lex-cli",
+        Accept: "application/vnd.github+json",
+      },
+    }, (response) => {
+      if (response.statusCode !== 200) {
+        response.resume();
+        reject(new Error(`latest-release lookup failed (${response.statusCode})`));
+        return;
+      }
+      let body = "";
+      response.on("data", (chunk) => { body += chunk; });
+      response.on("end", () => {
+        try {
+          const tag = JSON.parse(body).tag_name;
+          if (!tag) reject(new Error("latest release response had no tag_name"));
+          else resolve(tag);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }).on("error", reject);
+  });
+}
+
+async function resolveReleaseTag() {
+  const override = process.env.LEX_CLI_RELEASE_TAG;
+  if (override) return override;
+  try {
+    const tag = await latestReleaseTag();
+    console.error(`lex: latest release is ${tag}`);
+    return tag;
+  } catch (err) {
+    console.error(`lex: couldn't resolve latest release, using pinned ${config.releaseTag} (${err.message})`);
+    return config.releaseTag;
+  }
 }
 
 function sha256(file) {
@@ -102,13 +156,13 @@ function bootstrap(directory) {
   checked(pythonPath(directory), ["-m", "pip", "install", "--no-cache-dir", "-r", "requirements.txt"], { cwd: directory });
 }
 
-async function downloadRelease() {
+async function downloadRelease(tag) {
   const destination = installRoot();
   if (validLexHome(destination)) return destination;
 
   const temporary = await fsp.mkdtemp(path.join(os.tmpdir(), "lex-cli-"));
   try {
-    const urls = releaseUrls();
+    const urls = releaseUrls(tag);
     const archive = path.join(temporary, config.assetName);
     console.error(`lex: downloading ${config.releaseTag} release data…`);
     const [expected] = await Promise.all([expectedChecksum(urls.checksum), download(urls.archive, archive)]);
@@ -133,7 +187,8 @@ async function resolveLexHome() {
     if (!validLexHome(override)) throw new Error(`LEX_CLI_HOME is not a valid Lex distribution: ${override}`);
     return override;
   }
-  return downloadRelease();
+  const tag = await resolveReleaseTag();
+  return downloadRelease(tag);
 }
 
 async function main(args) {
@@ -148,4 +203,4 @@ async function main(args) {
   process.exitCode = result.status || 0;
 }
 
-module.exports = { archiveRoot, installRoot, releaseUrls, validLexHome, main };
+module.exports = { archiveRoot, installRoot, releaseUrls, resolveReleaseTag, validLexHome, main };
