@@ -388,6 +388,14 @@ LXX_REFERENCE_BOOK_ALIASES_RAW = {
 TSK_TO_BOOK = {abbr.rstrip("."): book for book, abbr in TSK_BOOK_ABBR.items()}
 BIBLE_BOOKS = list(TSK_BOOK_ABBR.keys())
 BIBLE_BOOK_INDEX = {book: idx for idx, book in enumerate(BIBLE_BOOKS)}
+PROTESTANT_OT_BOOKS = set(BIBLE_BOOKS[:39])
+PROTESTANT_NT_BOOKS = set(BIBLE_BOOKS[39:])
+SOURCE_VARIANT_RANGES = [
+    ("Mark", 16, 9, "Mark", 16, 20, "Longer Ending of Mark"),
+    ("John", 7, 53, "John", 8, 11, "Pericope Adulterae"),
+    ("Acts", 8, 37, "Acts", 8, 37, "Ethiopian Eunuch Confession"),
+    ("1 John", 5, 7, "1 John", 5, 8, "Comma Johanneum"),
+]
 
 # Pre-compile normalization pattern for performance
 NORM_RE = re.compile(r"[^a-z0-9]+")
@@ -536,6 +544,26 @@ BOOK_SCOPE_ALIASES.update({
     "rv": "Revelation",
     "re": "Revelation",
     "revelations": "Revelation",
+    "tobit": "Tob",
+    "tob": "Tob",
+    "judith": "Jdt",
+    "jdt": "Jdt",
+    "wisdom": "Wis",
+    "wisdomofsolomon": "Wis",
+    "wis": "Wis",
+    "sirach": "Sir",
+    "ecclesiasticus": "Sir",
+    "sir": "Sir",
+    "baruch": "Bar",
+    "bar": "Bar",
+    "1maccabees": "1Macc",
+    "1macc": "1Macc",
+    "1mac": "1Macc",
+    "firstmaccabees": "1Macc",
+    "2maccabees": "2Macc",
+    "2macc": "2Macc",
+    "2mac": "2Macc",
+    "secondmaccabees": "2Macc",
 })
 
 BOOK_SCOPE_GROUPS = {
@@ -1241,6 +1269,9 @@ class LexAgent:
 
     def clean_text(self, text):
         # Strip inline Strong's markers and similar annotation tokens from read text.
+        text = re.sub(r'\\par\b', ' ', text)
+        text = re.sub(r'\{\\cf\d+\s+([^{}]*)\}', r'\1', text)
+        text = re.sub(r'\\[a-zA-Z]+\d*\s?', '', text)
         text = re.sub(r'[\[<][GH]\d+[>\]]', '', text)
         text = re.sub(r'\*[a-z]+', '', text)
         text = re.sub(r'\byourln\b', 'your', text, flags=re.IGNORECASE)
@@ -1449,16 +1480,47 @@ class LexAgent:
             prefix += "."
         return f"{prefix}{chapter}.{verse}" if verse else f"{prefix}{chapter}."
 
-    def parse_tsk_ref(self, tsk_ref):
-        first_ref = tsk_ref.split("-", 1)[0]
-        match = re.match(r"^([1-3]?[A-Za-z]+)\.(\d+)\.(\d+)$", first_ref)
+    def parse_tsk_ref_parts(self, tsk_ref):
+        match = re.match(r"^([1-3]?[A-Za-z]+)\.(\d+)\.(\d+)$", tsk_ref)
         if not match:
             return None
         book_abbr, chapter, verse = match.groups()
         book = TSK_TO_BOOK.get(book_abbr)
         if not book:
             return None
-        return f"esv:{book}:{int(chapter)}:{int(verse)}"
+        db_book = self.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
+        return db_book, int(chapter), int(verse)
+
+    def parse_tsk_ref(self, tsk_ref):
+        first_ref = tsk_ref.split("-", 1)[0]
+        parts = self.parse_tsk_ref_parts(first_ref)
+        if not parts:
+            return None
+        book, chapter, verse = parts
+        return f"{self.bible_prefix}:{book}:{int(chapter)}:{int(verse)}"
+
+    def tsk_ref_to_range(self, tsk_ref):
+        start_raw, end_raw = (tsk_ref.split("-", 1) + [None])[:2]
+        start = self.parse_tsk_ref_parts(start_raw)
+        if not start:
+            return None
+        end = self.parse_tsk_ref_parts(end_raw) if end_raw else start
+        if not end:
+            return start, start
+        return start, end
+
+    def format_tsk_display_ref(self, tsk_ref):
+        ref_range = self.tsk_ref_to_range(tsk_ref)
+        if not ref_range:
+            return tsk_ref
+        start, end = ref_range
+        start_label = f"{self.reverse_canon_map.get(start[0], start[0])} {start[1]}:{start[2]}"
+        end_book = self.reverse_canon_map.get(end[0], end[0])
+        if start == end:
+            return start_label
+        if start[0] == end[0] and start[1] == end[1]:
+            return f"{start_label}-{end[2]}"
+        return f"{start_label}-{end_book} {end[1]}:{end[2]}"
 
     def get_tsk_crossrefs(self, db_ref):
         parts = self.parse_reference_parts(db_ref)
@@ -1470,15 +1532,36 @@ class LexAgent:
             (tsk_ref,)
         )
 
-    def get_crossref_preview(self, tsk_ref):
-        db_ref = self.parse_tsk_ref(tsk_ref)
-        if not db_ref:
+    def get_crossref_text(self, tsk_ref):
+        ref_range = self.tsk_ref_to_range(tsk_ref)
+        if not ref_range:
             return None
-        row = self.bible_db.query(
-            "SELECT text FROM bible WHERE reference = ? ORDER BY id LIMIT 1",
-            (db_ref,)
+        start, end = ref_range
+        start_ref = f"{self.bible_prefix}:{start[0]}:{start[1]}:{start[2]}"
+        end_ref = f"{self.bible_prefix}:{end[0]}:{end[1]}:{end[2]}"
+        rows = self.bible_db.query(
+            """
+            SELECT reference, text FROM bible
+            WHERE id >= (SELECT id FROM bible WHERE reference = ? LIMIT 1)
+              AND id <= (SELECT id FROM bible WHERE reference = ? LIMIT 1)
+            ORDER BY id
+            """,
+            (start_ref, end_ref),
         )
-        return self.clean_text(row[0][0]) if row else None
+        if not rows:
+            return None
+        verses = []
+        for ref, text in rows:
+            parts = self.parse_reference_parts(ref)
+            verse_text = self.clean_text(text)
+            if parts and len(rows) > 1:
+                verses.append(f"{parts['verse']}. {verse_text}")
+            else:
+                verses.append(verse_text)
+        return " ".join(verses)
+
+    def get_crossref_preview(self, tsk_ref):
+        return self.get_crossref_text(tsk_ref)
 
     def get_navigation_reference(self, current_ref, direction):
         refs = self.get_ordered_refs()
@@ -2163,10 +2246,10 @@ Find Strong's entries by number, transliteration, or English gloss:
         table.add_column("Rank", style="dim", justify="right", no_wrap=True)
         table.add_column("Link", style="verse.ref", no_wrap=True)
         table.add_column("Weight", style="bold cyan", justify="right", no_wrap=True)
-        table.add_column("Preview", style="verse.text", overflow="fold")
+        table.add_column("Text", style="verse.text", overflow="fold")
         for idx, (to_ref, votes) in enumerate(refs, 1):
-            preview = self.get_crossref_preview(to_ref)
-            table.add_row(str(idx), to_ref, str(votes), preview[:180] if preview else "")
+            text = self.get_crossref_text(to_ref)
+            table.add_row(str(idx), self.format_tsk_display_ref(to_ref), str(votes), text or "")
         console.print(table)
 
         spark = Text()
@@ -2174,7 +2257,7 @@ Find Strong's entries by number, transliteration, or English gloss:
             if idx > 1:
                 spark.append("  ", style="dim")
             spark.append("●", style="gold3" if idx == 1 else "cyan")
-            spark.append(f" {to_ref}", style="dim")
+            spark.append(f" {self.format_tsk_display_ref(to_ref)}", style="dim")
         console.print(Panel(spark, title="Connection Trail", border_style="ui.border"))
         console.print(f"[dim]Open a link: lex read <ref>  |  Study center: lex study {book} {chap}:{verse}[/]")
         self.save_history(db_ref)
@@ -2527,7 +2610,7 @@ Find Strong's entries by number, transliteration, or English gloss:
         table.add_column("Preview", overflow="fold", ratio=7)
         for to_ref, votes in refs:
             preview = self.get_crossref_preview(to_ref)
-            table.add_row(to_ref, str(votes), preview or "")
+            table.add_row(self.format_tsk_display_ref(to_ref), str(votes), preview[:140] if preview else "")
         console.print(table)
         if anchor_words:
             console.print("[dim]Verse-level TSK links; local data has no per-word anchor. Key terms: {}[/]".format(", ".join(anchor_words)))
@@ -2858,6 +2941,87 @@ Find Strong's entries by number, transliteration, or English gloss:
                 parts["verse"],
             )
 
+    def find_source_variant_label(self, book, chapter, verse):
+        for start_book, start_ch, start_v, end_book, end_ch, end_v, label in SOURCE_VARIANT_RANGES:
+            if book not in {start_book, end_book}:
+                continue
+            if start_book == end_book:
+                if book == start_book and (start_ch, start_v) <= (chapter, verse) <= (end_ch, end_v):
+                    return label
+                continue
+            if book == start_book and chapter == start_ch and verse >= start_v:
+                return label
+            if book == end_book and chapter == end_ch and verse <= end_v:
+                return label
+        return None
+
+    def resolve_study_source_route(self, db_ref):
+        parts = self.parse_reference_parts(db_ref)
+        if not parts:
+            return None
+        if parts["version"] == "esv":
+            return {
+                "source_ref": db_ref,
+                "target_base": "ESV interlinear",
+                "confidence": "direct",
+                "status": "direct",
+                "label": None,
+                "warning": None,
+            }
+        if parts["version"] != "gen":
+            return None
+
+        canon_book = self.reverse_canon_map.get(parts["book"], parts["book"])
+        book_for_group = "Psalms" if canon_book == "Psalm" else canon_book
+        if book_for_group in PROTESTANT_OT_BOOKS:
+            target_base = "Masoretic Hebrew / Aramaic tradition"
+        elif book_for_group in PROTESTANT_NT_BOOKS:
+            target_base = "Textus Receptus / Reformation Greek tradition"
+        else:
+            return {
+                "source_ref": None,
+                "target_base": "unmapped",
+                "confidence": "unmapped",
+                "status": "unmapped",
+                "label": "Geneva source layer: unmapped",
+                "warning": "This Geneva book is readable here, but Lex does not yet have a selected source-language study layer for it.",
+            }
+
+        source_ref = f"esv:{canon_book}:{parts['chapter']}:{parts['verse']}"
+        variant_label = self.find_source_variant_label(canon_book, parts["chapter"], parts["verse"])
+        if variant_label:
+            return {
+                "source_ref": source_ref,
+                "target_base": target_base,
+                "confidence": "variant/proxy",
+                "status": "variant",
+                "label": f"Geneva source target: {target_base}",
+                "warning": (
+                    f"{variant_label}: Geneva/TR tradition includes this unit, while many modern critical editions "
+                    "omit or bracket it. Any local interlinear row shown below is a labeled proxy, not Geneva's textual authority."
+                ),
+            }
+        return {
+            "source_ref": source_ref,
+            "target_base": target_base,
+            "confidence": "proxy",
+            "status": "proxy",
+            "label": f"Geneva source target: {target_base}",
+            "warning": "Local interlinear data is used as a proxy for now; it is not being treated as Geneva's textual authority.",
+        }
+
+    def display_source_route_notice(self, route):
+        if not route or not route.get("label"):
+            return
+        body = Text()
+        body.append(f"{route['label']}\n", style="text.strong")
+        body.append(f"Confidence: {route['confidence']}", style="ui.meta")
+        warning = route.get("warning")
+        if warning:
+            body.append("\n\n", style="ui.meta")
+            body.append(warning, style="warning")
+        console.print(Panel(body, title="Source Path", border_style="warning", padding=(1, 2)))
+
     def display_study(self, db_ref, animate=None, actions=None, context=True):
         parts = self.parse_reference_parts(db_ref)
         if parts and parts["version"] == "lxx":
@@ -2866,23 +3030,31 @@ Find Strong's entries by number, transliteration, or English gloss:
             console.print(Panel("No local LXX study data found for this verse.", border_style="warning"))
             return False
 
-        if parts and parts["version"] != "esv":
+        route = self.resolve_study_source_route(db_ref)
+        if parts and parts["version"] != "esv" and not route:
             console.print(Panel(
                 f"Interlinear study data is only available for ESV-backed references right now.\n\n"
                 f"Read view is using {parts['version'].upper()}; run `lex study {parts['book']} {parts['chapter']}:{parts['verse']}` without `-B {parts['version']}` for the ESV interlinear packet.",
                 border_style="warning"
             ))
             return False
+        study_ref = route["source_ref"] if route and route.get("source_ref") else db_ref
+        if route and not route.get("source_ref"):
+            if context:
+                self.display_study_context(db_ref)
+            self.display_source_route_notice(route)
+            return False
 
         index = self.get_interlinear_index()
-        row = index.get(db_ref)
+        row = index.get(study_ref)
 
         # If no exact match (likely due to version prefix mismatch), try to find by book:chap:verse
         if not row or not row.get("p"):
-            if parts:
+            study_parts = self.parse_reference_parts(study_ref)
+            if study_parts:
                 # Use reverse canon map to get the canonical book name (e.g. "Ps" -> "Psalm")
-                canon_book = self.reverse_canon_map.get(parts["book"], parts["book"])
-                generic_suffix = f":{canon_book}:{parts['chapter']}:{parts['verse']}"
+                canon_book = self.reverse_canon_map.get(study_parts["book"], study_parts["book"])
+                generic_suffix = f":{canon_book}:{study_parts['chapter']}:{study_parts['verse']}"
 
                 # The index keys in interlinear JSON look like "esv:Genesis:1:1" or "esv:Psalm:1:1"
                 for k, v in index.items():
@@ -2896,12 +3068,16 @@ Find Strong's entries by number, transliteration, or English gloss:
         parsed_tokens = [self.parse_interlinear_token(token) for token in row["p"]]
         if context:
             self.display_study_context(db_ref)
+        self.display_source_route_notice(route)
         self.pause_study_section(animate)
         self.display_source_text(parsed_tokens)
         self.pause_study_section(animate)
+        table_title = f"🔤 Study: {db_ref}"
+        if study_ref != db_ref:
+            table_title = f"🔤 Study: {db_ref} via {study_ref}"
         if console.width < 88:
             verse_table = Table(
-                title=f"🔤 Study: {db_ref}",
+                title=table_title,
                 box=None,
                 expand=True,
                 pad_edge=False,
@@ -2917,7 +3093,7 @@ Find Strong's entries by number, transliteration, or English gloss:
                 )
         else:
             verse_table = Table(
-                title=f"🔤 Study: {db_ref}",
+                title=table_title,
                 box=None,
                 expand=True,
                 pad_edge=False,
@@ -2997,7 +3173,7 @@ Find Strong's entries by number, transliteration, or English gloss:
             console.print(Panel(topics_text, title="🏷️ Topical Associations (Nave's)", border_style="ui.border"))
 
         self.pause_study_section(animate)
-        self.display_study_tsk(db_ref, parsed_tokens)
+        self.display_study_tsk(study_ref, parsed_tokens)
         use_actions = console.is_terminal if actions is None else actions
         if use_actions:
             self.prompt_study_actions(db_ref)
@@ -4194,25 +4370,19 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
 
         display_ref = self.format_display_ref(db_ref)
 
-        # Get cross refs from cross_refs.db
-        res = self.cross_refs_db.query(
-            "SELECT to_ref, votes FROM cross_refs WHERE from_ref = ? ORDER BY votes DESC LIMIT 15",
-            (db_ref,)
-        )
-
         connections = []
-        for target, votes in res:
-            t_row = self.bible_db.query("SELECT text FROM bible WHERE reference = ? LIMIT 1", (target,))
-            if t_row:
+        for target, votes in self.get_tsk_crossrefs(db_ref)[:15]:
+            text = self.get_crossref_text(target)
+            if text:
                 connections.append({
-                    "reference": self.format_display_ref(target),
+                    "reference": self.format_tsk_display_ref(target),
                     "votes": votes,
-                    "text": self.clean_text(t_row[0])
+                    "text": text,
                 })
 
         return {
             "display_ref": display_ref,
-            "verse": self.clean_text(verse_row[0]),
+            "verse": self.clean_text(verse_row[0][0]),
             "connections": connections
         }
 

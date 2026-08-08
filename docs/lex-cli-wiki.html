@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lex CLI Wiki</title>
+  <title>Lex CLI Docs</title>
   <meta name="description" content="End-user and developer reference for the Lex Bible study CLI.">
   <style>
     :root {
@@ -60,11 +60,36 @@
       padding: 48px 32px 72px;
     }
 
+    footer {
+      margin-top: 64px;
+      padding-top: 28px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .94rem;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 650;
+    }
+
+    footer a:hover { text-decoration: underline; }
+
     .brand {
       margin: 0 0 6px;
       font-size: 1.35rem;
       line-height: 1.1;
       font-weight: 750;
+    }
+
+    .brand a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .brand a:hover {
+      color: var(--accent);
     }
 
     .subtitle {
@@ -270,7 +295,7 @@
 <body>
   <div class="layout">
     <aside>
-      <p class="brand">Lex CLI Wiki</p>
+      <p class="brand"><a href="/lex/">Lex CLI Docs</a></p>
       <p class="subtitle">A compact reference for using and maintaining Lex.</p>
       <nav aria-label="Page navigation">
         <p class="group">User Guide</p>
@@ -296,7 +321,7 @@
     <main>
       <header class="hero" id="overview">
         <p class="eyebrow">Local-first Bible study CLI</p>
-        <h1>Lex CLI Wiki</h1>
+        <h1>Lex CLI Docs</h1>
         <p class="lead">Lex reads Scripture, searches local Bible databases, opens interlinear study views, maps cross-references, browses creeds, and exports study work from the terminal.</p>
         <div class="meta-row" aria-label="Key facts">
           <span class="pill">Version 2.5</span>
@@ -627,6 +652,11 @@ python3 ./lex.py define heliodorus</code></pre>
         <pre><code>type -a lex
 head -5 ~/.local/bin/lex</code></pre>
       </section>
+      <footer>
+        &copy; 2026 Lex CLI<br>
+        A project of <a href="https://jesuspeoplesf.com">Jesus People SF</a> (a 501c3 ministry)<br>
+        and <a href="https://apocalypse.press">Apocalypse Press</a>
+      </footer>
     </main>
   </div>
 </body>

@@ -22,6 +22,9 @@ Thumbs.db
 # Local config
 .lexrc
 
+# Private pre-public project work
+pre-public/
+
 # Built Bible edition databases
 bible_versions/*.db
 
