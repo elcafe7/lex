@@ -4,7 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lex-bible"
+
 version = "2.5.1"
+
 authors = [
   { name="elcafe7", email="nate@jesuspeoplesf.com" },
 ]

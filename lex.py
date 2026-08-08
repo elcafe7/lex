@@ -1003,6 +1003,39 @@ def fill_terminal_row(text, style="text"):
         rendered.append(" " * remaining, style=style)
     return rendered
 
+def study_note_excerpt(value, limit=520):
+    text = re.sub(r"\s+", " ", str(value or "").replace("__", "")).strip()
+    if len(text) <= limit:
+        return text
+    cut = text.rfind(" ", 0, limit)
+    if cut < int(limit * 0.65):
+        cut = limit
+    return text[:cut].rstrip(" ,.;:") + "..."
+
+def study_analysis_text(parsed):
+    analysis = Text()
+    source = f"{parsed['surface']} ({parsed['translit']})" if parsed["surface"] else "-"
+    lemma = f"{parsed['lemma']} ({parsed['lemma_translit']})" if parsed["lemma"] else "-"
+    code = parsed["strongs"] or parsed["morph"] or "-"
+    gloss = parsed["gloss"] or parsed["english"] or "-"
+    analysis.append("Src ", style="dim")
+    analysis.append(source, style="source.text")
+    analysis.append("\nLemma ", style="dim")
+    analysis.append(lemma, style="lexicon.word")
+    analysis.append("\nCode ", style="dim")
+    analysis.append(code, style="interlinear.strongs")
+    analysis.append(" · Gloss ", style="dim")
+    analysis.append(gloss, style="text")
+    return analysis
+
+def study_lexicon_text(lemma, details):
+    note = Text()
+    note.append(lemma or "-", style="lexicon.word")
+    if details:
+        note.append("\n")
+        note.append(details, style="text")
+    return note
+
 # ---------------------------------------------------------------------------
 # Database and application coordinator
 # ---------------------------------------------------------------------------
@@ -2344,13 +2377,18 @@ Find Strong's entries by number, transliteration, or English gloss:
                 )
             )
 
-        table = Table(title=f"LXX Interlinear: {self.format_display_ref(db_ref)}", box=None)
-        table.add_column("#", style="dim", justify="right", no_wrap=True)
-        table.add_column("Greek", style="source.text", overflow="fold")
-        table.add_column("Lemma", style="lexicon.word", overflow="fold")
-        table.add_column("Gloss", style="text", overflow="fold")
-        table.add_column("Morph", style="interlinear.strongs", overflow="fold")
-        table.add_column("Syntax", style="dim", overflow="fold")
+        table = Table(
+            title=f"LXX Interlinear: {self.format_display_ref(db_ref)}",
+            box=None,
+            expand=True,
+            pad_edge=False,
+        )
+        table.add_column("#", style="dim", justify="right", no_wrap=True, width=3)
+        table.add_column("Greek", style="source.text", overflow="fold", ratio=3)
+        table.add_column("Lemma", style="lexicon.word", overflow="fold", ratio=3)
+        table.add_column("Gloss", style="text", overflow="fold", ratio=3)
+        table.add_column("Morph", style="interlinear.strongs", overflow="fold", ratio=2)
+        table.add_column("Syntax", style="dim", overflow="fold", ratio=2)
         for token in tokens[:30]:
             strongs = token["strongs"]
             is_candidate = False
@@ -2379,10 +2417,19 @@ Find Strong's entries by number, transliteration, or English gloss:
 
         strong_tokens = [token for token in tokens if token["strongs"]]
         if strong_tokens:
-            lex_table = Table(title="LXX Greek Lexicon Notes", box=None)
-            lex_table.add_column("Strongs", style="lexicon.num")
-            lex_table.add_column("Lemma", style="lexicon.word", overflow="fold")
-            lex_table.add_column("Details", overflow="fold")
+            narrow_notes = console.width < 88
+            lex_table = Table(
+                title="LXX Greek Lexicon Notes",
+                box=None,
+                expand=True,
+                pad_edge=False,
+            )
+            lex_table.add_column("Strongs", style="lexicon.num", no_wrap=True, width=7)
+            if narrow_notes:
+                lex_table.add_column("Notes", overflow="fold", ratio=1)
+            else:
+                lex_table.add_column("Lemma", style="lexicon.word", overflow="fold", ratio=2)
+                lex_table.add_column("Details", overflow="fold", ratio=8)
             seen = set()
             for token in strong_tokens:
                 strongs = token["strongs"]
@@ -2398,21 +2445,30 @@ Find Strong's entries by number, transliteration, or English gloss:
                     step_def = entry["step"].get("definition", "")
                     step_def = re.sub(r'<br\s*/?>', ' ', step_def, flags=re.IGNORECASE)
                     step_def = re.sub(r'<[^>]+>', '', step_def)
-                    pieces.append(step_def[:400])
+                    pieces.append(study_note_excerpt(step_def))
                 elif entry["interlinear"]:
-                    pieces.append(entry["interlinear"].get("d", "")[:400])
+                    pieces.append(study_note_excerpt(entry["interlinear"].get("d", "")))
                 elif entry["db"]:
-                    pieces.append(entry["db"][3][:400])
-                lex_table.add_row(strongs, lemma or "-", " | ".join(piece for piece in pieces if piece) or "-")
+                    pieces.append(study_note_excerpt(entry["db"][3]))
+                details = " | ".join(piece for piece in pieces if piece) or "-"
+                if narrow_notes:
+                    lex_table.add_row(strongs, study_lexicon_text(lemma or "-", details))
+                else:
+                    lex_table.add_row(strongs, lemma or "-", details)
                 if len(seen) >= 12:
                     break
             console.print(lex_table)
         candidate_tokens = [token for token in tokens if not token["strongs"] and token.get("candidate_strongs")]
         if candidate_tokens:
-            lex_table = Table(title="LXX Candidate Strong's Notes", box=None)
-            lex_table.add_column("Candidate", style="lexicon.num")
-            lex_table.add_column("Lemma", style="lexicon.word", overflow="fold")
-            lex_table.add_column("Evidence", overflow="fold")
+            lex_table = Table(
+                title="LXX Candidate Strong's Notes",
+                box=None,
+                expand=True,
+                pad_edge=False,
+            )
+            lex_table.add_column("Candidate", style="lexicon.num", no_wrap=True, width=9)
+            lex_table.add_column("Lemma", style="lexicon.word", overflow="fold", ratio=2)
+            lex_table.add_column("Evidence", overflow="fold", ratio=8)
             seen = set()
             for token in candidate_tokens:
                 strongs = token["candidate_strongs"]
@@ -2460,13 +2516,18 @@ Find Strong's entries by number, transliteration, or English gloss:
             anchor_words.append(word)
             if len(anchor_words) >= 10:
                 break
-        table = Table(title="🔗 Treasury of Scripture Knowledge", box=None)
-        table.add_column("Ref", style="verse.ref", no_wrap=True)
-        table.add_column("Votes", style="dim", justify="right")
-        table.add_column("Preview", overflow="fold")
+        table = Table(
+            title="🔗 Treasury of Scripture Knowledge",
+            box=None,
+            expand=True,
+            pad_edge=False,
+        )
+        table.add_column("Ref", style="verse.ref", no_wrap=True, ratio=2, min_width=10)
+        table.add_column("Votes", style="dim", justify="right", no_wrap=True, width=5)
+        table.add_column("Preview", overflow="fold", ratio=7)
         for to_ref, votes in refs:
             preview = self.get_crossref_preview(to_ref)
-            table.add_row(to_ref, str(votes), preview[:140] if preview else "")
+            table.add_row(to_ref, str(votes), preview or "")
         console.print(table)
         if anchor_words:
             console.print("[dim]Verse-level TSK links; local data has no per-word anchor. Key terms: {}[/]".format(", ".join(anchor_words)))
@@ -2859,29 +2920,60 @@ Find Strong's entries by number, transliteration, or English gloss:
         self.pause_study_section(animate)
         self.display_source_text(parsed_tokens)
         self.pause_study_section(animate)
-        verse_table = Table(title=f"🔤 Study: {db_ref}", box=None)
-        verse_table.add_column("Eng", style="text.strong", overflow="fold")
-        verse_table.add_column("Src", style="source.text", overflow="fold")
-        verse_table.add_column("Lemma", style="lexicon.word", overflow="fold")
-        verse_table.add_column("Code", style="interlinear.strongs")
-        verse_table.add_column("Gloss", style="text", overflow="fold")
-        for parsed in parsed_tokens[:30]:
-            code = parsed["strongs"] or parsed["morph"] or "-"
-            gloss = parsed["gloss"] or parsed["english"] or "-"
-            verse_table.add_row(
-                parsed["english"] or "•",
-                f"{parsed['surface']} ({parsed['translit']})" if parsed["surface"] else "•",
-                f"{parsed['lemma']} ({parsed['lemma_translit']})" if parsed["lemma"] else "•",
-                code,
-                gloss,
+        if console.width < 88:
+            verse_table = Table(
+                title=f"🔤 Study: {db_ref}",
+                box=None,
+                expand=True,
+                pad_edge=False,
             )
+            verse_table.add_column("#", style="dim", justify="right", no_wrap=True, width=3)
+            verse_table.add_column("Token", style="text.strong", overflow="fold", ratio=2, min_width=10)
+            verse_table.add_column("Analysis", overflow="fold", ratio=6, min_width=28)
+            for idx, parsed in enumerate(parsed_tokens[:30], start=1):
+                verse_table.add_row(
+                    str(idx),
+                    parsed["english"] or "•",
+                    study_analysis_text(parsed),
+                )
+        else:
+            verse_table = Table(
+                title=f"🔤 Study: {db_ref}",
+                box=None,
+                expand=True,
+                pad_edge=False,
+            )
+            verse_table.add_column("Eng", style="text.strong", overflow="fold", ratio=2)
+            verse_table.add_column("Src", style="source.text", overflow="fold", ratio=3)
+            verse_table.add_column("Lemma", style="lexicon.word", overflow="fold", ratio=3)
+            verse_table.add_column("Code", style="interlinear.strongs", no_wrap=True, width=6)
+            verse_table.add_column("Gloss", style="text", overflow="fold", ratio=2)
+            for parsed in parsed_tokens[:30]:
+                code = parsed["strongs"] or parsed["morph"] or "-"
+                gloss = parsed["gloss"] or parsed["english"] or "-"
+                verse_table.add_row(
+                    parsed["english"] or "•",
+                    f"{parsed['surface']} ({parsed['translit']})" if parsed["surface"] else "•",
+                    f"{parsed['lemma']} ({parsed['lemma_translit']})" if parsed["lemma"] else "•",
+                    code,
+                    gloss,
+                )
         console.print(verse_table)
 
         self.pause_study_section(animate)
-        lex_table = Table(title="📚 Lexicon Notes", box=None)
-        lex_table.add_column("Strongs", style="lexicon.num")
-        lex_table.add_column("Lemma", style="lexicon.word", overflow="fold")
-        lex_table.add_column("Details", overflow="fold")
+        narrow_notes = console.width < 88
+        lex_table = Table(
+            title="📚 Lexicon Notes",
+            box=None,
+            expand=True,
+            pad_edge=False,
+        )
+        lex_table.add_column("Strongs", style="lexicon.num", no_wrap=True, width=7)
+        if narrow_notes:
+            lex_table.add_column("Notes", overflow="fold", ratio=1)
+        else:
+            lex_table.add_column("Lemma", style="lexicon.word", overflow="fold", ratio=2)
+            lex_table.add_column("Details", overflow="fold", ratio=8)
         seen = set()
         for parsed in parsed_tokens:
             strongs = parsed["strongs"]
@@ -2897,16 +2989,20 @@ Find Strong's entries by number, transliteration, or English gloss:
                 step_def = entry["step"].get("definition", "")
                 step_def = re.sub(r'<br\s*/?>', ' ', step_def, flags=re.IGNORECASE)
                 step_def = re.sub(r'<[^>]+>', '', step_def)
-                pieces.append(step_def[:400])
+                pieces.append(study_note_excerpt(step_def))
             elif entry["interlinear"]:
-                pieces.append(entry["interlinear"].get("d", "")[:400])
+                pieces.append(study_note_excerpt(entry["interlinear"].get("d", "")))
             elif entry["db"]:
-                pieces.append(entry["db"][3][:400])
+                pieces.append(study_note_excerpt(entry["db"][3]))
             if entry["step"] and entry["step"].get("translit"):
                 lemma = f"{lemma} ({entry['step']['translit']})"
             elif entry["db"]:
                 lemma = f"{lemma} ({entry['db'][2]})"
-            lex_table.add_row(strongs, lemma or "-", " | ".join(piece for piece in pieces if piece) or "-")
+            details = " | ".join(piece for piece in pieces if piece) or "-"
+            if narrow_notes:
+                lex_table.add_row(strongs, study_lexicon_text(lemma or "-", details))
+            else:
+                lex_table.add_row(strongs, lemma or "-", details)
             if len(seen) >= 12:
                 break
         console.print(lex_table)
