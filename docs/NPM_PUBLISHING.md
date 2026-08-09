@@ -1,4 +1,4 @@
-# Publishing `lex-cli` to npm
+# Publishing `@n8te_/lex-cli` to npm
 
 `lex-cli` is intentionally a small Node launcher. The Lex application and its
 offline runtime data are distributed as a GitHub release archive instead of an

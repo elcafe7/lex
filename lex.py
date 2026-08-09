@@ -13,6 +13,7 @@ import sys
 import re
 import json
 import argparse
+from collections import Counter
 import shlex
 import time
 import html
@@ -145,11 +146,15 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.5.1"
+VERSION = "2.6.0"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 QUERY_HISTORY_FILE = os.path.expanduser("~/.lex_query_history")
 QUERY_HISTORY_LIMIT = 200
 CONFIG_FILE = os.path.expanduser("~/.lex_config.json")
+MANUSCRIPT_CACHE_DIR = os.path.expanduser("~/.cache/lex/manuscripts")
+# The browser UI lives on apocalypse.press, while its generated data assets are
+# served from Poeta's static /lex-web/ tree.
+MANUSCRIPT_WEB_BASE = "https://poeta.icu/lex-web/"
 
 # Local-first path resolution. Clones ship the compact runtime data bundle
 # (SQLite DBs and JSON) under runtime-data/, while local developer worktrees
@@ -177,7 +182,8 @@ BIBLE_VERSIONS = {
     "nasb": {"name": "New American Standard Bible (1995)", "file": "bible_versions/nasb.db"},
     "gen": {"name": "Geneva Bible (1587)", "file": "bible_versions/gen.db"},
     "lxx": {"name": "Septuagint (Rahlfs 1935)", "file": "bible_versions/lxx.db"},
-    "vulg": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db"},
+    "vulg": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db", "latin_db": "latin.db", "type": "latin"},
+    "vulgate": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db", "latin_db": "latin.db", "type": "latin", "alias": "vulg"},
 }
 
 def get_bible_path(bible_id):
@@ -388,6 +394,7 @@ LXX_REFERENCE_BOOK_ALIASES_RAW = {
 TSK_TO_BOOK = {abbr.rstrip("."): book for book, abbr in TSK_BOOK_ABBR.items()}
 BIBLE_BOOKS = list(TSK_BOOK_ABBR.keys())
 BIBLE_BOOK_INDEX = {book: idx for idx, book in enumerate(BIBLE_BOOKS)}
+MANUSCRIPT_NT_BOOKS = set(BIBLE_BOOKS[BIBLE_BOOK_INDEX["Matthew"]:])
 PROTESTANT_OT_BOOKS = set(BIBLE_BOOKS[:39])
 PROTESTANT_NT_BOOKS = set(BIBLE_BOOKS[39:])
 SOURCE_VARIANT_RANGES = [
@@ -1077,6 +1084,14 @@ class LexDB:
             cursor.execute(sql, params)
             return cursor.fetchall()
 
+    def word_frequencies(self):
+        """Return surface-word frequencies from the active Bible text."""
+        counts = Counter()
+        with sqlite3.connect(self.db_path) as conn:
+            for (text,) in conn.execute("SELECT text FROM bible"):
+                counts.update(re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", text.lower()))
+        return counts
+
 class LexAgent:
     # LexAgent owns all local data access and terminal rendering. The CLI parser
     # at the bottom should stay thin and dispatch into these feature methods.
@@ -1087,6 +1102,13 @@ class LexAgent:
         self.db = LexDB(LEXICON_DB_PATH)
         bible_path = get_bible_path(bible_id)
         self.bible_db = LexDB(bible_path if os.path.exists(bible_path) else LEXICON_DB_PATH)
+
+        # Load Latin database for Vulgate semantic tagging
+        self.latin_db = None
+        if bible_id == "vulg" or (hasattr(self, 'bible_prefix') and self.bible_prefix == "vulg"):
+            latin_path = get_lex_path("latin.db")
+            if os.path.exists(latin_path):
+                self.latin_db = LexDB(latin_path)
 
         # Determine reference prefix from bible metadata
         self.bible_prefix = "esv"
@@ -1292,6 +1314,78 @@ class LexAgent:
             return None
         return " AND ".join(f'"{term}"' for term in terms)
 
+    def fts_any_terms_query(self, query):
+        terms = re.findall(r"\w+", query)
+        if not terms:
+            return None
+        return " OR ".join(f'"{term}"' for term in terms)
+
+    def edit_distance(self, source, target):
+        """Damerau-Levenshtein distance, including adjacent transpositions."""
+        if source == target:
+            return 0
+        if not source:
+            return len(target)
+        if not target:
+            return len(source)
+        previous_previous = None
+        previous = list(range(len(target) + 1))
+        for source_idx, source_char in enumerate(source, 1):
+            current = [source_idx]
+            for target_idx, target_char in enumerate(target, 1):
+                value = min(
+                    current[target_idx - 1] + 1,
+                    previous[target_idx] + 1,
+                    previous[target_idx - 1] + (source_char != target_char),
+                )
+                if (
+                    previous_previous is not None
+                    and source_idx > 1
+                    and target_idx > 1
+                    and source_char == target[target_idx - 2]
+                    and source[source_idx - 2] == target_char
+                ):
+                    value = min(value, previous_previous[target_idx - 2] + 1)
+                current.append(value)
+            previous_previous, previous = previous, current
+        return previous[-1]
+
+    def fuzzy_search_query(self, query):
+        """Correct missing search tokens against words in the selected Bible."""
+        tokens = re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?|\d+", query)
+        if not tokens:
+            return query, []
+        if not hasattr(self, "_bible_word_frequencies"):
+            self._bible_word_frequencies = self.bible_db.word_frequencies()
+        frequencies = self._bible_word_frequencies
+        vocabulary = list(frequencies)
+        corrected = []
+        changes = []
+        for token in tokens:
+            lowered = token.lower()
+            if lowered in frequencies or len(lowered) < 4 or not lowered.isalpha():
+                corrected.append(token)
+                continue
+            max_distance = 1 if len(lowered) <= 5 else 2 if len(lowered) <= 9 else 3
+            candidates = (
+                word for word in vocabulary
+                if abs(len(word) - len(lowered)) <= max_distance
+                and word[0] == lowered[0]
+            )
+            best = None
+            for candidate in candidates:
+                distance = self.edit_distance(lowered, candidate)
+                if distance > max_distance:
+                    continue
+                score = (distance, -frequencies[candidate], candidate)
+                if best is None or score < best[0]:
+                    best = (score, candidate)
+            replacement = best[1] if best else token
+            corrected.append(replacement)
+            if replacement != token:
+                changes.append((token, replacement))
+        return " ".join(corrected), changes
+
     def parse_book_scope(self, token):
         raw = token.strip()
         if not raw.startswith("-") or raw.startswith("--"):
@@ -1379,6 +1473,37 @@ class LexAgent:
             return None
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    def load_manuscript_asset(self, relative_path):
+        """Load a bundled/cached manuscript shard, fetching it only if absent."""
+        if not relative_path or relative_path.startswith(('/', '\\')) or '..' in relative_path.split('/'):
+            return None
+        local_path = get_lex_path(relative_path)
+        cache_path = os.path.join(MANUSCRIPT_CACHE_DIR, *relative_path.split('/'))
+        for path in (local_path, cache_path):
+            try:
+                payload = self.load_json_file(path)
+                if payload is not None:
+                    return payload
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
+
+        request = urllib.request.Request(
+            MANUSCRIPT_WEB_BASE + relative_path,
+            headers={"User-Agent": f"Lex/{VERSION}"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+            temp_path = f"{cache_path}.{os.getpid()}.tmp"
+            with open(temp_path, "w", encoding="utf-8") as cache_file:
+                json.dump(payload, cache_file, ensure_ascii=False, separators=(",", ":"))
+            os.replace(temp_path, cache_path)
+            return payload
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            self._manuscript_error = str(exc)
+            return None
 
     def get_interlinear_index(self):
         if self._interlinear_index is None:
@@ -1711,6 +1836,7 @@ class LexAgent:
         primary.add_row("Read:", "lex read John 3:16  (Context with navigation)")
         primary.add_row("Study:", "lex study John 3:16  (Interlinear + lexicon)")
         primary.add_row("Search:", 'lex search "mustard seed"  (Ranked search results)')
+        primary.add_row("Manuscript Map:", "lex manuscript <verse|name>  (Readings, witnesses, profile)")
         primary.add_row("Strong's Lookup:", "lex strongs love  or  lex G3056")
 
         also = Table.grid(padding=(0, 2))
@@ -1868,6 +1994,59 @@ See: `~/bible-lexicon-data/docs/LICENSING.md`
         )
         console.print(Panel(Group(table, "", note), border_style="ui.border", padding=(1, 2)))
 
+    def display_vulgate_study(self, db_ref, animate=None):
+        """Display Vulgate text with Latin semantic tagging from latin.db"""
+        if not self.latin_db:
+            return False
+
+        parts = self.parse_reference_parts(db_ref)
+        if not parts:
+            return False
+
+        # Get Vulgate text
+        text_row = self.bible_db.query("SELECT text FROM bible WHERE reference = ?", (db_ref,))
+        if not text_row:
+            return False
+        vulgate_text = text_row[0][0]
+
+        self.pause_study_section(animate)
+        console.print(
+            Panel(
+                Text(vulgate_text, style="source.text"),
+                title=f"Vulgate (Clementine) • {db_ref}",
+                border_style="source.border",
+                padding=(1, 2),
+            )
+        )
+
+        # Simple word lookup from latin.db
+        words = re.findall(r'\b\w+\b', vulgate_text.lower())
+        table = Table(title="Latin Semantic Tags", box=None, expand=True)
+        table.add_column("Latin", style="source.text", no_wrap=True)
+        table.add_column("POS", style="dim", width=8)
+        table.add_column("Definition", style="text", overflow="fold")
+
+        seen = set()
+        for word in words[:12]:  # limit for display
+            if word in seen:
+                continue
+            seen.add(word)
+            entry = self.latin_db.query(
+                "SELECT headword, part_of_speech, definition FROM latin WHERE normalized = ? LIMIT 1",
+                (word,)
+            )
+            if entry:
+                headword, pos, definition = entry[0]
+                definition = definition[:80] + "..." if len(definition) > 80 else definition
+                table.add_row(headword, pos or "-", definition)
+
+        if table.rows:
+            console.print(table)
+        else:
+            console.print(Panel("No Latin dictionary entries found for these words.", border_style="dim"))
+
+        return True
+
     def display_study_landing(self):
         md = """
 # Lex Study
@@ -1934,8 +2113,12 @@ Use explicit search mode:
 *   `lex search "mustard seed"`
 *   `lex search kingdom heaven`
 
-Search starts with an exact phrase match. If that finds nothing, Lex falls back
-to an all-terms match.
+Search ranks an exact phrase first, then includes verses containing all words.
+If nothing matches, Lex corrects likely misspellings and, as a final fallback,
+shows verses containing any of the words. Corrections are always shown.
+
+Search only matches verse text, not book names stored in reference metadata.
+Use a scope when you mean a book: `lex search light -john`.
 
 ## Page Controls
 
@@ -2059,6 +2242,201 @@ Notes from multiple traditions are displayed in sequential themed blocks
 (Henry in Blue, Calvin in Magenta) for immediate visual comparison.
 """
         console.print(Markdown(md))
+
+    def display_manuscript_howto(self):
+        md = """
+# Manuscript Map
+
+Look up a Bible verse to compare its available manuscript readings, or look up
+a manuscript by semantic name / Gregory-Aland number:
+
+*   `lex manuscript John 1:1`
+*   `lex manuscript Isaiah 53:11`
+*   `lex manuscript P66`
+*   `lex manuscript 1Qisaa`
+
+Use `--limit 25` to show more readings and witnesses. Shards are read from the
+local data pack or cache first; missing shards are fetched from Lex Web and
+cached for later offline use.
+"""
+        console.print(Panel(Markdown(md), title="Manuscripts", border_style="ui.border", expand=False))
+
+    def manuscript_verse_path(self, query):
+        ref_norm, book, chapter, verse, _ = self.normalize_ref(query)
+        if not ref_norm or not verse:
+            return None, None
+        canonical_book = self.reverse_canon_map.get(book, book)
+        if canonical_book == "Psalms":
+            canonical_book = "Psalm"
+        slug = re.sub(r"[^a-z0-9]+", "-", canonical_book.lower()).strip("-")
+        collection = "verses" if canonical_book in MANUSCRIPT_NT_BOOKS else "ot-verses"
+        reference = f"{canonical_book} {int(chapter)}:{int(verse)}"
+        return f"witnesses/{collection}/{slug}/{slug}-{int(chapter)}-{int(verse)}.json", reference
+
+    def render_manuscript_verse(self, payload, limit=10):
+        coverage = payload.get("coverage") or {}
+        reference = payload.get("reference") or "Manuscript readings"
+        summary = Table.grid(padding=(0, 2))
+        summary.add_column(style="ui.meta", no_wrap=True)
+        summary.add_column(style="text", overflow="fold")
+        summary.add_row("Reference", reference)
+        summary.add_row(
+            "Coverage",
+            f"{coverage.get('unique_witnesses', 0)} unique witnesses · "
+            f"{coverage.get('reading_groups', 0)} reading groups · "
+            f"{coverage.get('rendered_instances', 0)} rendered instances",
+        )
+        source_rows = payload.get("sources") or ([payload.get("source")] if payload.get("source") else [])
+        source_label = " · ".join(
+            f"{source.get('name', 'Unknown source')} ({source.get('license') or source.get('license_note') or 'license noted upstream'})"
+            for source in source_rows
+        )
+        if source_label:
+            summary.add_row("Source", source_label)
+        console.print(Panel(summary, title=f"Manuscripts · {reference}", border_style="source.border"))
+
+        base_text = payload.get("base_text") or {}
+        if base_text.get("text"):
+            console.print(Panel(
+                Text(base_text["text"], style="source.text"),
+                title=base_text.get("label") or "Collation base",
+                subtitle=base_text.get("note") or None,
+                border_style="source.border",
+            ))
+
+        readings = payload.get("readings") or []
+        if readings:
+            table = Table(title="Reading groups", border_style="ui.border", expand=True)
+            table.add_column("#", justify="right", style="ui.meta", width=3)
+            table.add_column("Reading", style="source.text", overflow="fold")
+            table.add_column("Witnesses", style="text", overflow="fold")
+            table.add_column("Flags", style="warning", overflow="fold")
+            for reading in readings[:limit]:
+                witnesses = []
+                for witness in reading.get("witnesses") or []:
+                    label = witness.get("label") or witness.get("id") or "?"
+                    instance = witness.get("instance")
+                    witnesses.append(f"{label}({instance})" if instance and instance != "1" else label)
+                table.add_row(
+                    str(reading.get("count") or 0),
+                    reading.get("reading") or reading.get("display") or "-",
+                    ", ".join(witnesses) or "-",
+                    ", ".join(reading.get("flags") or []) or "-",
+                )
+            console.print(table)
+            if len(readings) > limit:
+                console.print(f"[ui.meta]Showing {limit} of {len(readings)} reading groups; rerun with --limit {min(50, len(readings))}.[/]")
+
+        witnesses = payload.get("witnesses") or []
+        if witnesses:
+            table = Table(title="Witness map", border_style="ui.border", expand=True)
+            table.add_column("Witness", style="verse.ref", no_wrap=True)
+            table.add_column("Tradition", style="ui.meta", no_wrap=True)
+            table.add_column("Reading", style="source.text", overflow="fold")
+            table.add_column("Flags", style="warning", overflow="fold")
+            for witness in witnesses[:limit]:
+                label = witness.get("label") or witness.get("id") or "?"
+                instance = witness.get("instance")
+                if instance and instance != "1":
+                    label += f" ({instance})"
+                table.add_row(
+                    label,
+                    witness.get("tradition") or "-",
+                    witness.get("plain") or witness.get("display") or "-",
+                    ", ".join(witness.get("flags") or []) or "-",
+                )
+            console.print(table)
+            if len(witnesses) > limit:
+                console.print(f"[ui.meta]Showing {limit} of {len(witnesses)} witnesses.[/]")
+        for note in payload.get("notes") or []:
+            console.print(f"[ui.meta]{note}[/]")
+        return True
+
+    def render_manuscript_profile(self, payload, limit=10):
+        profile = payload.get("profile") or {}
+        name = profile.get("primaryName") or profile.get("gaNum") or profile.get("id") or "Manuscript"
+        details = Table.grid(padding=(0, 2))
+        details.add_column(style="ui.meta", no_wrap=True)
+        details.add_column(style="text", overflow="fold")
+        details.add_row("Semantic name", name)
+        details.add_row("Internal ID", str(profile.get("id") or "-"))
+        date = " – ".join(str(value) for value in (profile.get("origEarly"), profile.get("origLate")) if value)
+        details.add_row("Date", date or "-")
+        details.add_row("Language", profile.get("language") or "-")
+        if profile.get("tradition"):
+            details.add_row("Tradition", profile["tradition"])
+        external = profile.get("external") or {}
+        if external.get("intfWorkspace"):
+            details.add_row("INTF", external["intfWorkspace"])
+        if external.get("sourceRepository"):
+            details.add_row("Source", external["sourceRepository"])
+        console.print(Panel(details, title=f"Manuscript · {name}", border_style="source.border"))
+
+        shelves = profile.get("shelfInstances") or []
+        if shelves:
+            table = Table(title="Shelf instances", border_style="ui.border", expand=True)
+            table.add_column("Institution", style="text")
+            table.add_column("Shelf", style="verse.ref")
+            table.add_column("Place", style="ui.meta")
+            table.add_column("Contents", style="text", overflow="fold")
+            for shelf in shelves[:limit]:
+                table.add_row(
+                    shelf.get("institution") or "-",
+                    shelf.get("shelfNumber") or "-",
+                    ", ".join(value for value in (shelf.get("place"), shelf.get("country")) if value) or "-",
+                    shelf.get("contentOverview") or shelf.get("leaves") or "-",
+                )
+            console.print(table)
+
+        coverage = payload.get("coverage") or {}
+        refs = coverage.get("poc_references") or []
+        if refs:
+            console.print(Panel(
+                "  ·  ".join(refs[:limit]),
+                title=f"Mapped references · {coverage.get('poc_reference_count', len(refs))}",
+                border_style="ui.border",
+            ))
+        samples = payload.get("samples") or []
+        if samples:
+            table = Table(title="Sample readings", border_style="ui.border", expand=True)
+            table.add_column("Reference", style="verse.ref", no_wrap=True)
+            table.add_column("Reading", style="source.text", overflow="fold")
+            table.add_column("Flags", style="warning", overflow="fold")
+            for sample in samples[:limit]:
+                table.add_row(
+                    sample.get("reference") or "-",
+                    sample.get("plain") or sample.get("display") or "-",
+                    ", ".join(sample.get("flags") or []) or "-",
+                )
+            console.print(table)
+        for link in external.get("links") or []:
+            console.print(f"[ui.meta]{link.get('label', 'External resource')}: {link.get('url', '')}[/]")
+        for note in payload.get("notes") or []:
+            console.print(f"[ui.meta]{note}[/]")
+        return True
+
+    def display_manuscript(self, query, limit=10):
+        path, reference = self.manuscript_verse_path(query)
+        if path:
+            payload = self.load_manuscript_asset(path)
+            if payload:
+                return self.render_manuscript_verse(payload, limit=min(max(limit, 1), 50))
+            console.print(f"[warning]No manuscript shard is available for {reference}.[/]")
+            if getattr(self, "_manuscript_error", None):
+                console.print("[ui.meta]The local cache was empty and Lex Web could not be reached.[/]")
+            return False
+
+        manifest = self.load_manuscript_asset("witnesses-profiles-manifest.json")
+        key = re.sub(r"^ga\s*", "", query.strip(), flags=re.IGNORECASE).lower()
+        profile_path = (manifest or {}).get("manuscripts", {}).get(key)
+        if not profile_path:
+            console.print(f"[warning]No manuscript profile matches {query}. Try P66, 1Qisaa, WLC, or a Bible reference.[/]")
+            return False
+        payload = self.load_manuscript_asset(profile_path)
+        if not payload:
+            console.print(f"[warning]The manuscript profile for {query} could not be loaded.[/]")
+            return False
+        return self.render_manuscript_profile(payload, limit=min(max(limit, 1), 50))
 
     def display_strongs_howto(self):
         md = """
@@ -3052,11 +3430,17 @@ Find Strong's entries by number, transliteration, or English gloss:
             console.print(Panel("No local LXX study data found for this verse.", border_style="warning"))
             return False
 
+        if parts and parts["version"] == "vulg":
+            if self.latin_db and self.display_vulgate_study(db_ref, animate=animate):
+                return True
+            console.print(Panel("Vulgate text loaded. Latin semantic tagging available from latin.db.", border_style="info"))
+            # Fall through to basic read view with Latin support
+
         route = self.resolve_study_source_route(db_ref)
-        if parts and parts["version"] != "esv" and not route:
+        if parts and parts["version"] not in ("esv", "vulg") and not route:
             console.print(Panel(
-                f"Interlinear study data is only available for ESV-backed references right now.\n\n"
-                f"Read view is using {parts['version'].upper()}; run `lex study {parts['book']} {parts['chapter']}:{parts['verse']}` without `-B {parts['version']}` for the ESV interlinear packet.",
+                f"Interlinear study data is only available for ESV and Vulgate right now.\n\n"
+                f"Read view is using {parts['version'].upper()}; run `lex study {parts['book']} {parts['chapter']}:{parts['verse']}` without `-v {parts['version']}` for the ESV interlinear packet.",
                 border_style="warning"
             ))
             return False
@@ -3653,6 +4037,11 @@ Find Strong's entries by number, transliteration, or English gloss:
         params = tuple(f"*:{book}:*" for book in scope["books"])
         return f" AND ({clauses})", params
 
+    def text_fts_query(self, fts_query):
+        # The FTS table also indexes `reference`; column qualification prevents
+        # `lex search john` from returning every verse whose reference is John.
+        return f"text : ({fts_query})"
+
     def query_search_results(self, fts_query, limit, offset, scope=None):
         scope_clause, scope_params = self.search_scope_clause(scope)
         return self.bible_db.query(
@@ -3660,49 +4049,106 @@ Find Strong's entries by number, transliteration, or English gloss:
             SELECT reference, text
             FROM bible_fts
             WHERE bible_fts MATCH ?
+            AND reference NOT GLOB '*:0'
             {scope_clause}
             ORDER BY rank
             LIMIT ? OFFSET ?
             """,
-            (fts_query, *scope_params, limit, offset)
+            (self.text_fts_query(fts_query), *scope_params, limit, offset)
+        )
+
+    def query_ranked_search_results(self, phrase_query, terms_query, limit, offset, scope=None):
+        """Return phrase hits first, followed by remaining all-term hits."""
+        scope_clause, scope_params = self.search_scope_clause(scope)
+        return self.bible_db.query(
+            f"""
+            WITH candidates AS (
+                SELECT rowid, reference, text, 0 AS tier, bm25(bible_fts) AS score
+                FROM bible_fts
+                WHERE bible_fts MATCH ? AND reference NOT GLOB '*:0'{scope_clause}
+                UNION ALL
+                SELECT rowid, reference, text, 1 AS tier, bm25(bible_fts) AS score
+                FROM bible_fts
+                WHERE bible_fts MATCH ? AND reference NOT GLOB '*:0'{scope_clause}
+            ), ranked AS (
+                SELECT rowid, reference, text, MIN(tier) AS tier, MIN(score) AS score
+                FROM candidates
+                GROUP BY rowid, reference, text
+            )
+            SELECT reference, text
+            FROM ranked
+            ORDER BY tier, score
+            LIMIT ? OFFSET ?
+            """,
+            (
+                self.text_fts_query(phrase_query), *scope_params,
+                self.text_fts_query(terms_query), *scope_params,
+                limit, offset,
+            )
         )
 
     def count_search_results(self, fts_query, scope=None):
         scope_clause, scope_params = self.search_scope_clause(scope)
         rows = self.bible_db.query(
-            f"SELECT COUNT(*) FROM bible_fts WHERE bible_fts MATCH ?{scope_clause}",
-            (fts_query, *scope_params)
+            f"SELECT COUNT(*) FROM bible_fts WHERE bible_fts MATCH ? AND reference NOT GLOB '*:0'{scope_clause}",
+            (self.text_fts_query(fts_query), *scope_params)
         )
         return rows[0][0] if rows else 0
 
     def resolve_search(self, query, page=1, limit=10):
         search_query, scope = self.parse_search_query_and_scope(query)
-        safe_query = self.escape_fts_query(search_query)
-        if not safe_query:
+        effective_query = search_query
+        phrase_query = self.escape_fts_query(effective_query)
+        terms_query = self.fts_terms_query(effective_query)
+        if not phrase_query or not terms_query:
             return None
-        mode = "phrase"
-        active_query = safe_query
+        corrections = []
         page = max(1, page)
         limit = min(max(1, limit), 50)
-        total = self.count_search_results(active_query, scope=scope)
+
+        total = self.count_search_results(terms_query, scope=scope)
+        if not total:
+            corrected_query, corrections = self.fuzzy_search_query(search_query)
+            if corrections:
+                corrected_phrase = self.escape_fts_query(corrected_query)
+                corrected_terms = self.fts_terms_query(corrected_query)
+                corrected_total = self.count_search_results(corrected_terms, scope=scope)
+                if corrected_total:
+                    effective_query = corrected_query
+                    phrase_query = corrected_phrase
+                    terms_query = corrected_terms
+                    total = corrected_total
+
+        mode = "term"
+        active_query = terms_query
+        phrase_total = 0
+        if total:
+            phrase_total = self.count_search_results(phrase_query, scope=scope)
+            if phrase_query != terms_query and phrase_total:
+                mode = "phrase first" if phrase_total < total else "phrase"
+                active_query = phrase_query if mode == "phrase" else terms_query
+            elif phrase_query != terms_query:
+                mode = "all terms"
+        else:
+            active_query = self.fts_any_terms_query(effective_query)
+            total = self.count_search_results(active_query, scope=scope) if active_query else 0
+            mode = "any terms"
+
         if total:
             page = min(page, ((total - 1) // limit) + 1)
         offset = (page - 1) * limit
-        res = self.query_search_results(active_query, limit, offset, scope=scope) if total else []
-        if not total:
-            terms_query = self.fts_terms_query(search_query)
-            if terms_query and terms_query != safe_query:
-                active_query = terms_query
-                mode = "all terms"
-                total = self.count_search_results(active_query, scope=scope)
-                if total:
-                    page = min(page, ((total - 1) // limit) + 1)
-                offset = (page - 1) * limit
-                res = self.query_search_results(active_query, limit, offset, scope=scope) if total else []
+        if mode == "phrase first":
+            res = self.query_ranked_search_results(
+                phrase_query, terms_query, limit, offset, scope=scope
+            )
+        else:
+            res = self.query_search_results(active_query, limit, offset, scope=scope) if total else []
         if not res:
             return None
         return {
             "query": search_query,
+            "effective_query": effective_query,
+            "corrections": corrections,
             "active_query": active_query,
             "mode": mode,
             "scope": scope,
@@ -3717,6 +4163,7 @@ Find Strong's entries by number, transliteration, or English gloss:
     def render_search_page(self, state, interactive=False):
         body = Text()
         query = state["query"]
+        effective_query = state.get("effective_query", query)
         page = state["page"]
         limit = state["limit"]
         offset = state["offset"]
@@ -3727,11 +4174,15 @@ Find Strong's entries by number, transliteration, or English gloss:
             parts = self.parse_reference_parts(ref)
             display_ref = self.format_display_ref(ref) if parts else ref
             body.append(f"{offset + idx:>3}. {display_ref}\n", style="verse.ref")
-            body.append_text(self.highlight_search_terms(self.clean_text(text), query))
+            body.append_text(self.highlight_search_terms(self.clean_text(text), effective_query))
             body.append("\n\n", style="dim")
         shown_end = offset + len(res)
         scope_label = f"  |  Scope: {scope['label']}" if scope else ""
-        footer = f"Mode: {state['mode']}{scope_label}  |  Showing {offset + 1}-{shown_end} of {total}"
+        footer = ""
+        if state.get("corrections"):
+            changes = ", ".join(f"{old} → {new}" for old, new in state["corrections"])
+            footer += f"Corrected: {changes}\n"
+        footer += f"Mode: {state['mode']}{scope_label}  |  Showing {offset + 1}-{shown_end} of {total}"
         query_arg = shlex.quote(query)
         if scope:
             query_arg = f"{query_arg} -{scope['label'].lower().replace(' ', '-').replace('--', '-')}"
@@ -4994,14 +5445,32 @@ def main():
             else:
                 protected_argv.append(token)
         raw_argv = protected_argv
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        prog="lex",
+        description="Lex: local-first Bible reading, study, search, and manuscript tools.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""commands:
+  lex John 3:16                    read a verse in context
+  lex study John 1:1               open interlinear and lexicon study
+  lex search "holy spirit" -nt     ranked, scoped scripture search
+  lex manuscript John 1:1          map readings and manuscript witnesses
+  lex manuscript P66               open a manuscript profile
+  lex web John 3:16                 map connected verses
+  lex strongs love                  search Strong's entries
+  lex naves grace                   browse Nave's topical index
+  lex commentary John 3:16         read available commentary
+  lex -v esv                        set the default Bible version
+
+Run `lex <command>` without an argument for command-specific help.
+""",
+    )
     parser.add_argument("query", nargs="*")
     parser.add_argument("-i", "--interlinear", action="store_true")
     parser.add_argument("-d", "--define", action="store_true")
     parser.add_argument("-c", "--creed", action="store_true")
     parser.add_argument("-s", "--strongs", action="store_true")
-    parser.add_argument("-v", "--version", nargs="?", const="__LIST__", help="List versions or switch to <id>")
-    parser.add_argument("-B", "--bible", type=str, default=None, choices=BIBLE_VERSIONS.keys(), help="Select Bible version for current command")
+    parser.add_argument("-v", "--version", type=str, default=None, help="Set Bible version (e.g. -v vulgate, -v kjv, -v esv)")
+    parser.add_argument("-B", "--bible", type=str, default=None, choices=BIBLE_VERSIONS.keys(), help="Select Bible version for current command (legacy)")
     parser.add_argument("--update", action="store_true", help="Check for and install data updates")
     theme_group = parser.add_mutually_exclusive_group()
     theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light")
@@ -5059,66 +5528,26 @@ def main():
             console.print(f"[error]Unknown Bible version: {target}[/]")
             sys.exit(1)
 
-    # Handle -v / --version
+    # Handle -v / --version cleanly
     if args.version:
-        if args.version == "__LIST__" and "--version" in raw_argv:
-            sys.stdout.write(f"Lex {VERSION}\n")
-            sys.exit(0)
-
-        # Case 1: lex -v <id> -> switch permanently
-        if args.version != "__LIST__" and args.version in BIBLE_VERSIONS:
-            if not bible_version_available(args.version):
-                print_missing_bible_version(args.version)
+        target = args.version.lower()
+        # Resolve alias (vulgate -> vulg)
+        if target in BIBLE_VERSIONS and BIBLE_VERSIONS[target].get("alias"):
+            target = BIBLE_VERSIONS[target]["alias"]
+        if target in BIBLE_VERSIONS:
+            if not bible_version_available(target):
+                print_missing_bible_version(target)
                 sys.exit(1)
-            save_bible_preference(args.version)
-            console.print(f"[success]Default Bible version set to [bold cyan]{args.version}[/] ({BIBLE_VERSIONS[args.version]['name']})[/]")
-            sys.exit(0)
-
-        # Case 2: lex -v -> display numbered menu
-        vids = list(BIBLE_VERSIONS.keys())
-        current_pref = load_bible_preference()
-
-        menu_table = Table(border_style="ui.border", box=box.SIMPLE_HEAVY)
-        menu_table.add_column("#", justify="right", style="ui.action.key", no_wrap=True)
-        menu_table.add_column("ID", style="bold cyan", no_wrap=True)
-        menu_table.add_column("Edition", style="text")
-        for i, vid in enumerate(vids, 1):
-            info = BIBLE_VERSIONS[vid]
-            edition = Text(info["name"], style="text")
-            if vid == current_pref:
-                edition.append("  current", style="bold green")
-            menu_table.add_row(str(i), vid, edition)
-
-        console.print(
-            Panel(
-                menu_table,
-                title=f"Lex {VERSION}",
-                subtitle="Select Default Bible Version",
-                border_style="cyan",
-                padding=(1, 2),
-                expand=False,
-            )
-        )
-
-        if not sys.stdin.isatty():
-            sys.exit(0)
-
-        console.print("[dim]Select a number to switch default, or 'q' to exit.[/]")
-
-        try:
-            choice = Prompt.ask("Selection", choices=[str(i) for i in range(1, len(vids)+1)] + ["q"], default="q", show_choices=False)
-        except EOFError:
-            sys.exit(0)
-
-        if choice != "q":
-            selected_vid = vids[int(choice) - 1]
-            if not bible_version_available(selected_vid):
-                print_missing_bible_version(selected_vid)
-                sys.exit(1)
-            save_bible_preference(selected_vid)
-            console.print(f"[success]Default Bible version set to [bold cyan]{selected_vid}[/] ({BIBLE_VERSIONS[selected_vid]['name']})[/]")
-
-        sys.exit(0)
+            save_bible_preference(target)
+            console.print(f"[success]Default Bible version set to [bold cyan]{target}[/] ({BIBLE_VERSIONS[target]['name']})[/]")
+            if len(args.query) == 0:
+                sys.exit(0)
+            # Continue with the query using the new default
+        else:
+            console.print(f"[error]Unknown Bible version: {target}[/]")
+            console.print(f"Available: {', '.join(BIBLE_VERSIONS.keys())}")
+            sys.exit(1)
+        # Interactive menu removed. Use `lex -v <id>` to switch version cleanly.
 
     # Handle persistent bible selection: "lex -B kjv" with no query
     if args.bible and not query:
@@ -5241,6 +5670,17 @@ def main():
         q = query[4:].strip()
         if not agent.display_verse_web(q, limit=args.limit):
             console.print("[warning]No verse web found.[/]")
+            sys.exit(1)
+        sys.exit(0)
+    elif query == "manuscript":
+        agent.display_manuscript_howto()
+        sys.exit(0)
+    elif query.startswith("manuscript "):
+        q = query[len("manuscript "):].strip()
+        if not q:
+            agent.display_manuscript_howto()
+            sys.exit(1)
+        if not agent.display_manuscript(q, limit=args.limit):
             sys.exit(1)
         sys.exit(0)
     elif query == "export":

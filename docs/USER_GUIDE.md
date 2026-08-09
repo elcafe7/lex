@@ -138,6 +138,10 @@ lex search israel
 lex search "kingdom of god"
 ```
 
+Lex searches verse text only. Exact phrases rank first, followed by verses that
+contain all search words. Likely typos are corrected and displayed in the result
+footer. To search within a book, add a scope such as `-john`.
+
 For common terms with many results, use pages:
 
 ```bash
@@ -186,6 +190,21 @@ The export menu can save the current result page as DOCX, PDF, or PPTX under:
 ```
 
 The explicit `--page` commands still work for scripts, copied commands, and non-interactive output.
+
+## Map Manuscripts
+
+Use a verse reference to compare available readings and witnesses, or a semantic
+manuscript name / Gregory-Aland number to inspect its profile:
+
+```bash
+lex manuscript John 1:1
+lex manuscript Isaiah 53:11
+lex manuscript P66
+lex manuscript 1Qisaa
+```
+
+Use `--limit 25` for more rows. Manuscript shards are local-cache-first; missing
+assets are fetched from Lex Web and retained in `~/.cache/lex/manuscripts/`.
 
 ## Look Up Strong's Numbers
 

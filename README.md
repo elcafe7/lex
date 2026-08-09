@@ -12,7 +12,7 @@ lex naves grace
 lex web Romans 1:1
 ```
 
-Current version: `2.5.1`
+Current version: `2.6.0`
 
 
 ---
@@ -52,10 +52,9 @@ Current version: `2.5.1`
 
 ## 🚀 Installation
 
-### Recommended: Full Git Install
-Lex is local-first and ships with several hundred MB of SQLite/JSON runtime
-data. The most reliable install is a full Git clone plus the setup script.
-Python 3.12 or newer is required:
+### Recommended: Full Git Install (most reliable)
+
+Lex ships with several hundred MB of offline runtime data (SQLite Bibles, lexicons, cross-references, creeds). The cleanest and most reliable way to install is a full Git checkout:
 
 ```bash
 git clone https://github.com/elcafe7/lex.git
@@ -63,33 +62,35 @@ cd lex
 ./setup.sh
 ```
 
-`setup.sh` creates a repo-local Python virtual environment, installs the Python
-dependencies, and writes a `lex` wrapper to `~/.local/bin`. The wrapper runs
-the checkout's `lex.py` directly, so local source changes take effect without a
-separate package reinstall.
+`setup.sh` does the following:
+- Creates a repo-local `.venv` (Python 3.12+ required)
+- Installs Python dependencies
+- Installs a `lex` wrapper into `~/.local/bin` that points at this checkout
 
-### Package Managers
-Homebrew, pip-from-GitHub, and Scoop installs are not the primary path right
-now because Lex runtime data is large and must be present for offline use. Use
-the full Git install above unless you are testing package-manager formulas.
+Local edits to `lex.py` or data files take effect immediately.
+
+### Alternative: npm launcher
+
+```bash
+npm install -g @n8te_/lex-cli
+```
+
+The npm package is a small Node.js launcher. On first run it downloads the matching GitHub release, verifies the checksum, sets up a Python environment, and caches it. Good for users who prefer a one-liner.
 
 ### Updating
-To update code in a Git checkout:
 
+**Update both code and dependencies**
 ```bash
 git pull
 ./setup.sh
 ```
 
-To refresh runtime data only:
-
+**Refresh only the offline runtime data** (Bibles, lexicons, etc.)
 ```bash
 lex update
 ```
 
-`lex update` is intentionally data-only. Application code updates should come
-from Git plus `./setup.sh`; the updater does not overwrite the installed CLI
-script.
+`lex update` is intentionally data-only and will not overwrite your local code changes.
 
 ---
 
@@ -126,6 +127,9 @@ and export. Study export supports DOCX/PDF packets and a PPTX verse slide.
 
 ### Search & Scopes
 Lex search is fast and scoped. You can search the whole Bible or narrow it down to specific canons.
+Phrase matches rank first, likely misspellings are corrected transparently, and
+book names in reference metadata do not create false results. Use `-john` to
+scope to John rather than relying on the word `john`.
 
 <p align="center">
   <img src="docs/images/search_results.png" width="800" alt="Search Results">
@@ -137,6 +141,22 @@ lex search covenant -nt        # Search only the New Testament
 lex search beast -major        # Search only Major Prophets
 lex search "holy spirit" -paul  # Search only Pauline Epistles
 ```
+
+---
+
+### Manuscript Map
+
+Map a verse to available manuscript readings, or inspect a manuscript profile:
+
+```bash
+lex manuscript John 1:1
+lex manuscript Isaiah 53:11
+lex manuscript P66
+lex manuscript 1Qisaa
+```
+
+Lex uses bundled or cached shards first. Missing shards are fetched individually
+from Lex Web and cached under `~/.cache/lex/manuscripts/` for offline reuse.
 
 ---
 

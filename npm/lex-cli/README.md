@@ -1,10 +1,10 @@
-# lex-cli
+# `@n8te_/lex-cli`
 
-`lex-cli` is the npm launcher for [Lex](https://github.com/elcafe7/lex), the
+`@n8te_/lex-cli` is the npm launcher for [Lex](https://github.com/elcafe7/lex), the
 local-first Bible study terminal.
 
 ```sh
-npm install --global lex-cli
+npm install --global @n8te_/lex-cli
 lex John 3:16
 ```
 
