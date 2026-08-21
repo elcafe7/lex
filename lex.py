@@ -5157,7 +5157,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
         table.add_column("English", style="text")
         table.add_column("Definition", overflow="fold")
         for number, word, pronunciation, definition, gloss in results:
-            table.add_row(number, word, pronunciation, gloss, definition[:120])
+            table.add_row(number, word, pronunciation, gloss, definition)
         console.print(table)
         return True
 
@@ -5194,7 +5194,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 (safe_query,)
             )
         for t, c, s in res:
-            console.print(Panel(Markdown(c[:1000]), title=f"📖 {t} ({s})", border_style="violet"))
+            console.print(Panel(Markdown(c), title=f"📖 {t} ({s})", border_style="violet"))
         return bool(res)
 
     def display_encyclopedia(self, query):
@@ -5240,7 +5240,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 (safe_query,)
             )
         for t, c, s in res:
-            console.print(Panel(Markdown(c[:1400]), title=f"📚 {t} ({s})", border_style="cyan"))
+            console.print(Panel(Markdown(c), title=f"📚 {t} ({s})", border_style="cyan"))
         return bool(res)
 
     def format_naves_entry(self, entry_text):
