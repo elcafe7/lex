@@ -27,6 +27,7 @@ MIT is the best fit for the CLI source code because it is simple, permissive, an
 Known local sources include:
 
 - **Bible text:** ESV via local bible-data/ESV-derived database. Bible translation text should be treated as permission/copyright-controlled and not relicensed by Lex.
+- **Douay-Rheims 1899:** public-domain Challoner revision from eBible.org `engDRA`. Do not treat other English Catholic translations as public domain.
 - **Cross-references:** Treasury of Scripture Knowledge data via OpenBible-style cross-reference data. Verify upstream terms before redistribution.
 - **Strong's data:** public-domain Strong's-style concordance/lexicon data, per project README.
 - **OpenScriptures Strong's XHTML:** local `strongs/strongs-dictionary.xhtml` states GPL-3.0. Because local notes differ, verify the exact Strong's source chain before public redistribution.
