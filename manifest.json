@@ -51,6 +51,11 @@
       "size": 23080960,
       "path": "runtime-data/strongs_refs.db"
     },
+    "runtime-data/bible_versions/dra.db": {
+      "hash": "17f7d92e2ffaa4ee7e945f46f8e9c5a6bfade6874aadaa31a478383e23e08b68",
+      "size": 18354176,
+      "path": "runtime-data/bible_versions/dra.db"
+    },
     "runtime-data/bible_versions/esv.db": {
       "hash": "95381930e3b5741dc62fec44dd44004af88fe287a75bd3c8673cf9f55a9199ad",
       "size": 16625664,
