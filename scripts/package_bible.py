@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Bible Packager Tool
-Converts structured Bible data (JSON, XML, CSV) into standardized SQLite 
+Converts structured Bible data (JSON, XML, CSV, VPL) into standardized SQLite
 databases compatible with the Lex CLI engine.
 """
 import sqlite3
@@ -312,6 +312,136 @@ def package_geneva_1587(xml_path, db_path):
     conn.close()
     print(f"Packaged Geneva 1587 into {db_path}")
 
+# eBible engDRA VPL book codes, in Catholic canon order.
+# Protestant overlapping books keep the same English names as KJV/ESV.
+DRA_1899_BOOKS = (
+    ("GEN", "Genesis"),
+    ("EXO", "Exodus"),
+    ("LEV", "Leviticus"),
+    ("NUM", "Numbers"),
+    ("DEU", "Deuteronomy"),
+    ("JOS", "Joshua"),
+    ("JDG", "Judges"),
+    ("RUT", "Ruth"),
+    ("1SA", "1 Samuel"),
+    ("2SA", "2 Samuel"),
+    ("1KI", "1 Kings"),
+    ("2KI", "2 Kings"),
+    ("1CH", "1 Chronicles"),
+    ("2CH", "2 Chronicles"),
+    ("EZR", "Ezra"),
+    ("NEH", "Nehemiah"),
+    ("TOB", "Tobit"),
+    ("JDT", "Judith"),
+    ("EST", "Esther"),
+    ("JOB", "Job"),
+    ("PSA", "Psalms"),
+    ("PRO", "Proverbs"),
+    ("ECC", "Ecclesiastes"),
+    ("SOL", "Song of Solomon"),
+    ("WIS", "Wisdom"),
+    ("SIR", "Sirach"),
+    ("ISA", "Isaiah"),
+    ("JER", "Jeremiah"),
+    ("LAM", "Lamentations"),
+    ("BAR", "Baruch"),
+    ("EZE", "Ezekiel"),
+    ("DAN", "Daniel"),
+    ("HOS", "Hosea"),
+    ("JOE", "Joel"),
+    ("AMO", "Amos"),
+    ("OBA", "Obadiah"),
+    ("JON", "Jonah"),
+    ("MIC", "Micah"),
+    ("NAH", "Nahum"),
+    ("HAB", "Habakkuk"),
+    ("ZEP", "Zephaniah"),
+    ("HAG", "Haggai"),
+    ("ZEC", "Zechariah"),
+    ("MAL", "Malachi"),
+    ("1MA", "1 Maccabees"),
+    ("2MA", "2 Maccabees"),
+    ("MAT", "Matthew"),
+    ("MAR", "Mark"),
+    ("LUK", "Luke"),
+    ("JOH", "John"),
+    ("ACT", "Acts"),
+    ("ROM", "Romans"),
+    ("1CO", "1 Corinthians"),
+    ("2CO", "2 Corinthians"),
+    ("GAL", "Galatians"),
+    ("EPH", "Ephesians"),
+    ("PHI", "Philippians"),
+    ("COL", "Colossians"),
+    ("1TH", "1 Thessalonians"),
+    ("2TH", "2 Thessalonians"),
+    ("1TI", "1 Timothy"),
+    ("2TI", "2 Timothy"),
+    ("TIT", "Titus"),
+    ("PHM", "Philemon"),
+    ("HEB", "Hebrews"),
+    ("JAM", "James"),
+    ("1PE", "1 Peter"),
+    ("2PE", "2 Peter"),
+    ("1JO", "1 John"),
+    ("2JO", "2 John"),
+    ("3JO", "3 John"),
+    ("JUD", "Jude"),
+    ("REV", "Revelation"),
+)
+DRA_VPL_LINE = re.compile(r"^([0-9]?[A-Z]{2,3}) (\d+):(\d+) (.*)$")
+
+def package_dra_1899(vpl_path, db_path):
+    """Packages Douay-Rheims 1899 American Edition from eBible VPL text."""
+    metadata = {
+        'edition_id': 'dra',
+        'edition_name': 'Douay-Rheims (1899 American Edition)',
+        'language': 'en',
+        'reference_prefix': 'dra'
+    }
+    conn = init_target_db(db_path, metadata)
+
+    code_to_name = {code: name for code, name in DRA_1899_BOOKS}
+    verses_by_book = {name: {} for _, name in DRA_1899_BOOKS}
+    unknown_codes = set()
+
+    with open(vpl_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.rstrip('\n')
+            if not line:
+                continue
+            match = DRA_VPL_LINE.match(line)
+            if not match:
+                continue
+            code, chap, verse, text = match.groups()
+            book_name = code_to_name.get(code)
+            if not book_name:
+                unknown_codes.add(code)
+                continue
+            key = (int(chap), int(verse))
+            if key not in verses_by_book[book_name]:
+                verses_by_book[book_name][key] = (chap, verse, text.strip())
+
+    if unknown_codes:
+        raise ValueError(f"Unknown DRA book codes: {sorted(unknown_codes)}")
+
+    bible_entries = []
+    fts_entries = []
+    for _, book_name in DRA_1899_BOOKS:
+        for key in sorted(verses_by_book[book_name]):
+            chap, verse, text = verses_by_book[book_name][key]
+            if not text:
+                continue
+            ref = f"dra:{book_name}:{chap}:{verse}"
+            bible_entries.append((ref, text))
+            fts_entries.append((ref, clean_text(text)))
+
+    conn.executemany("INSERT INTO bible (reference, text) VALUES (?, ?)", bible_entries)
+    conn.executemany("INSERT INTO bible_fts (reference, text) VALUES (?, ?)", fts_entries)
+    conn.commit()
+    conn.close()
+    print(f"Packaged Douay-Rheims 1899 into {db_path}")
+
 if __name__ == "__main__":
     if len(sys.argv) < 4:
         print("Usage: python package_bible.py <type> <source_path> <target_db>")
@@ -327,4 +457,5 @@ if __name__ == "__main__":
     elif b_type == "gen1587": package_geneva_1587(source, target)
     elif b_type == "lxx": package_lxx(source, target)
     elif b_type == "vulg": package_vulgate(source, target)
+    elif b_type == "dra1899": package_dra_1899(source, target)
     else: print(f"Unknown type: {b_type}")

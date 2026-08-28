@@ -91,6 +91,7 @@ lex -B lxx Genesis 1:1      # Reads the Septuagint
 lex -B lxx Genesis 1:1 -i   # LXX study path, in progress
 lex -B kjv Genesis 1:1 -i   # Reads KJV context, then reports that KJV interlinear is unavailable
 lex -B vulg John 1:1 -i     # Vulgate study path, in progress
+lex -B dra John 3:16        # Reads Douay-Rheims 1899, including the deuterocanon
 ```
 
 In an interactive terminal, study sections can appear with a subtle pause between them. Turn this off or force it with:
@@ -278,6 +279,7 @@ To use a different version for just one command without changing your default:
 
 ```bash
 lex -B lxx Genesis 1:1  # Read the Septuagint once
+lex -B dra Tobit 1:1    # Read Douay-Rheims 1899 once
 ```
 
 By default, Lex uses the **ESV (English Standard Version)**.

@@ -46,6 +46,11 @@
       "size": 4059136,
       "path": "runtime-data/strongs.db"
     },
+    "runtime-data/bible_versions/dra.db": {
+      "hash": "17f7d92e2ffaa4ee7e945f46f8e9c5a6bfade6874aadaa31a478383e23e08b68",
+      "size": 18354176,
+      "path": "runtime-data/bible_versions/dra.db"
+    },
     "runtime-data/bible_versions/esv.db": {
       "hash": "95381930e3b5741dc62fec44dd44004af88fe287a75bd3c8673cf9f55a9199ad",
       "size": 16625664,
@@ -62,8 +67,8 @@
       "path": "runtime-data/bible_versions/kj16.db"
     },
     "runtime-data/bible_versions/kjv.db": {
-      "hash": "21b1f14cf6e6698c92df8af6d97d4a153397686ddcd32d1b5073fa376c24e231",
-      "size": 12587008,
+      "hash": "b6c72f4e4a9d85e4b859bb91cbe237b626ff78560d3b7410b9fabb8a3d8a3e98",
+      "size": 16515072,
       "path": "runtime-data/bible_versions/kjv.db"
     },
     "runtime-data/bible_versions/lxx.db": {

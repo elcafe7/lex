@@ -24,6 +24,7 @@ Examples:
 - `bible_versions/esv.db`
 - `bible_versions/kjv.db`
 - `bible_versions/nasb.db`
+- `bible_versions/dra.db`
 
 ## Required Tables
 

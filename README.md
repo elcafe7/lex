@@ -31,7 +31,7 @@ Current version: `2.5.1`
 
 | Feature | Description |
 | :--- | :--- |
-| **Multi-Version** | ESV, KJV (1769 & 1611), NASB '95, Geneva 1587, Septuagint (LXX), and Vulgate. |
+| **Multi-Version** | ESV, KJV (1769 & 1611), NASB '95, Geneva 1587, Douay-Rheims 1899, Septuagint (LXX), and Vulgate. |
 | **Unified Nave's** | Look up topics (e.g., `lex naves grace`) or find topical associations for any verse (e.g., `lex naves John 3:16`). |
 | **Interlinear Study** | Source text, transliteration, and lexicon notes in a surgically precise terminal view. |
 | **Verse Web** | Visualize local cross-reference connections ranked by relevance with instant previews. |
@@ -104,6 +104,7 @@ lex Romans 8         # Read a whole chapter
 lex --next           # Move to the next verse from your last position
 lex history          # Show recent Lex commands
 lex -B lxx Gen 1:1   # Read from the Septuagint
+lex -B dra John 3:16 # Read Douay-Rheims 1899
 ```
 
 ### Study Mode (`-i` or `study`)
@@ -187,6 +188,7 @@ lex -auto              # Revert to automatic detection
 ## 🗃️ Data Sources
 Lex is built on the shoulders of giants. Data is sourced from:
 - ESV-derived Bible database
+- Douay-Rheims 1899 American Edition (eBible.org engDRA, public domain)
 - CCAT LXX morphology and local Septuagint/apocrypha import
 - Treasury of Scripture Knowledge (OpenBible)
 - STEPBible & Strong's Lexicon data
