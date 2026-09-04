@@ -85,12 +85,15 @@ def package_kjv_modern(json_dir, db_path):
     bible_entries = []
     fts_entries = []
     
-    for filename in sorted(os.listdir(json_dir)):
-        if filename.endswith(".json") and filename not in ["lexicon.json", "books.json", "chapter_count.json"]:
-            book_abbr = filename.replace(".json", "")
-            full_book = book_map.get(book_abbr, book_abbr)
-            
-            with open(os.path.join(json_dir, filename), 'r', encoding='utf-8') as f:
+    # Iterate book_map (canonical Bible order) so row ids follow the canonical
+    # sequence; alphabetical filename order would break id-based navigation.
+    for book_abbr in book_map:
+        filename = f"{book_abbr}.json"
+        if filename not in os.listdir(json_dir):
+            print(f"Missing source file: {filename}")
+            continue
+        full_book = book_map[book_abbr]
+        with open(os.path.join(json_dir, filename), 'r', encoding='utf-8') as f:
                 try:
                     data = json.load(f)
                     book_data = data.get(book_abbr, {})
