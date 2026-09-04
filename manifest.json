@@ -62,8 +62,8 @@
       "path": "runtime-data/bible_versions/kj16.db"
     },
     "runtime-data/bible_versions/kjv.db": {
-      "hash": "21b1f14cf6e6698c92df8af6d97d4a153397686ddcd32d1b5073fa376c24e231",
-      "size": 12587008,
+      "hash": "b6c72f4e4a9d85e4b859bb91cbe237b626ff78560d3b7410b9fabb8a3d8a3e98",
+      "size": 16515072,
       "path": "runtime-data/bible_versions/kjv.db"
     },
     "runtime-data/bible_versions/lxx.db": {

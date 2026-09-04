@@ -5469,7 +5469,8 @@ Run `lex <command>` without an argument for command-specific help.
     parser.add_argument("-d", "--define", action="store_true")
     parser.add_argument("-c", "--creed", action="store_true")
     parser.add_argument("-s", "--strongs", action="store_true")
-    parser.add_argument("-v", "--version", type=str, default=None, help="Set Bible version (e.g. -v vulgate, -v kjv, -v esv)")
+    parser.add_argument("-v", dest="bible_version", type=str, default=None, help="Set Bible version (e.g. -v vulgate, -v kjv, -v esv)")
+    parser.add_argument("--version", action="version", version=VERSION)
     parser.add_argument("-B", "--bible", type=str, default=None, choices=BIBLE_VERSIONS.keys(), help="Select Bible version for current command (legacy)")
     parser.add_argument("--update", action="store_true", help="Check for and install data updates")
     theme_group = parser.add_mutually_exclusive_group()
@@ -5528,9 +5529,9 @@ Run `lex <command>` without an argument for command-specific help.
             console.print(f"[error]Unknown Bible version: {target}[/]")
             sys.exit(1)
 
-    # Handle -v / --version cleanly
-    if args.version:
-        target = args.version.lower()
+    # Handle -v Bible-version selection cleanly
+    if args.bible_version:
+        target = args.bible_version.lower()
         # Resolve alias (vulgate -> vulg)
         if target in BIBLE_VERSIONS and BIBLE_VERSIONS[target].get("alias"):
             target = BIBLE_VERSIONS[target]["alias"]
