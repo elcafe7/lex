@@ -213,6 +213,17 @@ Look up a Strong's number:
 ```bash
 lex G3056
 lex H7225
+lex strongs G3056
+```
+
+Number lookups show the lexicon entry and, when available, reverse verse usage
+from the bundled ESV interlinear index. Use pages or larger result limits when
+there are many verses:
+
+```bash
+lex strongs G3056 --page 2
+lex strongs G3056 --page 3 --limit 25
+lex strongs G3056 --all
 ```
 
 Search Strong's by English gloss:
@@ -220,6 +231,12 @@ Search Strong's by English gloss:
 ```bash
 lex strongs love
 lex strongs servant
+```
+
+Open the Strong's help page with:
+
+```bash
+lex strongs
 ```
 
 ## Define A Term

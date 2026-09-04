@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lex CLI Readme</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18202a;
+      --muted: #5c6877;
+      --line: #d9e0e8;
+      --panel: #f7f9fb;
+      --panel-strong: #eef3f7;
+      --accent: #1c6b63;
+      --accent-ink: #0f433e;
+      --code-bg: #111827;
+      --code-ink: #eef6ff;
+      --warn-bg: #fff7df;
+      --warn-line: #e8c35d;
+      --ok-bg: #edf8f2;
+      --ok-line: #6bb98b;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: var(--ink);
+      line-height: 1.55;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 56px;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      padding: 24px 0 28px;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 5vw, 4.2rem);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 40px 0 12px;
+      font-size: 1.45rem;
+      letter-spacing: 0;
+      scroll-margin-top: 18px;
+    }
+
+    h3 {
+      margin: 24px 0 8px;
+      font-size: 1.02rem;
+      letter-spacing: 0;
+      scroll-margin-top: 18px;
+    }
+
+    [id] { scroll-margin-top: 18px; }
+
+    p { margin: 0 0 14px; }
+
+    a {
+      color: var(--accent-ink);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      margin: 10px 0 18px;
+      padding: 16px;
+      overflow: auto;
+      border-radius: 8px;
+      background: var(--code-bg);
+      color: var(--code-ink);
+      line-height: 1.45;
+    }
+
+    pre code { color: inherit; }
+
+    .lede {
+      max-width: 780px;
+      font-size: 1.12rem;
+      color: var(--muted);
+    }
+
+    .version {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      font-size: 0.94rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+    }
+
+    .card h3 { margin-top: 0; }
+
+    .command-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .command-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+    }
+
+    .command-card h3 {
+      margin: 0 0 6px;
+    }
+
+    .command-card p {
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .expected {
+      display: block;
+      margin: 10px 0 14px;
+      padding: 10px 12px;
+      border: 1px solid rgba(217, 224, 232, 0.92);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.66);
+      color: var(--ink);
+      font-size: 0.9rem;
+    }
+
+    .expected strong {
+      color: var(--accent-ink);
+    }
+
+    .callout {
+      border-left: 4px solid var(--ok-line);
+      background: var(--ok-bg);
+      padding: 14px 16px;
+      margin: 18px 0;
+    }
+
+    .note {
+      border-left: 4px solid var(--warn-line);
+      background: var(--warn-bg);
+      padding: 14px 16px;
+      margin: 18px 0;
+    }
+
+    .page-nav {
+      position: fixed;
+      top: 24px;
+      right: max(16px, calc((100vw - 1120px) / 2 + 16px));
+      z-index: 20;
+      width: 136px;
+      padding: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.58);
+      border-radius: 8px;
+      background: rgba(247, 249, 251, 0.48);
+      box-shadow:
+        0 18px 44px rgba(24, 32, 42, 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.72);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+    }
+
+    .page-nav.is-collapsed {
+      width: auto;
+      padding: 6px;
+    }
+
+    .page-nav__top {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 4px;
+    }
+
+    .page-nav__toggle {
+      width: 24px;
+      height: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.58);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.42);
+      color: #111827;
+      font: inherit;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .page-nav__toggle:hover {
+      border-color: rgba(28, 107, 99, 0.48);
+      color: #111827;
+    }
+
+    .page-nav__links {
+      display: grid;
+      gap: 2px;
+    }
+
+    .page-nav a {
+      display: block;
+      padding: 4px 6px;
+      border-radius: 5px;
+      color: #111827;
+      text-decoration: none;
+      font-size: 0.78rem;
+      line-height: 1.25;
+    }
+
+    .page-nav a:hover {
+      background: rgba(28, 107, 99, 0.09);
+      color: #111827;
+    }
+
+    .page-nav.is-collapsed .page-nav__links {
+      display: none;
+    }
+
+    @media (max-width: 720px) {
+      .page-nav {
+        top: auto;
+        right: 12px;
+        bottom: 12px;
+        left: auto;
+        width: min(220px, calc(100vw - 24px));
+      }
+
+      .page-nav__links {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: var(--panel-strong); }
+    tr:last-child td { border-bottom: 0; }
+
+    ul {
+      padding-left: 22px;
+      margin: 10px 0 16px;
+    }
+
+    .footer {
+      margin-top: 44px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+  </style>
+</head>
+<body>
+  <aside class="page-nav" id="page-nav" aria-label="Page navigation">
+    <div class="page-nav__top">
+      <button class="page-nav__toggle" id="page-nav-toggle" type="button" aria-expanded="true" aria-controls="page-nav-links">-</button>
+    </div>
+    <nav class="page-nav__links" id="page-nav-links">
+      <a href="#install">Install</a>
+      <a href="#verify">Verify Install</a>
+      <a href="#try-it">Try It</a>
+      <a href="#commands">Commands</a>
+      <a href="#reading">Reading</a>
+      <a href="#study">Study</a>
+      <a href="#search">Search</a>
+      <a href="#strongs">Strong's</a>
+      <a href="#verse-web">Verse Web</a>
+      <a href="#reference-tools">Nave's Topics</a>
+      <a href="#manuscripts">Manuscripts</a>
+      <a href="#creeds">Creeds</a>
+      <a href="#define-commentary">Dictionary</a>
+      <a href="#export">Export</a>
+      <a href="#settings">Settings</a>
+      <a href="#maintenance">Maintenance</a>
+      <a href="#npm">Launcher</a>
+      <a href="#data">Data</a>
+    </nav>
+  </aside>
+  <main>
+    <header>
+      <h1>Lex CLI</h1>
+      <p class="lede">A local-first Bible study terminal for reading, searching, studying, exporting, and source-language work from a fast offline command line.</p>
+      <div class="version"><strong>Current version:</strong> <code>2.6.1</code></div>
+    </header>
+
+    <section id="install">
+      <h2>Install</h2>
+      <h3 id="npm-install">1. Install npm launcher</h3>
+      <pre><code>npm install --global @n8te_/lex-cli</code></pre>
+      <p>The npm package is a small Node.js launcher. On first run it downloads the latest Lex GitHub release archive, verifies the SHA-256 checksum, creates an isolated Python 3.12+ environment, installs dependencies, and caches the offline app under your user profile.</p>
+
+      <h3 id="verify">2. Verify install</h3>
+      <p><code>lex --version</code> may trigger the first-run download and Python setup. A successful install prints the Lex app version, currently <code>2.6.1</code>. <code>lex help</code> should open the command map.</p>
+      <pre><code>lex --version
+lex help</code></pre>
+
+      <h3 id="try-it">3. Try it</h3>
+      <pre><code>lex John 3:16
+lex search "kingdom of god"
+lex strongs G3056</code></pre>
+
+      <h3 id="git-install">Full Git install</h3>
+      <p>Use this path for development or local edits. It requires Python 3.12+, a normal POSIX shell, and execute permission for <code>setup.sh</code>.</p>
+      <pre><code>git clone https://github.com/elcafe7/lex.git
+cd lex
+./setup.sh</code></pre>
+      <p>Use the Git install when you are developing Lex or want local file edits to take effect immediately.</p>
+    </section>
+
+    <section id="commands">
+      <h2>Command Map</h2>
+      <p>Each command is local-first and returns a focused terminal panel. Use this map to choose the command by the kind of output you want.</p>
+      <div class="command-grid">
+        <div class="command-card" id="reading">
+          <h3>Reading</h3>
+          <p>Open a verse, range, or chapter with nearby context. This is the fastest way to read Scripture from the selected Bible edition.</p>
+          <span class="expected"><strong>Expected output:</strong> a clean passage panel with the requested reference highlighted in context.</span>
+          <pre><code>lex John 3:16
+lex read Romans 8
+lex --next
+lex --prev
+lex read all
+lex -B lxx Genesis 1:1</code></pre>
+        </div>
+        <div class="command-card" id="study">
+          <h3>Study</h3>
+          <p>Use this when you want the passage plus original-language data, interlinear rows, Strong's/STEPBible notes, topics, and cross-references.</p>
+          <span class="expected"><strong>Expected output:</strong> verse context followed by Greek/Hebrew source text, transliteration, aligned word rows, lexicon notes, Nave's topics, and TSK links when available.</span>
+          <pre><code>lex study John 1:1
+lex John 3:16 -i
+lex -B kjv Genesis 1:1 -i
+lex study Romans 1:1 --no-animate</code></pre>
+        </div>
+        <div class="command-card" id="search">
+          <h3>Search</h3>
+          <p>Find verses by word or phrase. Search matches verse text, supports paging, and can be scoped to books or canon sections.</p>
+          <span class="expected"><strong>Expected output:</strong> ranked verse hits with snippets, highlighted terms, result counts, <code>Page 1</code>, and next-page/more-per-page footer commands.</span>
+          <pre><code>lex search "kingdom of god"
+lex search Jeremiah --limit 3
+lex search covenant -nt
+lex search covenant --page 2 --limit 20</code></pre>
+        </div>
+        <div class="command-card" id="strongs">
+          <h3>Strong's</h3>
+          <p>Look up Greek or Hebrew Strong's entries, search entries by English gloss, or list verses where an indexed number appears.</p>
+          <span class="expected"><strong>Expected output:</strong> the Strong's number, lemma, definition, and reverse ESV verse usage for indexed numbers, with paging controls for large result sets.</span>
+          <pre><code>lex strongs
+lex G3056
+lex strongs G3056 --page 2 --limit 25
+lex strongs love</code></pre>
+        </div>
+        <div class="command-card" id="verse-web">
+          <h3>Verse Web</h3>
+          <p>Use this for a quick map of cross-reference connections around one verse, ranked by local relevance signals.</p>
+          <span class="expected"><strong>Expected output:</strong> a center verse with connected references, relevance scores, and short previews.</span>
+<pre><code>lex web John 3:16
+lex web Romans 1:1 --limit 8</code></pre>
+        </div>
+        <div class="command-card" id="reference-tools">
+          <h3>Nave's Topics</h3>
+          <p>Move between topics and verses. Search a topic directly, or give a verse to see its associated theological topics.</p>
+          <span class="expected"><strong>Expected output:</strong> topic headings with verse references, or a reverse-topic list for a specific verse.</span>
+          <pre><code>lex naves faith
+lex topic covenant
+lex naves John 3:16</code></pre>
+        </div>
+        <div class="command-card" id="manuscripts">
+          <h3>Manuscripts</h3>
+          <p>Compare readings and witnesses for a verse, or inspect a manuscript profile by identifier or common name.</p>
+          <span class="expected"><strong>Expected output:</strong> reading groups, witness lists, coverage notes, or a manuscript profile summary.</span>
+          <pre><code>lex manuscript John 1:1
+lex manuscript Isaiah 53:11
+lex manuscript P66
+lex manuscript 1Qisaa</code></pre>
+        </div>
+        <div class="command-card" id="creeds">
+          <h3>Creeds</h3>
+          <p>Open the historical document navigator or jump directly to a creed/confession by name.</p>
+          <span class="expected"><strong>Expected output:</strong> tradition-grouped document lists, section navigation, and bilingual text where available.</span>
+          <pre><code>lex creed
+lex creeds
+lex creed nicene
+lex creed westminster confession</code></pre>
+        </div>
+        <div class="command-card" id="define-commentary">
+          <h3>Dictionary And Commentary</h3>
+          <p>Use dictionary/encyclopedia lookup for terms, and commentary lookup for verse-level notes.</p>
+          <span class="expected"><strong>Expected output:</strong> local dictionary/encyclopedia entries or commentary excerpts tied to the requested term or reference.</span>
+          <pre><code>lex define grace
+lex define heliodorus
+lex commentary John 1:1
+lex commentary Romans 1:1</code></pre>
+        </div>
+        <div class="command-card" id="export">
+          <h3>Export</h3>
+          <p>Create shareable study packets, read-mode images/slides, verse web documents, or search result exports.</p>
+          <span class="expected"><strong>Expected output:</strong> an export prompt or a <code>Saved to ...</code> path under <code>~/Documents/lex_exports</code>.</span>
+          <pre><code>lex export "John 3:16"
+lex export "John 3:16" --mode read --format png
+lex export "Ephesians 1" --mode study --format pdf
+lex export "John 3:16" --mode web --format docx</code></pre>
+        </div>
+        <div class="command-card" id="settings">
+          <h3>Bible Version And Theme</h3>
+          <p>Choose a default Bible, override the Bible for one command, or force the terminal theme when auto-detection is wrong.</p>
+          <span class="expected"><strong>Expected output:</strong> a version picker or confirmation message; theme flags change the current and saved display preference.</span>
+          <pre><code>lex -v
+lex -v kjv
+lex -B nasb John 3:16
+lex -light
+lex -dark
+lex -auto</code></pre>
+        </div>
+        <div class="command-card" id="maintenance">
+          <h3>Maintenance</h3>
+          <p>Inspect local command history, move through reading position, refresh runtime data, or show version/source credits.</p>
+          <span class="expected"><strong>Expected output:</strong> history tables, next/previous passages, data update progress, version text, or source/license credits.</span>
+          <pre><code>lex history --limit 10
+lex history --clear
+lex update
+lex --credits
+lex --version</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="npm">
+      <h2>Launcher Details</h2>
+      <table>
+        <thead>
+          <tr><th>Command</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>lex --npm-version</code></td><td>Print the small Node launcher version without downloading the release archive.</td></tr>
+          <tr><td><code>lex --version</code></td><td>Print the Lex application version after resolving the release payload.</td></tr>
+          <tr><td><code>LEX_CLI_HOME=/path/to/lex lex</code></td><td>Point the launcher at an existing valid checkout for development.</td></tr>
+          <tr><td><code>LEX_CLI_RELEASE_TAG=v2.6.1 lex</code></td><td>Force a release tag for install testing.</td></tr>
+        </tbody>
+      </table>
+      <p>The launcher resolves GitHub's latest release during first-run install and falls back to the pinned release tag if that lookup is unavailable.</p>
+    </section>
+
+    <section id="data">
+      <h2>Runtime Data</h2>
+      <p>Lex runs from local SQLite and JSON stores after installation. The main bundled data areas are Bible editions, ESV interlinear packets, Strong's and STEPBible lexicons, reverse Strong's usage, Treasury of Scripture Knowledge cross-references, Nave's topics, dictionary/encyclopedia content, places, creeds, Septuagint data, and manuscript shards.</p>
+      <table>
+        <thead>
+          <tr><th>Data Area</th><th>Typical Path</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Bible editions</td><td><code>runtime-data/bible_versions/*.db</code></td></tr>
+          <tr><td>Strong's lexicon</td><td><code>runtime-data/strongs.db</code></td></tr>
+          <tr><td>Reverse Strong's index</td><td><code>runtime-data/strongs_refs.db</code></td></tr>
+          <tr><td>Cross-references</td><td><code>runtime-data/cross_refs.db</code></td></tr>
+          <tr><td>Creeds</td><td><code>runtime-data/creeds.db</code></td></tr>
+          <tr><td>Manuscript cache</td><td><code>~/.cache/lex/manuscripts/</code></td></tr>
+        </tbody>
+      </table>
+      <h3 id="verify-git-data">Developer/Data Integrity Verification</h3>
+      <p>For a Git checkout, verify runtime data files against the SHA-256 hashes in <code>manifest.json</code>:</p>
+      <pre><code>python3 - &lt;&lt;'PY'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(".")
+manifest = json.loads((root / "manifest.json").read_text())
+bad = []
+for rel, info in manifest["assets"].items():
+    path = root / rel
+    if not path.exists():
+        bad.append(f"missing {rel}")
+        continue
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest != info["hash"]:
+        bad.append(f"hash mismatch {rel}")
+if bad:
+    print("\n".join(bad))
+    sys.exit(1)
+print(f"Verified {len(manifest['assets'])} runtime assets for Lex {manifest['version']}.")
+PY</code></pre>
+      <p>If you install from a GitHub release archive instead of <code>git clone</code>, verify the archive sidecar before unpacking:</p>
+      <pre><code>curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.1/lex-v2.6.1.tar.gz
+curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.1/lex-v2.6.1.tar.gz.sha256
+shasum -a 256 -c lex-v2.6.1.tar.gz.sha256</code></pre>
+    </section>
+
+    <p class="footer">Generated from the current Lex CLI documentation state for version <code>2.6.1</code>.</p>
+  </main>
+  <script>
+    const pageNav = document.getElementById("page-nav");
+    const pageNavToggle = document.getElementById("page-nav-toggle");
+
+    pageNavToggle.addEventListener("click", () => {
+      const collapsed = pageNav.classList.toggle("is-collapsed");
+      pageNavToggle.textContent = collapsed ? "+" : "-";
+      pageNavToggle.setAttribute("aria-expanded", String(!collapsed));
+    });
+  </script>
+</body>
+</html>

@@ -69,13 +69,73 @@ cd lex
 
 Local edits to `lex.py` or data files take effect immediately.
 
+#### Verify Git checkout data
+
+For a Git install, the runtime data files are checked against the hashes in the
+checked-in `manifest.json`:
+
+```bash
+python3 - <<'PY'
+import hashlib, json, pathlib, sys
+root = pathlib.Path(".")
+manifest = json.loads((root / "manifest.json").read_text())
+bad = []
+for rel, info in manifest["assets"].items():
+    path = root / rel
+    if not path.exists():
+        bad.append(f"missing {rel}")
+        continue
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest != info["hash"]:
+        bad.append(f"hash mismatch {rel}")
+if bad:
+    print("\n".join(bad))
+    sys.exit(1)
+print(f"Verified {len(manifest['assets'])} runtime assets for Lex {manifest['version']}.")
+PY
+```
+
+If you are installing from a GitHub release archive instead of `git clone`, use
+the release checksum sidecar before unpacking:
+
+```bash
+curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.1/lex-v2.6.1.tar.gz
+curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.1/lex-v2.6.1.tar.gz.sha256
+shasum -a 256 -c lex-v2.6.1.tar.gz.sha256
+```
+
 ### Alternative: npm launcher
+
+```bash
+npm install -g @n8te_/lex-cli
+lex --version
+```
+
+The npm package is a small Node.js launcher. On first run it downloads the
+latest Lex GitHub release archive, verifies the SHA-256 checksum, creates an
+isolated Python environment, installs Python dependencies, and caches the full
+offline app under your user profile. Future runs reuse that cached install.
+
+Use the launcher when you want a one-line install:
 
 ```bash
 npm install -g @n8te_/lex-cli
 ```
 
-The npm package is a small Node.js launcher. On first run it downloads the matching GitHub release, verifies the checksum, sets up a Python environment, and caches it. Good for users who prefer a one-liner.
+Try it after install:
+
+```bash
+lex John 3:16
+lex search "kingdom of god"
+lex strongs G3056
+```
+
+For launcher diagnostics:
+
+```bash
+lex --npm-version      # Node launcher version
+lex --version          # Lex application version
+```
 
 ### Updating
 
@@ -140,7 +200,13 @@ lex search "kingdom of god"
 lex search covenant -nt        # Search only the New Testament
 lex search beast -major        # Search only Major Prophets
 lex search "holy spirit" -paul  # Search only Pauline Epistles
+lex search covenant --page 2 --limit 20
 ```
+
+Search results include footer commands for the next page and for increasing the
+number of results per page. Use explicit book/group scopes such as `-jeremiah`
+or `-nt`; a bare book name in the query is treated as text to search for, not
+metadata to match.
 
 ---
 
@@ -181,6 +247,10 @@ Lookup Strong's numbers or English definitions directly.
 ```bash
 lex G3056              # Lookup Greek 'Logos'
 lex H7225              # Lookup Hebrew 'Reshit'
+lex strongs G3056      # Entry plus ESV reverse verse usage
+lex strongs G3056 --page 2 --limit 25
+lex strongs G3056 --all
+lex strongs            # Strong's help and options
 lex define propitiation
 ```
 

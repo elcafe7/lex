@@ -20,7 +20,7 @@
 - Export search pages to DOCX/PDF/PPTX, study packets to DOCX/PDF, study verse slides to PPTX, and read-mode output to PNG/PPTX under `~/Documents/lex_exports`.
 - Browse creeds/confessions with tradition grouping and section navigation.
 - Define terms using dictionary and encyclopedia databases.
-- Look up Strong's entries by number or English gloss.
+- Look up Strong's entries by number or English gloss, including reverse ESV verse usage for indexed Strong's numbers.
 
 ## Key Runtime Paths
 
@@ -33,6 +33,7 @@ also use full upstream data directories beside `lex.py`.
 - `ENCYCLOPEDIA_DB_PATH`: `runtime-data/encyclopedia.db`
 - `CROSS_REFS_DB_PATH`: `runtime-data/cross_refs.db`
 - `STRONGS_DB_PATH`: `runtime-data/strongs.db`
+- `STRONGS_REFS_DB_PATH`: `runtime-data/strongs_refs.db`
 - `DICTIONARY_DB_PATH`: `runtime-data/dictionary.db`
 - `CREEDS_DB_PATH`: `runtime-data/creeds.db`
 - `PLACES_DB_PATH`: `runtime-data/places.db`
@@ -76,6 +77,9 @@ interlinear study is unavailable rather than falling back across source
 traditions by reference suffix.
 
 Search mode first tries an exact phrase FTS query. If that has no results, it falls back to an all-terms query.
+The FTS query is constrained to verse text and excludes heading rows, so a query
+like `lex search Jeremiah` returns verses where Jeremiah appears in the text
+rather than matching the book-name metadata for every verse in Jeremiah.
 
 Search scopes are parsed from single-dash tokens after the query:
 
@@ -93,6 +97,21 @@ Search and study exports use `python-docx` for DOCX, ReportLab for PDF, `python-
 Creed mode uses SQLite rows when available, but falls back to JSON files when the DB row is only a placeholder.
 
 Define mode shows both dictionary and encyclopedia results when both are available.
+
+Strong's mode supports a full help page with bare `lex strongs`, direct number
+lookups such as `lex strongs G3056`, direct shortcuts such as `lex G3056`,
+English/gloss lookups such as `lex strongs love`, and reverse verse usage
+paging:
+
+```bash
+lex strongs G3056 --page 2 --limit 25
+lex strongs G3056 --all
+```
+
+Reverse usage is built from `runtime-data/strongs_refs.db`, which is generated
+from the bundled ESV interlinear data by `scripts/build_strongs_refs_db.py`.
+When the active Bible edition has a matching canonical reference, Lex projects
+the reverse usage verse list into that selected edition's verse text.
 
 Theme selection happens before Rich initializes the global console. Lex checks,
 in order: explicit CLI flags, `LEX_THEME`, saved config, generic terminal/theme
@@ -136,6 +155,8 @@ python3 ./lex.py study James 1:1
 python3 ./lex.py -B lxx Genesis 1:1 -i --no-animate
 python3 ./lex.py search israel --limit 2
 python3 ./lex.py search covenant -major --limit 2
+python3 ./lex.py search Jeremiah --limit 2
+python3 ./lex.py strongs G3056 --limit 2
 python3 ./lex.py 2 jn 1:2
 python3 ./lex.py define heliodorus
 ```

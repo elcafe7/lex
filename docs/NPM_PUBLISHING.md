@@ -47,7 +47,7 @@ fails (offline, rate-limited, private network).
 Override for testing:
 
 ```sh
-LEX_CLI_RELEASE_TAG=v2.5.0 lex        # force a specific tag
+LEX_CLI_RELEASE_TAG=v2.6.1 lex        # force a specific tag
 LEX_CLI_RELEASE_BASE_URL=... lex      # force a mirror URL
 ```
 
