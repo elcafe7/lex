@@ -146,13 +146,29 @@ function validLexHome(directory) {
 }
 
 function pythonPath(directory) {
-  return path.join(directory, ".venv", "bin", "python");
+  return process.platform === "win32"
+    ? path.join(directory, ".venv", "Scripts", "python.exe")
+    : path.join(directory, ".venv", "bin", "python");
+}
+
+function dependenciesInstalled(directory) {
+  if (!fs.existsSync(pythonPath(directory))) return false;
+  const result = spawnSync(
+    pythonPath(directory),
+    ["-c", "import rich, docx, reportlab, pptx, PIL"],
+    { cwd: directory, stdio: "ignore" }
+  );
+  return result.status === 0;
 }
 
 function bootstrap(directory) {
-  if (fs.existsSync(pythonPath(directory))) return;
+  const venvPath = path.join(directory, ".venv");
+  if (!fs.existsSync(pythonPath(directory))) {
+    checked("python3", ["-c", "import sys; raise SystemExit(sys.version_info < (3, 12))"]);
+    checked("python3", ["-m", "venv", venvPath]);
+  }
+  if (dependenciesInstalled(directory)) return;
   checked("python3", ["-c", "import sys; raise SystemExit(sys.version_info < (3, 12))"]);
-  checked("python3", ["-m", "venv", path.join(directory, ".venv")]);
   checked(pythonPath(directory), ["-m", "pip", "install", "--no-cache-dir", "-r", "requirements.txt"], { cwd: directory });
 }
 
@@ -174,7 +190,14 @@ async function downloadRelease(tag) {
     const source = path.join(extraction, archiveRoot());
     if (!validLexHome(source)) throw new Error("release archive does not contain a valid Lex distribution");
     await fsp.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
-    await fsp.rename(source, destination);
+    try {
+      await fsp.rename(source, destination);
+    } catch (error) {
+      if (error && ["EEXIST", "ENOTEMPTY"].includes(error.code) && validLexHome(destination)) {
+        return destination;
+      }
+      throw error;
+    }
     return destination;
   } finally {
     await fsp.rm(temporary, { recursive: true, force: true });
@@ -203,4 +226,13 @@ async function main(args) {
   process.exitCode = result.status || 0;
 }
 
-module.exports = { archiveRoot, installRoot, releaseUrls, resolveReleaseTag, validLexHome, main };
+module.exports = {
+  archiveRoot,
+  installRoot,
+  releaseUrls,
+  resolveReleaseTag,
+  validLexHome,
+  pythonPath,
+  dependenciesInstalled,
+  main,
+};

@@ -82,10 +82,19 @@ class LexUpdateManager:
 
     def check_for_updates(self):
         remote = self.fetch_remote_manifest()
-        if not remote: return None, None
+        if not remote: return None, None, None
+
+        remote_version = remote.get("version")
+        assets = remote.get("assets")
+        if not isinstance(remote_version, str) or not isinstance(assets, dict):
+            self.console.print("[error]Update manifest is malformed.[/]")
+            return None, None, None
 
         updates_needed = []
-        for rel_path, info in remote.get("assets", {}).items():
+        for rel_path, info in assets.items():
+            if not isinstance(info, dict) or not isinstance(info.get("hash"), str):
+                self.console.print(f"[error]Update manifest has malformed asset metadata: {rel_path}[/]")
+                return None, None, None
             local_path = self.resolve_asset_path(rel_path)
             if not local_path:
                 continue
@@ -94,7 +103,7 @@ class LexUpdateManager:
             if local_hash != info["hash"]:
                 updates_needed.append(rel_path)
 
-        return updates_needed, remote["version"]
+        return updates_needed, remote_version, remote
 
     def ensure_data(self):
         """Ensures that essential data files exist. If not, trigger a full update."""
@@ -109,7 +118,7 @@ class LexUpdateManager:
         return os.path.exists(critical_file)
 
     def perform_update(self):
-        updates, remote_version = self.check_for_updates()
+        updates, remote_version, remote = self.check_for_updates()
         if updates is None:
             return False
 
@@ -127,13 +136,29 @@ class LexUpdateManager:
             if not target_path:
                 self.console.print(f"[error]Skipping unsafe manifest path: {rel_path}[/]")
                 return False
+            info = remote["assets"].get(rel_path, {})
+            expected_hash = info.get("hash")
+            expected_size = info.get("size")
+            if not isinstance(expected_hash, str) or not isinstance(expected_size, int):
+                self.console.print(f"[error]Skipping asset with malformed manifest metadata: {rel_path}[/]")
+                return False
 
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            tmp_path = target_path + ".tmp"
 
             try:
-                urllib.request.urlretrieve(url, target_path + ".tmp")
-                os.replace(target_path + ".tmp", target_path)
+                urllib.request.urlretrieve(url, tmp_path)
+                actual_hash = self.get_local_hash(tmp_path)
+                actual_size = os.path.getsize(tmp_path)
+                if actual_hash != expected_hash or actual_size != expected_size:
+                    raise ValueError(
+                        f"download verification failed for {rel_path}: "
+                        f"expected {expected_hash}/{expected_size}, got {actual_hash}/{actual_size}"
+                    )
+                os.replace(tmp_path, target_path)
             except Exception as e:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
                 self.console.print(f"[error]Failed to download {rel_path}: {e}[/]")
                 return False
 
@@ -146,7 +171,7 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.6.0"
+VERSION = "2.6.1"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 QUERY_HISTORY_FILE = os.path.expanduser("~/.lex_query_history")
 QUERY_HISTORY_LIMIT = 200
@@ -204,6 +229,7 @@ def print_missing_bible_version(bible_id):
 ENCYCLOPEDIA_DB_PATH = get_lex_path("encyclopedia.db")
 CROSS_REFS_DB_PATH = get_lex_path("cross_refs.db")
 STRONGS_DB_PATH = get_lex_path("strongs.db")
+STRONGS_REFS_DB_PATH = get_lex_path("strongs_refs.db")
 DICTIONARY_DB_PATH = get_lex_path("dictionary.db")
 CREEDS_DB_PATH = get_lex_path("creeds.db")
 PLACES_DB_PATH = get_lex_path("places.db")
@@ -1101,7 +1127,9 @@ class LexAgent:
 
         self.db = LexDB(LEXICON_DB_PATH)
         bible_path = get_bible_path(bible_id)
-        self.bible_db = LexDB(bible_path if os.path.exists(bible_path) else LEXICON_DB_PATH)
+        if not os.path.exists(bible_path):
+            raise FileNotFoundError(f"Bible database is not installed: {bible_path}")
+        self.bible_db = LexDB(bible_path)
 
         # Load Latin database for Vulgate semantic tagging
         self.latin_db = None
@@ -1156,6 +1184,7 @@ class LexAgent:
         self.encyclopedia_db = LexDB(ENCYCLOPEDIA_DB_PATH) if os.path.exists(ENCYCLOPEDIA_DB_PATH) else None
         self.cross_refs_db = LexDB(CROSS_REFS_DB_PATH if os.path.exists(CROSS_REFS_DB_PATH) else LEXICON_DB_PATH)
         self.strongs_db = LexDB(STRONGS_DB_PATH if os.path.exists(STRONGS_DB_PATH) else LEXICON_DB_PATH)
+        self.strongs_refs_db = LexDB(STRONGS_REFS_DB_PATH) if os.path.exists(STRONGS_REFS_DB_PATH) else None
         self.dictionary_db = LexDB(DICTIONARY_DB_PATH if os.path.exists(DICTIONARY_DB_PATH) else LEXICON_DB_PATH)
         self.creeds_db = LexDB(CREEDS_DB_PATH if os.path.exists(CREEDS_DB_PATH) else LEXICON_DB_PATH)
         self.places_db = LexDB(PLACES_DB_PATH if os.path.exists(PLACES_DB_PATH) else LEXICON_DB_PATH)
@@ -1447,7 +1476,7 @@ class LexAgent:
         if not terms:
             result.append(text, style="verse.text")
             return result
-        pattern = re.compile("(" + "|".join(re.escape(term) for term in terms) + ")", re.IGNORECASE)
+        pattern = re.compile(r"(?<!\w)(" + "|".join(re.escape(term) for term in terms) + r")(?!\w)", re.IGNORECASE)
         pos = 0
         for match in pattern.finditer(text):
             if match.start() > pos:
@@ -1599,6 +1628,30 @@ class LexAgent:
             "reference": db_ref,
         }
 
+    def project_ref_to_active_bible(self, db_ref):
+        parts = self.parse_reference_parts(db_ref)
+        if not parts:
+            return None
+        canon_book = self.reverse_canon_map.get(parts["book"], parts["book"])
+        db_book = self.canon_map.get(re.sub(r"[^a-z0-9]+", "", canon_book.lower()), canon_book)
+        return f"{self.bible_prefix}:{db_book}:{parts['chapter']}:{parts['verse']}"
+
+    def resolve_interlinear_row(self, db_ref):
+        index = self.get_interlinear_index()
+        row = index.get(db_ref)
+        if row and row.get("p"):
+            return row
+
+        parts = self.parse_reference_parts(db_ref)
+        if not parts:
+            return None
+        canon_book = self.reverse_canon_map.get(parts["book"], parts["book"])
+        generic_suffix = f":{canon_book}:{parts['chapter']}:{parts['verse']}"
+        for key, candidate in index.items():
+            if key.endswith(generic_suffix) and candidate.get("p"):
+                return candidate
+        return None
+
     def convert_to_tsk_ref(self, book, chapter, verse=None):
         prefix = TSK_BOOK_ABBR.get(book, book)
         if not prefix.endswith("."):
@@ -1687,6 +1740,63 @@ class LexAgent:
 
     def get_crossref_preview(self, tsk_ref):
         return self.get_crossref_text(tsk_ref)
+
+    def get_strongs_usage(self, strongs_id, page=1, limit=12, show_all=False):
+        if not self.strongs_refs_db:
+            return [], 0
+        _, _, index_key = self.normalize_strongs_key(strongs_id)
+        if not index_key:
+            return [], 0
+
+        total_row = self.strongs_refs_db.query(
+            "SELECT COUNT(*) FROM strongs_refs WHERE strongs = ?",
+            (index_key,),
+        )
+        total = total_row[0][0] if total_row else 0
+        if show_all:
+            rows = self.strongs_refs_db.query(
+                """
+                SELECT reference, token_count
+                FROM strongs_refs
+                WHERE strongs = ?
+                ORDER BY verse_order, reference
+                """,
+                (index_key,),
+            )
+        else:
+            page = max(1, int(page or 1))
+            limit = max(1, min(int(limit or 12), 250))
+            offset = (page - 1) * limit
+            rows = self.strongs_refs_db.query(
+                """
+                SELECT reference, token_count
+                FROM strongs_refs
+                WHERE strongs = ?
+                ORDER BY verse_order, reference
+                LIMIT ? OFFSET ?
+                """,
+                (index_key, limit, offset),
+            )
+        usage = []
+        for source_ref, token_count in rows:
+            target_ref = self.project_ref_to_active_bible(source_ref) or source_ref
+            verse_row = self.bible_db.query(
+                "SELECT text FROM bible WHERE reference = ? ORDER BY id LIMIT 1",
+                (target_ref,),
+            )
+            if not verse_row and target_ref != source_ref:
+                verse_row = self.bible_db.query(
+                    "SELECT text FROM bible WHERE reference = ? ORDER BY id LIMIT 1",
+                    (source_ref,),
+                )
+                target_ref = source_ref
+            usage.append({
+                "source_ref": source_ref,
+                "target_ref": target_ref,
+                "token_count": token_count,
+                "text": self.clean_text(verse_row[0][0]) if verse_row else "",
+            })
+        return usage, total
 
     def get_navigation_reference(self, current_ref, direction):
         refs = self.get_ordered_refs()
@@ -1921,6 +2031,76 @@ class LexAgent:
             )
         )
 
+    def display_command_map(self):
+        md = """
+# Lex Command Map
+
+## Scripture
+
+*   `lex John 3:16` - read a verse or chapter directly
+*   `lex read John 3:16` - explicit read mode
+*   `lex --next` / `lex --prev` - move from the last read reference
+*   `lex study John 3:16` - interlinear/source-language packet
+*   `lex web John 3:16` - verse plus cross-reference web
+*   `lex read all` - read top cross-references for the last verse
+
+## Search
+
+*   `lex search "mustard seed"` - phrase search in verse text
+*   `lex search kingdom heaven` - phrase first, then all-terms fallback
+*   `lex search covenant -jeremiah` - search within Jeremiah
+*   `lex search covenant --page 2 --limit 20` - browse more results
+
+Search scopes: `-ot`, `-nt`, `-law`, `-history`, `-wisdom`, `-prophets`,
+`-major`, `-minor`, `-gospels`, `-epistles`, `-pauline`, `-1-john`,
+`-jeremiah-revelation`.
+
+## References
+
+*   `lex John 3`
+*   `lex John 3:16-18`
+*   `lex 1 John 4:7`
+*   `lex jn3:16`
+
+## Strong's
+
+*   `lex strongs G3056` - lexicon entry plus reverse verse usage
+*   `lex strongs G3056 --page 2 --limit 25`
+*   `lex strongs love` - English/gloss lookup
+*   `lex G3056` - direct Strong's shortcut
+
+## Study Aids
+
+*   `lex define grace`
+*   `lex topic covenant` / `lex naves covenant`
+*   `lex commentary John 3:16`
+*   `lex creed` / `lex creed nicene`
+
+## Export
+
+*   `lex export "John 3:16"` - interactive export menu
+*   `lex export "John 3:16" --mode read --format png --ratio 1:1`
+*   `lex export "Ephesians 1" --mode study --format pdf`
+*   `lex export "John 3:16" --mode web --format docx`
+
+## Versions And Settings
+
+*   `lex -v` - interactive Bible version menu
+*   `lex -v kjv` / `lex version kjv` / `lex bible kjv` - set default Bible
+*   `lex -B nasb John 3:16` - use a Bible version for one command
+*   `lex -light` / `lex -dark` / `lex -auto` - terminal theme preference
+*   `LEX_THEME=light lex John 3:16` - one-command theme override
+*   `LEX_NO_COLOR=1 lex search covenant` - plain terminal output
+
+## Maintenance
+
+*   `lex history` / `lex history --limit 10` / `lex history --clear`
+*   `lex update` / `lex --update`
+*   `lex --credits`
+*   `lex --version`
+"""
+        console.print(Panel(Markdown(md), title="🧭 Commands", border_style="ui.border", expand=False))
+
     def display_credits(self):
         table = Table(title="Lex Credits and Data Licenses", box=None, show_lines=True)
         table.add_column("Component", style="bold cyan", no_wrap=True)
@@ -2124,6 +2304,10 @@ Use a scope when you mean a book: `lex search light -john`.
 
 *   `lex search covenant --page 2`
 *   `lex search covenant --limit 20`
+*   `lex search covenant --page 3 --limit 20`
+
+Result pages also print the next-page command at the bottom. `--limit` accepts
+1-50 results per page.
 
 In an interactive terminal, search opens a compact action bar:
 
@@ -2442,14 +2626,59 @@ cached for later offline use.
         md = """
 # Strong's Lookup
 
-Find Strong's entries by number, transliteration, or English gloss:
+Find Strong's entries by number, transliteration, or English gloss. Number
+lookups also show reverse verse usage from the local ESV interlinear index.
 
 *   `lex strongs love`
 *   `lex strongs word`
 *   `lex strongs God`
 *   `lex G3056`
+
+## Reverse Strong's
+
+*   `lex strongs G3056`
+*   `lex strongs H0430`
+*   `lex -B esv strongs G3056`
+*   `lex -B nasb strongs G3056`
+
+Reverse Strong's is indexed by ESV interlinear tags. Other English Bible
+versions display the same verse locations with that version's verse text.
+
+## More Results
+
+*   `lex strongs G3056 --page 2`
+*   `lex strongs G3056 --limit 25`
+*   `lex strongs G3056 --page 3 --limit 25`
+*   `lex strongs G3056 --all`
+
+The default view keeps the lexicon entry readable and shows the first page of
+verse usage. Use paging for normal browsing; use `--all` only when you want the
+full concordance list in the terminal.
 """
         console.print(Panel(Markdown(md), title="🔤 Strong's Lookup", border_style="ui.border", expand=False))
+
+    def display_web_howto(self):
+        md = """
+# Verse Web
+
+Build a compact verse-centered cross-reference view.
+
+## Usage
+
+*   `lex web John 3:16`
+*   `lex web Romans 8:28`
+*   `lex -B nasb web John 3:16`
+*   `lex web John 3:16 --limit 20`
+
+Verse web uses local Treasury of Scripture Knowledge links and displays verse
+text from the active Bible version when available.
+
+## Export
+
+*   `lex export "John 3:16" --mode web --format pdf`
+*   `lex export "John 3:16" --mode web --format docx`
+"""
+        console.print(Panel(Markdown(md), title="🕸️ Verse Web", border_style="ui.border", expand=False))
 
     # -----------------------------------------------------------------------
     # Bible reading and navigation rendering
@@ -3009,7 +3238,7 @@ Find Strong's entries by number, transliteration, or English gloss:
         return os.path.join(self.study_export_dir(), safe)
 
     def build_study_export_data(self, db_ref):
-        row = self.get_interlinear_index().get(db_ref)
+        row = self.resolve_interlinear_row(db_ref)
         if not row or not row.get("p"):
             return None
         parsed_tokens = [self.parse_interlinear_token(token) for token in row["p"]]
@@ -3451,22 +3680,7 @@ Find Strong's entries by number, transliteration, or English gloss:
             self.display_source_route_notice(route)
             return False
 
-        index = self.get_interlinear_index()
-        row = index.get(study_ref)
-
-        # If no exact match (likely due to version prefix mismatch), try to find by book:chap:verse
-        if not row or not row.get("p"):
-            study_parts = self.parse_reference_parts(study_ref)
-            if study_parts:
-                # Use reverse canon map to get the canonical book name (e.g. "Ps" -> "Psalm")
-                canon_book = self.reverse_canon_map.get(study_parts["book"], study_parts["book"])
-                generic_suffix = f":{canon_book}:{study_parts['chapter']}:{study_parts['verse']}"
-
-                # The index keys in interlinear JSON look like "esv:Genesis:1:1" or "esv:Psalm:1:1"
-                for k, v in index.items():
-                    if k.endswith(generic_suffix):
-                        row = v
-                        break
+        row = self.resolve_interlinear_row(study_ref)
 
         if not row or not row.get("p"):
             console.print(Panel("No local interlinear data found for this verse.", border_style="warning"))
@@ -4196,6 +4410,8 @@ Find Strong's entries by number, transliteration, or English gloss:
             footer += f"\nPrevious page: lex search {query_arg} --page {page - 1}"
             if limit != 10:
                 footer += f" --limit {limit}"
+        if not interactive:
+            footer += f"\nMore per page: lex search {query_arg} --limit 20"
         body.append(footer, style="ui.meta")
         console.print(
             Panel(
@@ -4527,7 +4743,7 @@ images, presentations, or study documents.
 
 ```bash
 lex export "John 3:16"            # Interactive menu
-lex export "John 3:16" --mode read --format png --ratio 1:1 --theme dark
+lex -dark export "John 3:16" --mode read --format png --ratio 1:1
 lex export "Romans 8:28-39" --mode read --format pptx
 lex export "Ephesians 1" --mode study --format pdf
 ```
@@ -5024,9 +5240,33 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 state = next_state
         return True
 
-    def display_strongs(self, query):
+    def strongs_usage_footer(self, strongs_id, page, limit, total, shown, show_all=False):
+        if not total:
+            return ""
+        if show_all:
+            return f"\n\n[dim]Showing all {total} verses. Compact view: lex strongs {strongs_id}[/]"
+
+        page = max(1, int(page or 1))
+        limit = max(1, int(limit or 8))
+        start = ((page - 1) * limit) + 1 if shown else 0
+        end = start + shown - 1 if shown else 0
+        page_count = max(1, (total + limit - 1) // limit)
+        page_label = f"Page {page}/{page_count}" if page <= page_count else f"Page {page} requested; last page is {page_count}"
+        pieces = [f"Showing {start}-{end} of {total} verses", page_label]
+        if page < page_count:
+            pieces.append(f"Next: lex strongs {strongs_id} --page {page + 1} --limit {limit}")
+        if limit != 25:
+            pieces.append(f"More per page: lex strongs {strongs_id} --limit 25")
+        pieces.append(f"All: lex strongs {strongs_id} --all")
+        return "\n\n[dim]" + "  |  ".join(pieces) + "[/]"
+
+    def display_strongs(self, query, page=1, limit=8, show_all=False):
         if re.match(r'^[GH]\d+$', query.upper()):
-            res = self.strongs_db.query("SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?", (query.upper(),))
+            _, strongs_db_key, _ = self.normalize_strongs_key(query)
+            res = self.strongs_db.query(
+                "SELECT number, word, pronunciation, definition FROM strongs WHERE number = ?",
+                (strongs_db_key or query.upper(),),
+            )
         else:
             normalized = self.normalize_term(query)
             res = self.strongs_db.query(
@@ -5067,37 +5307,31 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 source = extended_entry["step"].get("source", "Extended Lexicon")
                 definition_text = f"{step_def}\n\n[dim]---\nSource: {source}\nBrief: {d}[/]"
 
-
-            # Fetch major uses (concordance) from KJV if available
-            major_uses = ""
-            kjv_path = get_bible_path("kjv")
-            if os.path.exists(kjv_path):
-                with sqlite3.connect(kjv_path) as conn:
-                    c = conn.cursor()
-                    pattern = f"%[{n}]%"
-                    c.execute("SELECT reference, text FROM bible WHERE text LIKE ? LIMIT 5", (pattern,))
-                    rows = c.fetchall()
-                    if rows:
-                        major_uses = "\n\n[bold underline]Major Uses (KJV):[/]"
-                        for ref, txt in rows:
-                            disp_ref = self.format_display_ref(ref)
-                            target_tag = f"[{n}]"
-                            # Mark target
-                            highlighted = txt.replace(target_tag, "__TARGET_TAG__")
-                            # Strip all other Strong's tags (handles [G123], <G123>, etc.)
-                            highlighted = re.sub(r'[<\[][GH]\d+[>\]]', '', highlighted)
-                            # Strip remaining HTML
-                            highlighted = re.sub(r'<[^>]+>', '', highlighted)
-                            # Restore target with highlight
-                            highlighted = highlighted.replace("__TARGET_TAG__", f"[bold yellow]{target_tag}[/]")
-                            major_uses += f"\n[cyan]{disp_ref}[/] {highlighted.strip()}"
-
-                        c.execute("SELECT COUNT(*) FROM bible WHERE text LIKE ?", (pattern,))
-                        total = c.fetchone()[0]
-                        if total > 5:
-                            major_uses += f"\n[dim]... and {total - 5} more occurrences.[/]"
-
-            definition_text += major_uses
+            usage, total = self.get_strongs_usage(n, page=page, limit=limit, show_all=show_all)
+            if usage:
+                source_label = "ESV interlinear"
+                if self.bible_prefix != "esv":
+                    source_label += f" projected to {self.bible_prefix.upper()}"
+                usage_text = f"\n\n[bold underline]Verse Usage ({source_label}):[/]"
+                for item in usage:
+                    disp_ref = self.format_display_ref(item["target_ref"])
+                    count_note = f" x{item['token_count']}" if item["token_count"] > 1 else ""
+                    preview = item["text"][:240]
+                    usage_text += f"\n[cyan]{disp_ref}[/][dim]{count_note}[/] {preview}"
+                if not show_all:
+                    remaining = total - (max(1, int(page or 1)) * max(1, int(limit or 8)))
+                    if remaining > 0:
+                        usage_text += f"\n[dim]... and {remaining} more verses.[/]"
+                usage_text += self.strongs_usage_footer(n, page, limit, total, len(usage), show_all=show_all)
+                definition_text += usage_text
+            elif total:
+                definition_text += (
+                    "\n\n[bold underline]Verse Usage (ESV interlinear):[/]"
+                    f"\n[dim]No verses on page {max(1, int(page or 1))}.[/]"
+                    + self.strongs_usage_footer(n, page, limit, total, 0, show_all=show_all)
+                )
+            elif self.strongs_refs_db:
+                definition_text += "\n\n[dim]No verse usage found in the ESV interlinear index.[/]"
             console.print(Panel(f"[lexicon.word]{w}[/] ({p})\n\n{definition_text}", title=f"📚 {lang} Lexicon: {n}", border_style="blue"))
         return bool(res)
 
@@ -5447,16 +5681,19 @@ def main():
         raw_argv = protected_argv
     parser = argparse.ArgumentParser(
         prog="lex",
-        description="Lex: local-first Bible reading, study, search, and manuscript tools.",
+        description="Lex: local-first Bible reading, study, search, Strong's, manuscript tools, and export.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""commands:
+  lex help                           show the full command map
   lex John 3:16                    read a verse in context
   lex study John 1:1               open interlinear and lexicon study
   lex search "holy spirit" -nt     ranked, scoped scripture search
+  lex search covenant --page 2     browse more search results
   lex manuscript John 1:1          map readings and manuscript witnesses
   lex manuscript P66               open a manuscript profile
   lex web John 3:16                 map connected verses
-  lex strongs love                  search Strong's entries
+  lex strongs G3056                 Strong's entry plus reverse verse usage
+  lex strongs love                  search Strong's entries by English/gloss
   lex naves grace                   browse Nave's topical index
   lex commentary John 3:16         read available commentary
   lex -v esv                        set the default Bible version
@@ -5465,29 +5702,30 @@ Run `lex <command>` without an argument for command-specific help.
 """,
     )
     parser.add_argument("query", nargs="*")
-    parser.add_argument("-i", "--interlinear", action="store_true")
-    parser.add_argument("-d", "--define", action="store_true")
-    parser.add_argument("-c", "--creed", action="store_true")
-    parser.add_argument("-s", "--strongs", action="store_true")
+    parser.add_argument("-i", "--interlinear", action="store_true", help="Show interlinear study data for a reference")
+    parser.add_argument("-d", "--define", action="store_true", help="Treat the query as a dictionary/encyclopedia lookup")
+    parser.add_argument("-c", "--creed", action="store_true", help="Open the creed/confession navigator or lookup")
+    parser.add_argument("-s", "--strongs", action="store_true", help="Treat the query as a Strong's lookup")
     parser.add_argument("-v", dest="bible_version", type=str, default=None, help="Set Bible version (e.g. -v vulgate, -v kjv, -v esv)")
     parser.add_argument("--version", action="version", version=VERSION)
     parser.add_argument("-B", "--bible", type=str, default=None, choices=BIBLE_VERSIONS.keys(), help="Select Bible version for current command (legacy)")
     parser.add_argument("--update", action="store_true", help="Check for and install data updates")
     theme_group = parser.add_mutually_exclusive_group()
-    theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light")
-    theme_group.add_argument("-dark", dest="theme_mode", action="store_const", const="dark")
-    theme_group.add_argument("-auto", dest="theme_mode", action="store_const", const="auto")
-    parser.add_argument("--credits", action="store_true")
-    parser.add_argument("--next", action="store_true")
-    parser.add_argument("--prev", action="store_true")
-    parser.add_argument("--page", type=int, default=1)
-    parser.add_argument("--limit", type=int, default=10)
-    parser.add_argument("--mode", type=str, choices=["read", "study", "web"], default="read")
-    parser.add_argument("--format", type=str, choices=["png", "pptx", "pdf", "docx"], default=None)
+    theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light", help="Use and remember the light terminal theme")
+    theme_group.add_argument("-dark", dest="theme_mode", action="store_const", const="dark", help="Use and remember the dark terminal theme")
+    theme_group.add_argument("-auto", dest="theme_mode", action="store_const", const="auto", help="Clear saved theme preference and auto-detect")
+    parser.add_argument("--credits", action="store_true", help="Show data/source credits")
+    parser.add_argument("--next", action="store_true", help="Read the next verse/chapter from history")
+    parser.add_argument("--prev", action="store_true", help="Read the previous verse/chapter from history")
+    parser.add_argument("--page", type=int, default=1, help="Search or reverse Strong's result page")
+    parser.add_argument("--limit", type=int, default=None, help="Results per page for search, web, history, or reverse Strong's")
+    parser.add_argument("--all", action="store_true", help="Show all reverse Strong's verse usage results")
+    parser.add_argument("--mode", type=str, choices=["read", "study", "web"], default="read", help="Export mode")
+    parser.add_argument("--format", type=str, choices=["png", "pptx", "pdf", "docx"], default=None, help="Export format")
     parser.add_argument("--ratio", type=str, choices=["16:9", "1:1"], default="16:9", help="Aspect ratio for PNG exports")
-    parser.add_argument("--animate", dest="animate", action="store_true", default=None)
-    parser.add_argument("--no-animate", dest="animate", action="store_false")
-    parser.add_argument("--clear", action="store_true", help="Clear command history when used with `lex history`")
+    parser.add_argument("--animate", dest="animate", action="store_true", default=None, help="Animate study/read transitions where supported")
+    parser.add_argument("--no-animate", dest="animate", action="store_false", help="Disable study/read transition animation")
+    parser.add_argument("--clear", action="store_true", help="Clear command history when used with `lex history`; `lex history clear` also works")
     args, unknown = parser.parse_known_args(raw_argv)
     if args.theme_mode == "auto":
         clear_theme_preference()
@@ -5577,7 +5815,7 @@ Run `lex <command>` without an argument for command-specific help.
                 sys.exit(0)
             console.print("[error]Could not clear Lex query history.[/]")
             sys.exit(1)
-        agent.display_query_history(limit=args.limit)
+        agent.display_query_history(limit=args.limit or 10)
         sys.exit(0)
     elif query.startswith("history "):
         subquery = query.split(" ", 1)[1].strip()
@@ -5587,7 +5825,7 @@ Run `lex <command>` without an argument for command-specific help.
                 sys.exit(0)
             console.print("[error]Could not clear Lex query history.[/]")
             sys.exit(1)
-        agent.display_query_history(limit=args.limit)
+        agent.display_query_history(limit=args.limit or 10)
         sys.exit(0)
 
     if raw_argv:
@@ -5604,7 +5842,10 @@ Run `lex <command>` without an argument for command-specific help.
         agent.display_intro()
         sys.exit(0)
 
-    if query == "read":
+    if query in {"help", "commands", "options"}:
+        agent.display_command_map()
+        sys.exit(0)
+    elif query == "read":
         agent.display_read_landing()
         sys.exit(0)
     elif query == "read all" or query == "all":
@@ -5660,16 +5901,16 @@ Run `lex <command>` without an argument for command-specific help.
         query = query.split(" ", 1)[1].strip()
         if not query:
             sys.exit(1)
-        if not agent.display_search(query, page=args.page, limit=args.limit):
+        if not agent.display_search(query, page=args.page, limit=args.limit or 10):
             console.print("[warning]No scripture search results found.[/]")
             sys.exit(1)
         sys.exit(0)
     elif query == "web":
-        console.print("[warning]Usage: lex web John 3:16[/]")
-        sys.exit(1)
+        agent.display_web_howto()
+        sys.exit(0)
     elif query.startswith("web "):
         q = query[4:].strip()
-        if not agent.display_verse_web(q, limit=args.limit):
+        if not agent.display_verse_web(q, limit=args.limit or 10):
             console.print("[warning]No verse web found.[/]")
             sys.exit(1)
         sys.exit(0)
@@ -5708,12 +5949,12 @@ Run `lex <command>` without an argument for command-specific help.
             agent.display_strongs_howto()
             sys.exit(1)
         if re.match(r'^[GH]\d+$', q, re.IGNORECASE):
-            if not agent.display_strongs(q):
+            if not agent.display_strongs(q, page=args.page, limit=args.limit or 8, show_all=args.all):
                 console.print("[warning]No Strong's entry found for that number.[/]")
                 sys.exit(1)
         else:
             if not agent.display_english_strongs(q):
-                if not agent.display_strongs(q):
+                if not agent.display_strongs(q, page=args.page, limit=args.limit or 8, show_all=args.all):
                     console.print("[warning]No Strong's entries found for that term.[/]")
                     sys.exit(1)
         sys.exit(0)
@@ -5754,16 +5995,16 @@ Run `lex <command>` without an argument for command-specific help.
             agent.display_strongs_howto()
             sys.exit(1)
         if re.match(r'^[GH]\d+$', query, re.IGNORECASE):
-            if not agent.display_strongs(query):
+            if not agent.display_strongs(query, page=args.page, limit=args.limit or 8, show_all=args.all):
                 console.print("[warning]No Strong's entry found for that number.[/]")
                 sys.exit(1)
         else:
             if not agent.display_english_strongs(query):
-                if not agent.display_strongs(query):
+                if not agent.display_strongs(query, page=args.page, limit=args.limit or 8, show_all=args.all):
                     console.print("[warning]No Strong's entries found for that term.[/]")
                     sys.exit(1)
     elif re.match(r'^[GH]\d+', query, re.IGNORECASE):
-        if not agent.display_strongs(query):
+        if not agent.display_strongs(query, page=args.page, limit=args.limit or 8, show_all=args.all):
             console.print("[warning]No Strong's entry found for that number.[/]")
             sys.exit(1)
     elif query:
@@ -5782,7 +6023,7 @@ Run `lex <command>` without an argument for command-specific help.
                 sys.exit(1)
         else:
             if not agent.display_verse(query, interlinear=args.interlinear, animate=args.animate):
-                if not agent.display_strongs(query):
+                if not agent.display_strongs(query, page=args.page, limit=args.limit or 8, show_all=args.all):
                     agent.display_search_howto()
                     sys.exit(1)
     else:

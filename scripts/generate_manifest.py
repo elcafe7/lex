@@ -48,8 +48,11 @@ def generate_manifest():
                     "path": rel_path
                 }
 
-    with open(MANIFEST_PATH, "w") as f:
+    tmp_path = MANIFEST_PATH + ".tmp"
+    with open(tmp_path, "w") as f:
         json.dump(manifest, f, indent=2)
+        f.write("\n")
+    os.replace(tmp_path, MANIFEST_PATH)
     
     print(f"Manifest generated at {MANIFEST_PATH}")
     print(f"Version: {manifest['version']}")

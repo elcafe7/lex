@@ -1,14 +1,15 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const test = require("node:test");
 const launcher = require("../lib/launcher");
 
 test("release URLs use the pinned GitHub release contract", () => {
   const urls = launcher.releaseUrls();
-  assert.equal(urls.archive, "https://github.com/elcafe7/lex/releases/download/v2.6.0/lex-v2.6.0.tar.gz");
-  assert.equal(urls.checksum, "https://github.com/elcafe7/lex/releases/download/v2.6.0/lex-v2.6.0.tar.gz.sha256");
-  assert.equal(launcher.archiveRoot(), "lex-2.6.0");
+  assert.equal(urls.archive, "https://github.com/elcafe7/lex/releases/download/v2.6.1/lex-v2.6.1.tar.gz");
+  assert.equal(urls.checksum, "https://github.com/elcafe7/lex/releases/download/v2.6.1/lex-v2.6.1.tar.gz.sha256");
+  assert.equal(launcher.archiveRoot(), "lex-2.6.1");
 });
 
 test("releaseUrls accepts an explicit tag", () => {
@@ -41,8 +42,18 @@ test("resolveReleaseTag falls back to pinned tag when lookup fails", async () =>
   };
   try {
     const tag = await launcher.resolveReleaseTag();
-    assert.equal(tag, "v2.6.0");
+    assert.equal(tag, "v2.6.1");
   } finally {
     https.get = original;
+  }
+});
+
+test("venv python path matches the current platform", () => {
+  const root = path.join(path.sep, "tmp", "lex");
+  const python = launcher.pythonPath(root);
+  if (process.platform === "win32") {
+    assert.equal(python, path.join(root, ".venv", "Scripts", "python.exe"));
+  } else {
+    assert.equal(python, path.join(root, ".venv", "bin", "python"));
   }
 });

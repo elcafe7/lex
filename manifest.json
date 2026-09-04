@@ -1,5 +1,5 @@
 {
-  "version": "2.6.0",
+  "version": "2.6.1",
   "assets": {
     "runtime-data/creeds.db": {
       "hash": "8c9525be7b8316314bcc545d05a829ff4aaaf464c8adfaafc6c899c7ac0f27ae",
@@ -45,6 +45,11 @@
       "hash": "e0020866adedea4b44974e03a9608bac7157f5a30de06ac5013cc0a47e2683b0",
       "size": 4059136,
       "path": "runtime-data/strongs.db"
+    },
+    "runtime-data/strongs_refs.db": {
+      "hash": "c7a65dac2cd1d35fe57409327aff51304fb9c27f5cce8f5deb976e58f4432e53",
+      "size": 23080960,
+      "path": "runtime-data/strongs_refs.db"
     },
     "runtime-data/bible_versions/esv.db": {
       "hash": "95381930e3b5741dc62fec44dd44004af88fe287a75bd3c8673cf9f55a9199ad",
