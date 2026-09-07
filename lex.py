@@ -2600,6 +2600,8 @@ cached for later offline use.
         return True
 
     def display_manuscript(self, query, limit=10):
+        if limit is None:
+            limit = 10
         path, reference = self.manuscript_verse_path(query)
         if path:
             payload = self.load_manuscript_asset(path)
@@ -2620,6 +2622,8 @@ cached for later offline use.
         if not payload:
             console.print(f"[warning]The manuscript profile for {query} could not be loaded.[/]")
             return False
+        if limit is None:
+            limit = 10
         return self.render_manuscript_profile(payload, limit=min(max(limit, 1), 50))
 
     def display_strongs_howto(self):
@@ -5922,7 +5926,7 @@ Run `lex <command>` without an argument for command-specific help.
         if not q:
             agent.display_manuscript_howto()
             sys.exit(1)
-        if not agent.display_manuscript(q, limit=args.limit):
+        if not agent.display_manuscript(q, limit=args.limit or 10):
             sys.exit(1)
         sys.exit(0)
     elif query == "export":
