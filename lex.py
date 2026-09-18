@@ -171,7 +171,7 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.6.1"
+VERSION = "2.6.2"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 QUERY_HISTORY_FILE = os.path.expanduser("~/.lex_query_history")
 QUERY_HISTORY_LIMIT = 200
@@ -480,8 +480,10 @@ BOOK_SCOPE_ALIASES.update({
     "2kgs": "2 Kings",
     "1ch": "1 Chronicles",
     "1chr": "1 Chronicles",
+    "1chron": "1 Chronicles",
     "2ch": "2 Chronicles",
     "2chr": "2 Chronicles",
+    "2chron": "2 Chronicles",
     "ezr": "Ezra",
     "neh": "Nehemiah",
     "est": "Esther",

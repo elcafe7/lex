@@ -66,6 +66,6 @@ back to its pinned release tag if that lookup is unavailable. Override it for
 testing with:
 
 ```sh
-LEX_CLI_RELEASE_TAG=v2.6.1 lex --version
+LEX_CLI_RELEASE_TAG=v2.6.2 lex --version
 LEX_CLI_RELEASE_BASE_URL=https://example.invalid/releases lex --version
 ```

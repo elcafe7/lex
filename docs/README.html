@@ -324,7 +324,7 @@
     <header>
       <h1>Lex CLI</h1>
       <p class="lede">A local-first Bible study terminal for reading, searching, studying, exporting, and source-language work from a fast offline command line.</p>
-      <div class="version"><strong>Current version:</strong> <code>2.6.1</code></div>
+      <div class="version"><strong>Current version:</strong> <code>2.6.2</code></div>
     </header>
 
     <section id="install">
@@ -334,7 +334,7 @@
       <p>The npm package is a small Node.js launcher. On first run it downloads the latest Lex GitHub release archive, verifies the SHA-256 checksum, creates an isolated Python 3.12+ environment, installs dependencies, and caches the offline app under your user profile.</p>
 
       <h3 id="verify">2. Verify install</h3>
-      <p><code>lex --version</code> may trigger the first-run download and Python setup. A successful install prints the Lex app version, currently <code>2.6.1</code>. <code>lex help</code> should open the command map.</p>
+      <p><code>lex --version</code> may trigger the first-run download and Python setup. A successful install prints the Lex app version, currently <code>2.6.2</code>. <code>lex help</code> should open the command map.</p>
       <pre><code>lex --version
 lex help</code></pre>
 
@@ -478,7 +478,7 @@ lex --version</code></pre>
           <tr><td><code>lex --npm-version</code></td><td>Print the small Node launcher version without downloading the release archive.</td></tr>
           <tr><td><code>lex --version</code></td><td>Print the Lex application version after resolving the release payload.</td></tr>
           <tr><td><code>LEX_CLI_HOME=/path/to/lex lex</code></td><td>Point the launcher at an existing valid checkout for development.</td></tr>
-          <tr><td><code>LEX_CLI_RELEASE_TAG=v2.6.1 lex</code></td><td>Force a release tag for install testing.</td></tr>
+          <tr><td><code>LEX_CLI_RELEASE_TAG=v2.6.2 lex</code></td><td>Force a release tag for install testing.</td></tr>
         </tbody>
       </table>
       <p>The launcher resolves GitHub's latest release during first-run install and falls back to the pinned release tag if that lookup is unavailable.</p>
@@ -521,12 +521,12 @@ if bad:
 print(f"Verified {len(manifest['assets'])} runtime assets for Lex {manifest['version']}.")
 PY</code></pre>
       <p>If you install from a GitHub release archive instead of <code>git clone</code>, verify the archive sidecar before unpacking:</p>
-      <pre><code>curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.1/lex-v2.6.1.tar.gz
-curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.1/lex-v2.6.1.tar.gz.sha256
-shasum -a 256 -c lex-v2.6.1.tar.gz.sha256</code></pre>
+      <pre><code>curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.2/lex-v2.6.2.tar.gz
+curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.2/lex-v2.6.2.tar.gz.sha256
+shasum -a 256 -c lex-v2.6.2.tar.gz.sha256</code></pre>
     </section>
 
-    <p class="footer">Generated from the current Lex CLI documentation state for version <code>2.6.1</code>.</p>
+    <p class="footer">Generated from the current Lex CLI documentation state for version <code>2.6.2</code>.</p>
   </main>
   <script>
     const pageNav = document.getElementById("page-nav");
