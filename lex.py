@@ -146,7 +146,7 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.6.0"
+VERSION = "2.6.1"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 QUERY_HISTORY_FILE = os.path.expanduser("~/.lex_query_history")
 QUERY_HISTORY_LIMIT = 200
@@ -1743,16 +1743,19 @@ class LexAgent:
     def normalize_ref(self, q):
         # User-facing references are intentionally forgiving here. The DB still
         # uses canonical "version:Book:Chapter:Verse" strings internally.
+        # Accept the typographic dashes commonly produced when references are
+        # copied from books, notes, or chat (for example, "24:17–19").
         q_clean = q.lower().strip()
+        q_clean = re.sub(r"[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]", "-", q_clean)
 
         # 1. Try standard spaced reference: '1 John 3:16', 'John 3:16', '1 Jn 3', 'John 3:16-20'
         # Book is anything before the last set of digits
-        pattern_spaced = r'^([1-4]?\s?[a-z\s.]+?)\s+(\d+)(?:[\s:.](\d+)(?:-(\d+))?)?$'
+        pattern_spaced = r'^([1-4]?\s?[a-z\s.]+?)\s+(\d+)(?:[\s:.](\d+)(?:\s*-\s*(\d+))?)?$'
         match = re.match(pattern_spaced, q_clean)
 
         # 2. Try compact reference: '1cor13', 'jn3:16', 'jn3:16-20'
         if not match:
-            pattern_compact = r'^([1-4]?[a-z\s.]+?)(\d+)(?:[\s:.](\d+)(?:-(\d+))?)?$'
+            pattern_compact = r'^([1-4]?[a-z\s.]+?)(\d+)(?:[\s:.](\d+)(?:\s*-\s*(\d+))?)?$'
             match = re.match(pattern_compact, q_clean)
 
         if match:
