@@ -146,7 +146,7 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.6.3"
+VERSION = "2.6.4"
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 QUERY_HISTORY_FILE = os.path.expanduser("~/.lex_query_history")
 QUERY_HISTORY_LIMIT = 200
@@ -454,8 +454,10 @@ BOOK_SCOPE_ALIASES.update({
     "2kgs": "2 Kings",
     "1ch": "1 Chronicles",
     "1chr": "1 Chronicles",
+    "1chron": "1 Chronicles",
     "2ch": "2 Chronicles",
     "2chr": "2 Chronicles",
+    "2chron": "2 Chronicles",
     "ezr": "Ezra",
     "neh": "Nehemiah",
     "est": "Esther",
@@ -1750,12 +1752,12 @@ class LexAgent:
 
         # 1. Try standard spaced reference: '1 John 3:16', 'John 3:16', '1 Jn 3', 'John 3:16-20'
         # Book is anything before the last set of digits
-        pattern_spaced = r'^([1-4]?\s?[a-z\s.]+?)\s+(\d+)(?:[\s:.](\d+)(?:\s*-\s*(\d+))?)?$'
+        pattern_spaced = r'^([1-4]?\s?[a-z\s.\-]+?)\s+(\d+)(?:[\s:.](\d+)(?:\s*-\s*(\d+))?)?$'
         match = re.match(pattern_spaced, q_clean)
 
         # 2. Try compact reference: '1cor13', 'jn3:16', 'jn3:16-20'
         if not match:
-            pattern_compact = r'^([1-4]?[a-z\s.]+?)(\d+)(?:[\s:.](\d+)(?:\s*-\s*(\d+))?)?$'
+            pattern_compact = r'^([1-4]?[a-z\s.\-]+?)(\d+)(?:[\s:.](\d+)(?:\s*-\s*(\d+))?)?$'
             match = re.match(pattern_compact, q_clean)
 
         if match:
