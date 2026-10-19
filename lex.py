@@ -205,7 +205,7 @@ BIBLE_VERSIONS = {
     "kjv": {"name": "King James Version (Oxford 1769)", "file": "bible_versions/kjv.db"},
     "kj16": {"name": "King James Version (1611)", "file": "bible_versions/kj16.db"},
     "nasb": {"name": "New American Standard Bible (1995)", "file": "bible_versions/nasb.db"},
-    "gen": {"name": "Geneva Bible (1587)", "file": "bible_versions/gen.db"},
+    "gen": {"name": "Geneva Bible (1599)", "file": "bible_versions/gen.db"},
     "lxx": {"name": "Septuagint (Rahlfs 1935)", "file": "bible_versions/lxx.db"},
     "vulg": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db", "latin_db": "latin.db", "type": "latin"},
     "vulgate": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db", "latin_db": "latin.db", "type": "latin", "alias": "vulg"},

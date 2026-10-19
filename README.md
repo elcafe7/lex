@@ -31,7 +31,7 @@ Current version: `2.6.2`
 
 | Feature | Description |
 | :--- | :--- |
-| **Multi-Version** | ESV, KJV (1769 & 1611), NASB '95, Geneva 1587, Septuagint (LXX), and Vulgate. |
+| **Multi-Version** | ESV, KJV (1769 & 1611), NASB '95, Geneva 1599, Septuagint (LXX), and Vulgate. |
 | **Unified Nave's** | Look up topics (e.g., `lex naves grace`) or find topical associations for any verse (e.g., `lex naves John 3:16`). |
 | **Interlinear Study** | Source text, transliteration, and lexicon notes in a surgically precise terminal view. |
 | **Verse Web** | Visualize local cross-reference connections ranked by relevance with instant previews. |
