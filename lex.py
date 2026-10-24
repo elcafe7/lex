@@ -34,6 +34,41 @@ from rich.rule import Rule
 import urllib.request
 import hashlib
 
+
+def transform_angle_markup(value, replacements=None):
+    """Transform simple imported angle-bracket markup in linear time."""
+    text = str(value or "")
+    replacements = replacements or {}
+    parts, position = [], 0
+    while position < len(text):
+        start = text.find("<", position)
+        if start < 0:
+            parts.append(text[position:])
+            break
+        parts.append(text[position:start])
+        end = text.find(">", start + 1)
+        if end < 0:
+            parts.append(text[start:])
+            break
+        raw_tag = text[start + 1:end].strip()
+        tag_name = raw_tag.casefold().split(None, 1)[0].rstrip("/") if raw_tag else ""
+        if raw_tag.startswith("/"):
+            tag_name = "/" + raw_tag[1:].casefold().split(None, 1)[0]
+        parts.append(replacements.get(tag_name, ""))
+        position = end + 1
+    return "".join(parts)
+
+
+def plain_lexicon_text(value, break_replacement=" "):
+    return transform_angle_markup(value, {"br": break_replacement})
+
+
+def rich_lexicon_text(value):
+    return transform_angle_markup(value, {
+        "br": "\n", "b": "[bold]", "/b": "[/]", "i": "[italic]",
+        "/i": "[/]", "ref": "[cyan]", "/ref": "[/]",
+    })
+
 # ... (rest of imports)
 
 # ---------------------------------------------------------------------------
@@ -3139,8 +3174,7 @@ text from the active Bible version when available.
                     pieces.append(token["morph"])
                 if entry["step"]:
                     step_def = entry["step"].get("definition", "")
-                    step_def = re.sub(r'<br\s*/?>', ' ', step_def, flags=re.IGNORECASE)
-                    step_def = re.sub(r'<[^>]+>', '', step_def)
+                    step_def = plain_lexicon_text(step_def)
                     pieces.append(study_note_excerpt(step_def))
                 elif entry["interlinear"]:
                     pieces.append(study_note_excerpt(entry["interlinear"].get("d", "")))
@@ -3176,8 +3210,7 @@ text from the active Bible version when available.
                 details = []
                 if entry["step"]:
                     step_def = entry["step"].get("definition", "")
-                    step_def = re.sub(r'<br\s*/?>', ' ', step_def, flags=re.IGNORECASE)
-                    step_def = re.sub(r'<[^>]+>', '', step_def)
+                    step_def = plain_lexicon_text(step_def)
                     details.append(step_def[:300])
                 elif entry["interlinear"]:
                     details.append(entry["interlinear"].get("d", "")[:300])
@@ -3272,8 +3305,7 @@ text from the active Bible version when available.
                 pieces.append(parsed["morph"])
             if entry["step"]:
                 step_def = entry["step"].get("definition", "")
-                step_def = re.sub(r'<br\s*/?>', ' ', step_def, flags=re.IGNORECASE)
-                step_def = re.sub(r'<[^>]+>', '', step_def)
+                step_def = plain_lexicon_text(step_def)
                 pieces.append(step_def[:1000])
             elif entry["interlinear"]:
                 pieces.append(entry["interlinear"].get("d", "")[:1000])
@@ -3768,8 +3800,7 @@ text from the active Bible version when available.
                 pieces.append(parsed["morph"])
             if entry["step"]:
                 step_def = entry["step"].get("definition", "")
-                step_def = re.sub(r'<br\s*/?>', ' ', step_def, flags=re.IGNORECASE)
-                step_def = re.sub(r'<[^>]+>', '', step_def)
+                step_def = plain_lexicon_text(step_def)
                 pieces.append(study_note_excerpt(step_def))
             elif entry["interlinear"]:
                 pieces.append(study_note_excerpt(entry["interlinear"].get("d", "")))
@@ -5305,11 +5336,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
             definition_text = d
             if extended_entry["step"] and extended_entry["step"].get("definition"):
                 step_def = extended_entry["step"]["definition"]
-                step_def = re.sub(r'<br\s*/?>', '\n', step_def, flags=re.IGNORECASE)
-                step_def = re.sub(r'<b>(.*?)</b>', r'[bold]\1[/]', step_def, flags=re.IGNORECASE|re.DOTALL)
-                step_def = re.sub(r'<i>(.*?)</i>', r'[italic]\1[/]', step_def, flags=re.IGNORECASE|re.DOTALL)
-                step_def = re.sub(r'<ref[^>]*>(.*?)</ref>', r'[cyan]\1[/]', step_def, flags=re.IGNORECASE|re.DOTALL)
-                step_def = re.sub(r'<[^>]+>', '', step_def)
+                step_def = rich_lexicon_text(step_def)
                 source = extended_entry["step"].get("source", "Extended Lexicon")
                 definition_text = f"{step_def}\n\n[dim]---\nSource: {source}\nBrief: {d}[/]"
 
