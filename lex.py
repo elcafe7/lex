@@ -32,6 +32,7 @@ from rich.prompt import Prompt, IntPrompt
 from rich.rule import Rule
 
 import urllib.request
+from urllib.parse import urlparse
 import hashlib
 
 
@@ -69,6 +70,18 @@ def rich_lexicon_text(value):
         "/i": "[/]", "ref": "[cyan]", "/ref": "[/]",
     })
 
+
+TRUSTED_FETCH_HOSTS = {"raw.githubusercontent.com", "poeta.icu"}
+
+
+def open_trusted_https(url_or_request, *, timeout=15):
+    """Open only the fixed HTTPS origins used by Lex update/data fetches."""
+    url = url_or_request.full_url if isinstance(url_or_request, urllib.request.Request) else url_or_request
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname not in TRUSTED_FETCH_HOSTS:
+        raise ValueError("Lex refused an untrusted update URL")
+    return urllib.request.urlopen(url_or_request, timeout=timeout)
+
 # ... (rest of imports)
 
 # ---------------------------------------------------------------------------
@@ -93,7 +106,7 @@ class LexUpdateManager:
 
     def fetch_remote_manifest(self):
         try:
-            with urllib.request.urlopen(self.MANIFEST_URL) as response:
+            with open_trusted_https(self.MANIFEST_URL) as response:
                 return json.loads(response.read().decode())
         except Exception as e:
             self.console.print(f"[warning]Failed to fetch update manifest: {e}[/]")
@@ -182,7 +195,8 @@ class LexUpdateManager:
             tmp_path = target_path + ".tmp"
 
             try:
-                urllib.request.urlretrieve(url, tmp_path)
+                with open_trusted_https(url) as response, open(tmp_path, "wb") as output:
+                    shutil.copyfileobj(response, output)
                 actual_hash = self.get_local_hash(tmp_path)
                 actual_size = os.path.getsize(tmp_path)
                 if actual_hash != expected_hash or actual_size != expected_size:
@@ -1559,7 +1573,7 @@ class LexAgent:
             headers={"User-Agent": f"Lex/{VERSION}"},
         )
         try:
-            with urllib.request.urlopen(request, timeout=15) as response:
+            with open_trusted_https(request) as response:
                 payload = json.loads(response.read().decode("utf-8"))
             os.makedirs(os.path.dirname(cache_path), exist_ok=True)
             temp_path = f"{cache_path}.{os.getpid()}.tmp"

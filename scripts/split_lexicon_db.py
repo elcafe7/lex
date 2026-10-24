@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 import sqlite3
 
 
@@ -63,6 +64,8 @@ TARGETS = {
 
 
 def create_table_from_source(source, target, table):
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
+        raise ValueError(f"Unsafe SQLite identifier: {table!r}")
     sql = source.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
         (table,),
