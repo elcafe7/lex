@@ -25,5 +25,12 @@ the verification performed. It is not a claim that Lex is free of defects.
 ## Open follow-up
 
 The remaining CodeQL path-handling review is tracked in GitHub issue
-[#6](https://github.com/elcafe7/lex/issues/6). Its completion record must link
-the final CodeQL run, scanned commit, per-alert disposition, and validation.
+[#6](https://github.com/elcafe7/lex/issues/6). The concrete resolution issues
+are [#8](https://github.com/elcafe7/lex/issues/8) for Lex runtime paths and
+[#9](https://github.com/elcafe7/lex/issues/9) for developer-script paths. Each
+completion record must link the final CodeQL run, scanned commit, per-alert
+disposition, and validation.
+
+The wider unfinished-work and compliance-tool plan is maintained in
+[SECURITY_ROADMAP.md](SECURITY_ROADMAP.md) and tracked operationally in GitHub
+issue [#7](https://github.com/elcafe7/lex/issues/7).
