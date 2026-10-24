@@ -1372,7 +1372,16 @@ class LexAgent:
     def clean_text(self, text):
         # Strip inline Strong's markers and similar annotation tokens from read text.
         text = re.sub(r'\\par\b', ' ', text)
-        text = re.sub(r'\{\\cf\d+\s+([^{}]*)\}', r'\1', text)
+        # Unwrap simple RTF colour groups without a backtracking expression.
+        while True:
+            start = text.find(r"{\cf")
+            if start < 0:
+                break
+            space = text.find(" ", start)
+            end = text.find("}", space + 1) if space >= 0 else -1
+            if space < 0 or end < 0 or not text[start + 4:space].isdigit():
+                break
+            text = text[:start] + text[space + 1:end] + text[end + 1:]
         text = re.sub(r'\\[a-zA-Z]+\d*\s?', '', text)
         text = re.sub(r'[\[<][GH]\d+[>\]]', '', text)
         text = re.sub(r'\*[a-z]+', '', text)
@@ -1542,10 +1551,10 @@ class LexAgent:
         return re.sub(r"[^a-z0-9]+", "", text.lower())
 
     def normalize_strongs_key(self, key):
-        match = re.match(r"([gh])0*(\d+)$", key.lower())
-        if not match:
+        key = str(key or "").lower()
+        if len(key) < 2 or key[0] not in {"g", "h"} or not key[1:].isdecimal():
             return None, None, None
-        prefix, num = match.groups()
+        prefix, num = key[0], key[1:].lstrip("0") or "0"
         return f"{prefix}{int(num)}", f"{prefix.upper()}{int(num)}", f"{prefix.upper()}{int(num):04d}"
 
     def load_json_file(self, path):
@@ -1657,9 +1666,9 @@ class LexAgent:
         if verse_match:
             book, chap, verse = verse_match.groups()
             return {"kind": "verse", "book": book, "chapter": int(chap), "verse": int(verse), "reference": ref}
-        chapter_match = re.match(r"^(.*?)\s+(\d+)$", ref)
-        if chapter_match:
-            book, chap = chapter_match.groups()
+        chapter_parts = ref.rsplit(None, 1)
+        if len(chapter_parts) == 2 and chapter_parts[1].isdecimal():
+            book, chap = chapter_parts
             return {"kind": "chapter", "book": book, "chapter": int(chap), "reference": ref}
         return None
 
@@ -1905,6 +1914,8 @@ class LexAgent:
         # User-facing references are intentionally forgiving here. The DB still
         # uses canonical "version:Book:Chapter:Verse" strings internally.
         q_clean = q.lower().strip()
+        if len(q_clean) > 128:
+            return None
 
         # 1. Try standard spaced reference: '1 John 3:16', 'John 3:16', '1 Jn 3', 'John 3:16-20'
         # Book is anything before the last set of digits
