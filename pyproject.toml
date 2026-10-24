@@ -28,6 +28,7 @@ dependencies = [
     "reportlab",
     "python-pptx",
     "Pillow",
+    "defusedxml",
 ]
 
 [project.urls]

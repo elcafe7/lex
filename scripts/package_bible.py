@@ -9,7 +9,7 @@ import json
 import os
 import re
 import sys
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
 
 def init_target_db(db_path, metadata):
     """Initializes the target Bible SQLite database with the required schema."""

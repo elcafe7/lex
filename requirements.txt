@@ -1,3 +1,4 @@
 rich
 python-docx
 reportlab
+defusedxml
