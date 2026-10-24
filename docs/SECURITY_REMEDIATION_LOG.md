@@ -10,6 +10,7 @@ the verification performed. It is not a claim that Lex is free of defects.
 | 2026-10-24 | `ecaec58` | Bandit `B310`; CodeQL path review | Restricted updater/manuscript fetches to an explicit HTTPS-host allowlist and validated split-database identifiers. | Hostile `http`, `file`, and untrusted-host URL smoke checks. |
 | 2026-10-24 | `c6b1c6e` | CodeQL `py/polynomial-redos` | Replaced remaining runtime Strong's/history/RTF parsing hot paths and bounded reference input. | `py_compile`; targeted parser smoke checks. |
 | 2026-10-24 | `1f909b5` | CodeQL `py/path-injection` | Restricted JSON reads to Lex data/cache roots and export opening to the Lex export directory. | `py_compile`; out-of-root read rejection check. |
+| 2026-10-24 | `7a13c16` | CodeQL `py/polynomial-redos` | Rejected non-reference characters before applying reference parsing patterns. | `py_compile`; hostile-tab and valid-reference smoke checks. |
 
 ## Evidence rules
 
