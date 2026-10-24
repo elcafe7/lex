@@ -21,3 +21,9 @@ the verification performed. It is not a claim that Lex is free of defects.
   with rationale and owner, or false positive with evidence.
 - Public status language must say “automated checks” rather than “verified
   secure.”
+
+## Open follow-up
+
+The remaining CodeQL path-handling review is tracked in GitHub issue
+[#6](https://github.com/elcafe7/lex/issues/6). Its completion record must link
+the final CodeQL run, scanned commit, per-alert disposition, and validation.
