@@ -1923,6 +1923,8 @@ class LexAgent:
         q_clean = q.lower().strip()
         if len(q_clean) > 128:
             return None
+        if not q_clean or any(char not in "abcdefghijklmnopqrstuvwxyz0123456789 .:-" for char in q_clean):
+            return None
 
         # 1. Try standard spaced reference: '1 John 3:16', 'John 3:16', '1 Jn 3', 'John 3:16-20'
         # Book is anything before the last set of digits
