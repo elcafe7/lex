@@ -1558,9 +1558,16 @@ class LexAgent:
         return f"{prefix}{int(num)}", f"{prefix.upper()}{int(num)}", f"{prefix.upper()}{int(num):04d}"
 
     def load_json_file(self, path):
-        if not os.path.exists(path):
+        allowed_roots = (RUNTIME_DATA_DIR, MANUSCRIPT_CACHE_DIR, HISTORICAL_DOCS_DIR)
+        try:
+            resolved = os.path.realpath(path)
+            if not any(os.path.commonpath((resolved, os.path.realpath(root))) == os.path.realpath(root) for root in allowed_roots):
+                return None
+        except (OSError, ValueError):
             return None
-        with open(path, "r", encoding="utf-8") as f:
+        if not os.path.isfile(resolved):
+            return None
+        with open(resolved, "r", encoding="utf-8") as f:
             return json.load(f)
 
     def load_manuscript_asset(self, relative_path):
@@ -4512,6 +4519,15 @@ text from the active Bible version when available.
     def open_export(self, path):
         if not path:
             return
+        exports_root = os.path.realpath(self.search_export_dir())
+        try:
+            target = os.path.realpath(path)
+            if os.path.commonpath((exports_root, target)) != exports_root:
+                console.print("[error]Refusing to open a path outside Lex exports.[/]")
+                return
+        except (OSError, ValueError):
+            return
+        path = target
         if sys.platform.startswith("win"):
             try:
                 os.startfile(path)
