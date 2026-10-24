@@ -1926,22 +1926,48 @@ class LexAgent:
         if not q_clean or any(char not in "abcdefghijklmnopqrstuvwxyz0123456789 .:-" for char in q_clean):
             return None
 
-        # 1. Try standard spaced reference: '1 John 3:16', 'John 3:16', '1 Jn 3', 'John 3:16-20'
-        # Book is anything before the last set of digits
-        pattern_spaced = r'^([1-4]?\s?[a-z\s.]+?)\s+(\d+)(?:[\s:.](\d+)(?:-(\d+))?)?$'
-        match = re.match(pattern_spaced, q_clean)
+        # Parse common spaced and compact references without a backtracking
+        # regex. This input comes from the command surface, so parsing must
+        # remain predictably linear even for malformed input.
+        chapter_start = next(
+            (index for index, char in enumerate(q_clean)
+             if char.isdecimal() and not (index == 0 and char in "1234")),
+            None,
+        )
+        b = q_clean[:chapter_start].strip() if chapter_start is not None else ""
+        remainder = q_clean[chapter_start:] if chapter_start is not None else ""
+        chapter_digits = ""
+        while remainder and remainder[0].isdecimal():
+            chapter_digits += remainder[0]
+            remainder = remainder[1:]
 
-        # 2. Try compact reference: '1cor13', 'jn3:16', 'jn3:16-20'
-        if not match:
-            pattern_compact = r'^([1-4]?[a-z\s.]+?)(\d+)(?:[\s:.](\d+)(?:-(\d+))?)?$'
-            match = re.match(pattern_compact, q_clean)
+        v = None
+        v_end = None
+        if remainder:
+            if remainder[0] not in " .:":
+                return None
+            remainder = remainder[1:]
+            if not remainder or not remainder[0].isdecimal():
+                return None
+            verse_digits = ""
+            while remainder and remainder[0].isdecimal():
+                verse_digits += remainder[0]
+                remainder = remainder[1:]
+            v = verse_digits
+            if remainder:
+                if remainder[0] != "-":
+                    return None
+                remainder = remainder[1:]
+                if not remainder or not remainder.isdecimal():
+                    return None
+                v_end = remainder
 
-        if match:
-            groups = match.groups()
-            b = groups[0].strip()
-            c = groups[1]
-            v = groups[2] if len(groups) > 2 else None
-            v_end = groups[3] if len(groups) > 3 else None
+        valid_book = b and all(
+            char.isalpha() or char in " ." or (index == 0 and char in "1234")
+            for index, char in enumerate(b)
+        )
+        if chapter_digits and valid_book:
+            c = chapter_digits
 
             # For slugs and compact keys, we want to normalize the book part
             b_slug = re.sub(r"[^a-z0-9]+", "-", b.lower()).strip("-")

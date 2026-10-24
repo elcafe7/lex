@@ -79,10 +79,17 @@ def load_json_object(path):
 def load_word_list(path):
     with open(path, "r", encoding="utf-8-sig") as fh:
         raw = fh.read()
-    match = re.search(r"greekWordList\s*=\s*(\{.*\})\s*;?\s*$", raw, flags=re.DOTALL)
-    if not match:
+    marker = "greekWordList"
+    marker_index = raw.find(marker)
+    if marker_index == -1:
         return {}
-    return json.loads(match.group(1))
+    assignment_index = raw.find("=", marker_index + len(marker))
+    if assignment_index == -1:
+        return {}
+    payload = raw[assignment_index + 1:].strip().rstrip(";").strip()
+    if not (payload.startswith("{") and payload.endswith("}")):
+        return {}
+    return json.loads(payload)
 
 
 def normalize_strongs(raw):

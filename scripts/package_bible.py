@@ -11,6 +11,48 @@ import re
 import sys
 from defusedxml import ElementTree as ET
 
+
+def strip_markup_tags(text):
+    """Remove tag delimiters in linear time from imported source text."""
+    output = []
+    in_tag = False
+    for char in text:
+        if char == "<":
+            in_tag = True
+        elif char == ">" and in_tag:
+            in_tag = False
+        elif not in_tag:
+            output.append(char)
+    return "".join(output)
+
+
+def strip_named_markup_elements(text, names):
+    """Remove selected simple XML-like elements and their content linearly."""
+    output = []
+    active_name = None
+    index = 0
+    while index < len(text):
+        if text[index] != "<":
+            if active_name is None:
+                output.append(text[index])
+            index += 1
+            continue
+        tag_end = text.find(">", index + 1)
+        if tag_end == -1:
+            if active_name is None:
+                output.append(text[index])
+            index += 1
+            continue
+        tag = text[index + 1:tag_end].strip()
+        closing = tag.startswith("/")
+        name = tag.lstrip("/").split(None, 1)[0].rstrip("/") if tag else ""
+        if active_name is None and not closing and name in names:
+            active_name = name
+        elif active_name == name and closing:
+            active_name = None
+        index = tag_end + 1
+    return "".join(output)
+
 def init_target_db(db_path, metadata):
     """Initializes the target Bible SQLite database with the required schema."""
     if os.path.exists(db_path):
@@ -53,7 +95,7 @@ def clean_text(text):
     text = re.sub(r'\*[a-z]+', '', text)
     text = text.replace('[i]', '').replace('[/i]', '')
     # Remove HTML-like tags if any
-    text = re.sub(r'<[^>]+>', '', text)
+    text = strip_markup_tags(text)
     return text.strip()
 
 def package_kjv_modern(json_dir, db_path):
@@ -219,8 +261,8 @@ def package_lxx(source_db_path, target_db_path):
         book_name = book_map.get(b_num, str(b_num))
         
         # Strip morphological tags like <S>704639</S><m>lxx.P</m>
-        clean_v_text = re.sub(r'<[^>]+>.*?</[^>]+>', '', raw_text) # removes <S>...</S> and <m>...</m>
-        clean_v_text = re.sub(r'<[^>]+>', '', clean_v_text) # removes any remaining single tags
+        clean_v_text = strip_named_markup_elements(raw_text, {"S", "m"})
+        clean_v_text = strip_markup_tags(clean_v_text)
         clean_v_text = clean_v_text.strip()
         
         ref = f"lxx:{book_name}:{chap}:{verse}"
