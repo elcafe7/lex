@@ -27,7 +27,7 @@ dependencies = [
     "python-docx",
     "reportlab",
     "python-pptx",
-    "Pillow",
+    "Pillow>=13",
     "defusedxml",
 ]
 
