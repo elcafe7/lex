@@ -221,6 +221,8 @@ class LexUpdateManager:
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
 VERSION = "2.6.2"
+# Typographic dashes accepted in references, mapped to ASCII "-".
+REFERENCE_DASH_TRANSLATION = str.maketrans({ch: "-" for ch in "\u2010\u2011\u2012\u2013\u2014\u2015\u2212"})
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
 QUERY_HISTORY_FILE = os.path.expanduser("~/.lex_query_history")
 QUERY_HISTORY_LIMIT = 200
@@ -1920,11 +1922,13 @@ class LexAgent:
     def normalize_ref(self, q):
         # User-facing references are intentionally forgiving here. The DB still
         # uses canonical "version:Book:Chapter:Verse" strings internally.
-        q_clean = q.lower().strip()
+        # Accept the typographic dashes commonly produced when references are
+        # copied from books, notes, or chat (for example, "24:17\u201319").
+        q_clean = q.lower().strip().translate(REFERENCE_DASH_TRANSLATION)
         if len(q_clean) > 128:
-            return None
+            return None, None, None, None, None
         if not q_clean or any(char not in "abcdefghijklmnopqrstuvwxyz0123456789 .:-" for char in q_clean):
-            return None
+            return None, None, None, None, None
 
         # Parse common spaced and compact references without a backtracking
         # regex. This input comes from the command surface, so parsing must
@@ -1945,25 +1949,27 @@ class LexAgent:
         v_end = None
         if remainder:
             if remainder[0] not in " .:":
-                return None
+                return None, None, None, None, None
             remainder = remainder[1:]
             if not remainder or not remainder[0].isdecimal():
-                return None
+                return None, None, None, None, None
             verse_digits = ""
             while remainder and remainder[0].isdecimal():
                 verse_digits += remainder[0]
                 remainder = remainder[1:]
             v = verse_digits
             if remainder:
-                if remainder[0] != "-":
-                    return None
-                remainder = remainder[1:]
+                # Allow optional spaces around the range dash: "3:16 - 18".
+                remainder = remainder.lstrip(" ")
+                if not remainder or remainder[0] != "-":
+                    return None, None, None, None, None
+                remainder = remainder[1:].lstrip(" ")
                 if not remainder or not remainder.isdecimal():
-                    return None
+                    return None, None, None, None, None
                 v_end = remainder
 
         valid_book = b and all(
-            char.isalpha() or char in " ." or (index == 0 and char in "1234")
+            char.isalpha() or char in " .-" or (index == 0 and char in "1234")
             for index, char in enumerate(b)
         )
         if chapter_digits and valid_book:
