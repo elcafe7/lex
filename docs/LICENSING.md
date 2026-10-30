@@ -30,6 +30,7 @@ Known local sources include:
 - **Cross-references:** Treasury of Scripture Knowledge data via OpenBible-style cross-reference data. Verify upstream terms before redistribution.
 - **Strong's data:** public-domain Strong's-style concordance/lexicon data, per project README.
 - **OpenScriptures Strong's XHTML:** local `strongs/strongs-dictionary.xhtml` states GPL-3.0. Because local notes differ, verify the exact Strong's source chain before public redistribution.
+- **Geneva word tags (`wordtags.db`):** the Strong's numbers are projected from the KJV Strong's tagging in the CrossWire Bible Society SWORD KJV module (crosswire.org). Credit CrossWire Bible Society.
 - **STEPBible:** CC BY 4.0; credit "STEP Bible" and link/reference STEPBible.org.
 - **UBS Open License resources:** CC BY-SA 4.0; preserve attribution and ShareAlike obligations for adapted UBS material.
 - **Bible Geocoding Data:** CC BY 4.0, based on local `Bible-Geocoding-Data/license.txt`.

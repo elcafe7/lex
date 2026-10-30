@@ -388,6 +388,10 @@ def main():
     db = sqlite3.connect(a.out)
     db.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     db.execute("CREATE TABLE wordtags(edition TEXT NOT NULL, ref TEXT NOT NULL, tags TEXT NOT NULL, tiers TEXT NOT NULL, PRIMARY KEY(edition, ref)) WITHOUT ROWID")
+    # KJV verse numbers (sorted, unique) for the subset test and later editions
+    db.execute("CREATE TABLE kjv_numbers(osis TEXT PRIMARY KEY, nums TEXT NOT NULL) WITHOUT ROWID")
+    db.executemany("INSERT INTO kjv_numbers VALUES(?,?)",
+                   [(k, " ".join(sorted({n for t in v for n in t[1]}))) for k, v in K.items()])
     report = {}
     for ed in a.editions.split(","):
         t0 = time.time()

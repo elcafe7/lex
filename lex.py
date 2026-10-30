@@ -293,6 +293,30 @@ INTERLINEAR_STRONGS_PATH = get_lex_path("esv-data/data/interlinear/strongs.json"
 STEP_GREEK_PATH = get_lex_path("theolog-ai/data/biblical-languages/stepbible-lexicons/tbesg-greek.json")
 STEP_HEBREW_PATH = get_lex_path("theolog-ai/data/biblical-languages/stepbible-lexicons/tbesh-hebrew.json")
 HISTORICAL_DOCS_DIR = get_lex_path("theolog-ai/data/historical-documents")
+WORDTAGS_DB_PATH = get_lex_path("wordtags.db")
+# Word mode: Strong's numbers per English word. Same tokeniser the tagger used.
+WORD_TOKEN_RE = re.compile(r"[A-Za-zÆæ]+")
+WORDTAG_EDITIONS = {"gen"}
+
+def open_wordtags_db(path=None):
+    """Open wordtags.db read-only (works from read-only install folders). None if missing."""
+    path = path or WORDTAGS_DB_PATH
+    if not os.path.exists(path):
+        return None
+    return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+
+def lookup_wordtags(conn, edition, ref, text):
+    """Return [(word, [strongs...], tier)] for one verse, or None if the verse is not tagged.
+    Tiers are kept for later review; word mode shows every tag the same way."""
+    row = conn.execute("SELECT tags, tiers FROM wordtags WHERE edition=? AND ref=?", (edition, ref)).fetchone()
+    if not row:
+        return None
+    words = WORD_TOKEN_RE.findall(text)
+    tags = row[0].split(" ") if row[0] else []
+    tiers = row[1] or ""
+    if len(tags) != len(words) or len(tiers) != len(words):
+        return None
+    return [(w, [] if t == "-" else t.split("+"), g) for w, t, g in zip(words, tags, tiers)]
 
 # The creeds table in lexicon.db has placeholder rows for some documents. This
 # map lets the UI fall back to the complete local JSON document when needed.
@@ -2144,6 +2168,7 @@ class LexAgent:
 *   `lex read John 3:16` - explicit read mode
 *   `lex --next` / `lex --prev` - move from the last read reference
 *   `lex study John 3:16` - interlinear/source-language packet
+*   `lex -B gen words Gen 1:1` - Geneva words with their Strong's numbers
 *   `lex web John 3:16` - verse plus cross-reference web
 *   `lex read all` - read top cross-references for the last verse
 
@@ -2258,6 +2283,11 @@ Search scopes: `-ot`, `-nt`, `-law`, `-history`, `-wisdom`, `-prophets`,
             "Creeds/confessions",
             "TheologAI historical documents dataset: local theolog-ai/data/historical-documents",
             "Public domain per local TheologAI README; preserve source attribution",
+        )
+        table.add_row(
+            "Geneva word tags",
+            "Strong's numbers per word in runtime-data/wordtags.db, projected from the CrossWire Bible Society KJV module's Strong's tagging (crosswire.org)",
+            "Credit CrossWire Bible Society for the KJV Strong's tagging",
         )
         table.add_row(
             "Interlinear data",
@@ -2921,6 +2951,82 @@ text from the active Bible version when available.
                 self.save_history(f"{book} {chap}")
             return True
         return False
+    def word_gloss(self, number):
+        """Short English gloss and transliteration for a Strong's number (STEP first, then strongs.db)."""
+        _, strongs_db_key, step_key = self.normalize_strongs_key(number)
+        step = (self.get_step_greek() if number.upper().startswith("G") else self.get_step_hebrew()).get(step_key) or {}
+        gloss, translit = step.get("gloss") or "", step.get("translit") or ""
+        if not gloss and strongs_db_key:
+            row = self.strongs_db.query("SELECT definition, pronunciation FROM strongs WHERE number = ?", (strongs_db_key,))
+            if row:
+                gloss = re.sub(r"<[^>]+>", "", row[0][0] or "").split(";")[0][:60]
+                translit = translit or (row[0][1] or "")
+        return gloss, translit
+
+    def get_verse_words(self, query):
+        """Resolve a reference in the active Bible and return (db_ref, words) or (db_ref, None)."""
+        ref_norm, book, chap, verse, v_end = self.normalize_ref(query)
+        if not ref_norm or not verse:
+            return None, None
+        db_book = self.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
+        db_ref = f"{self.bible_prefix}:{db_book}:{chap}:{verse}"
+        res = self.bible_db.query("SELECT reference, text FROM bible WHERE reference = ?", (db_ref,))
+        if not res:
+            return None, None
+        conn = open_wordtags_db()
+        if conn is None:
+            return db_ref, None
+        try:
+            return db_ref, lookup_wordtags(conn, self.bible_prefix, db_ref, res[0][1])
+        finally:
+            conn.close()
+
+    def display_words(self, query):
+        """Word mode: each English word with its Strong's number, gloss and transliteration."""
+        if self.bible_prefix not in WORDTAG_EDITIONS:
+            name = BIBLE_VERSIONS.get(self.bible_prefix, {}).get("name", self.bible_prefix)
+            console.print(Panel(
+                f"Word tags are not available for {name} yet. They are available for the Geneva Bible:\n"
+                f"  lex -B gen words {query}",
+                border_style="warning"))
+            return False
+        if not os.path.exists(WORDTAGS_DB_PATH):
+            console.print("[error]wordtags.db is not installed. Run `lex update`.[/]")
+            return False
+        db_ref, words = self.get_verse_words(query)
+        if not db_ref:
+            console.print(f"[error]Could not find {query} in this Bible.[/]")
+            return False
+        if words is None:
+            console.print(Panel(f"No word tags for {self.format_display_ref(db_ref)}.", border_style="warning"))
+            return False
+        table = Table(box=box.SIMPLE, show_header=True, header_style="bold")
+        table.add_column("Word", style="text", no_wrap=True)
+        table.add_column("Strong's", style="interlinear.strongs", no_wrap=True)
+        table.add_column("Gloss", style="text", overflow="fold")
+        table.add_column("Translit", style="interlinear.translit", overflow="fold")
+        prev = None
+        for word, nums, _tier in words:
+            if not nums:
+                table.add_row(word, "", "", "")
+                prev = None
+                continue
+            key = "+".join(nums)
+            if key == prev:
+                table.add_row(word, "  \"", "", "")
+                continue
+            glosses, translits = [], []
+            for n in nums:
+                g, t = self.word_gloss(n)
+                glosses.append(g); translits.append(t)
+            table.add_row(word, " ".join(nums), "; ".join(x for x in glosses if x), " ".join(x for x in translits if x))
+            prev = key
+        title = f"{self.format_display_ref(db_ref)} — words ({BIBLE_VERSIONS.get(self.bible_prefix, {}).get('name', self.bible_prefix)})"
+        note = Text("Strong's numbers projected from the CrossWire KJV Strong's tagging. Run `lex strongs <number>` for the full entry.", style="dim")
+        console.print(Panel(Group(table, note), title=title, border_style="ui.border"))
+        self.save_history(db_ref)
+        return True
+
     def display_verse_web(self, query, limit=12):
         ref_norm, book, chap, verse, v_end = self.normalize_ref(query)
         if not ref_norm or not verse:
@@ -5795,6 +5901,7 @@ def main():
   lex help                           show the full command map
   lex John 3:16                    read a verse in context
   lex study John 1:1               open interlinear and lexicon study
+  lex -B gen words Gen 1:1         Geneva words with Strong's numbers
   lex search "holy spirit" -nt     ranked, scoped scripture search
   lex search covenant --page 2     browse more search results
   lex manuscript John 1:1          map readings and manuscript witnesses
@@ -5981,6 +6088,12 @@ Run `lex <command>` without an argument for command-specific help.
     elif query == "study":
         agent.display_study_landing()
         sys.exit(0)
+    elif query == "words":
+        console.print("Usage: lex words <reference>   (Geneva Bible: lex -B gen words Gen 1:1)")
+        sys.exit(0)
+    elif query.startswith("words "):
+        ok = all(agent.display_words(p.strip()) for p in re.split(r"[,;]+", query[6:]) if p.strip())
+        sys.exit(0 if ok else 1)
     elif query.startswith("study "):
         query = query[6:].strip()
         if not query:

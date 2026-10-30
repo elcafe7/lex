@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — geneva-word branch
+
+- **Word mode for the Geneva Bible.** `lex -B gen words Gen 1:1` lists each word with
+  its Strong's number, short gloss and transliteration. Numbers come from
+  `runtime-data/wordtags.db` (new), projected from the CrossWire KJV Strong's tagging
+  onto the Geneva text (93.0% of words tagged). Every tag is shown the same way; a
+  confidence grade per word is kept in the data for a later review pass. Other
+  editions print a "not available" message. Built by `scripts/build_wordtags.py`;
+  review overrides in `scripts/wordtags/overrides_gen.tsv`.
+- **KJV 1611 text:** 27 run-together words split (e.g. Isaiah 53:3 "ofsorrows" →
+  "of sorrows"), search index updated. Script `scripts/fix_kj16_glued.py`, list in
+  `scripts/wordtags/kj16_glued_fixes.tsv`.
+- **STEP Hebrew glosses:** H4496 now "rest" (was "Nohah", the name H5119), plus 11
+  more glosses that had been taken from the wrong entry (list in
+  `scripts/wordtags/gloss_fixes.tsv`).
+- New tests: `python -m unittest tests.test_wordtags`.
+
 ## 2.6.5 — 2026-10-30
 
 - **Geneva Bible text replaced.** `runtime-data/bible_versions/gen.db` is now the
