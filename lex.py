@@ -296,7 +296,7 @@ HISTORICAL_DOCS_DIR = get_lex_path("theolog-ai/data/historical-documents")
 WORDTAGS_DB_PATH = get_lex_path("wordtags.db")
 # Word mode: Strong's numbers per English word. Same tokeniser the tagger used.
 WORD_TOKEN_RE = re.compile(r"[A-Za-zÆæ]+")
-WORDTAG_EDITIONS = {"gen"}
+WORDTAG_EDITIONS = {"gen", "kj16", "kjv"}
 
 def open_wordtags_db(path=None):
     """Open wordtags.db read-only (works from read-only install folders). None if missing."""
@@ -311,7 +311,13 @@ def lookup_wordtags(conn, edition, ref, text):
     row = conn.execute("SELECT tags, tiers FROM wordtags WHERE edition=? AND ref=?", (edition, ref)).fetchone()
     if not row:
         return None
-    words = WORD_TOKEN_RE.findall(text)
+    words = []
+    for m in WORD_TOKEN_RE.finditer(text):
+        w = m.group(0)
+        # KJV 1611 text keeps the thorn abbreviation as "&thorn;" (for "the"/"that"): show the letter
+        if text[m.start() - 1:m.start()] == "&" and text[m.end():m.end() + 1] == ";":
+            w = html.unescape(f"&{w};") if w == "thorn" else w
+        words.append(w)
     tags = row[0].split(" ") if row[0] else []
     tiers = row[1] or ""
     if len(tags) != len(words) or len(tiers) != len(words):
@@ -2168,7 +2174,7 @@ class LexAgent:
 *   `lex read John 3:16` - explicit read mode
 *   `lex --next` / `lex --prev` - move from the last read reference
 *   `lex study John 3:16` - interlinear/source-language packet
-*   `lex -B gen words Gen 1:1` - Geneva words with their Strong's numbers
+*   `lex -B gen words Gen 1:1` - each word with its Strong's number (gen, kj16, kjv)
 *   `lex web John 3:16` - verse plus cross-reference web
 *   `lex read all` - read top cross-references for the last verse
 
@@ -2285,8 +2291,8 @@ Search scopes: `-ot`, `-nt`, `-law`, `-history`, `-wisdom`, `-prophets`,
             "Public domain per local TheologAI README; preserve source attribution",
         )
         table.add_row(
-            "Geneva word tags",
-            "Strong's numbers per word in runtime-data/wordtags.db, projected from the CrossWire Bible Society KJV module's Strong's tagging (crosswire.org)",
+            "Word tags (Geneva, KJV 1611, KJV 1769)",
+            "Strong's numbers per word in runtime-data/wordtags.db: the CrossWire Bible Society KJV module's Strong's tagging (crosswire.org), used directly for KJV 1769 and projected onto the Geneva and KJV 1611 texts",
             "Credit CrossWire Bible Society for the KJV Strong's tagging",
         )
         table.add_row(
@@ -2986,8 +2992,9 @@ text from the active Bible version when available.
         if self.bible_prefix not in WORDTAG_EDITIONS:
             name = BIBLE_VERSIONS.get(self.bible_prefix, {}).get("name", self.bible_prefix)
             console.print(Panel(
-                f"Word tags are not available for {name} yet. They are available for the Geneva Bible:\n"
-                f"  lex -B gen words {query}",
+                f"Word tags are not available for {name}.\n"
+                f"They are available for Geneva 1599 (gen), KJV 1611 (kj16) and KJV 1769 (kjv). Try:\n"
+                f"  lex -B kjv words {query}",
                 border_style="warning"))
             return False
         if not os.path.exists(WORDTAGS_DB_PATH):
@@ -3022,7 +3029,7 @@ text from the active Bible version when available.
             table.add_row(word, " ".join(nums), "; ".join(x for x in glosses if x), " ".join(x for x in translits if x))
             prev = key
         title = f"{self.format_display_ref(db_ref)} — words ({BIBLE_VERSIONS.get(self.bible_prefix, {}).get('name', self.bible_prefix)})"
-        note = Text("Strong's numbers projected from the CrossWire KJV Strong's tagging. Run `lex strongs <number>` for the full entry.", style="dim")
+        note = Text("Strong's numbers from the CrossWire KJV Strong's tagging. Run `lex strongs <number>` for the full entry.", style="dim")
         console.print(Panel(Group(table, note), title=title, border_style="ui.border"))
         self.save_history(db_ref)
         return True
@@ -5901,7 +5908,7 @@ def main():
   lex help                           show the full command map
   lex John 3:16                    read a verse in context
   lex study John 1:1               open interlinear and lexicon study
-  lex -B gen words Gen 1:1         Geneva words with Strong's numbers
+  lex -B kjv words Gen 1:1         each word with its Strong's number (gen, kj16, kjv)
   lex search "holy spirit" -nt     ranked, scoped scripture search
   lex search covenant --page 2     browse more search results
   lex manuscript John 1:1          map readings and manuscript witnesses
@@ -6089,7 +6096,7 @@ Run `lex <command>` without an argument for command-specific help.
         agent.display_study_landing()
         sys.exit(0)
     elif query == "words":
-        console.print("Usage: lex words <reference>   (Geneva Bible: lex -B gen words Gen 1:1)")
+        console.print("Usage: lex -B <gen|kj16|kjv> words <reference>   e.g. lex -B gen words Gen 1:1")
         sys.exit(0)
     elif query.startswith("words "):
         ok = all(agent.display_words(p.strip()) for p in re.split(r"[,;]+", query[6:]) if p.strip())

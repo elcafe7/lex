@@ -2,13 +2,22 @@
 
 ## Unreleased — geneva-word branch
 
-- **Word mode for the Geneva Bible.** `lex -B gen words Gen 1:1` lists each word with
-  its Strong's number, short gloss and transliteration. Numbers come from
-  `runtime-data/wordtags.db` (new), projected from the CrossWire KJV Strong's tagging
-  onto the Geneva text (93.0% of words tagged). Every tag is shown the same way; a
-  confidence grade per word is kept in the data for a later review pass. Other
-  editions print a "not available" message. Built by `scripts/build_wordtags.py`;
-  review overrides in `scripts/wordtags/overrides_gen.tsv`.
+- **Word mode for Geneva 1599, KJV 1611 and KJV 1769.** `lex -B gen words Gen 1:1`
+  (or `-B kj16`, `-B kjv`) lists each word with its Strong's number, short gloss and
+  transliteration. Numbers come from `runtime-data/wordtags.db` (new): the CrossWire
+  KJV Strong's tagging, used directly for KJV 1769 (92.2% of words tagged) and
+  projected onto the KJV 1611 (93.0%) and Geneva (91.8%) texts. Every tag is shown
+  the same way; a confidence grade per word is kept in the data for a later review
+  pass. Other editions print a "not available" message. Built by
+  `scripts/build_wordtags.py`; review overrides in `scripts/wordtags/overrides_gen.tsv`.
+- **Small-word rule:** a function word (the, of, upon, him, ...) no longer borrows a
+  number that belongs to a content word elsewhere in the verse unless its nearest
+  content neighbour in the same clause carries that number (Isaiah 53:5 "vpon him"
+  no longer shows H2250 "stripes").
+- **KJV tag extraction fix:** empty `<w/>` elements in the KJV module (Greek words
+  with no English, mostly the article) were read as opening tags, so about 7,000 NT
+  words per edition took the wrong number (John 3:16 "For" showed G3588; now G1063).
+- KJV 1611 word mode shows the stored `&thorn;` abbreviation as "þ".
 - **KJV 1611 text:** 27 run-together words split (e.g. Isaiah 53:3 "ofsorrows" →
   "of sorrows"), search index updated. Script `scripts/fix_kj16_glued.py`, list in
   `scripts/wordtags/kj16_glued_fixes.tsv`.
