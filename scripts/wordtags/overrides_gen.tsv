@@ -1,0 +1,20 @@
+# Agent review overrides for the Geneva projection (no human pass). Columns: scope key proposed decision note
+pair	becaus	H3068	none	'because' is not the divine name; KJV phrase tag
+pair	becaus	H4191	none	'because' is not 'die'
+pair	becaus	H1696	none	'because' is not 'speak'
+ref	Gen.4.9#15	*	fix:H3045	'cannot tell' = KJV 'know not' (yada)
+ref	Gen.1.2#12	*	fix:H8415	'the deepe' = tehom; 'vpon' keeps H6440 (KJV 'upon the face of')
+ref	Gen.1.2#21	*	fix:H4325	'the waters' = mayim
+ref	Ps.3.1#14	*	fix:H6862	'mine aduersaries' = tsar
+ref	Ps.3.1#17	*	fix:H7227	'howe many' = rab
+ref	Ps.23.2#4	*	fix:H7257	'maketh me to rest' = rabats (KJV 'lie down')
+ref	Ps.23.6#0	*	fix:H2896	'Doubtlesse kindnesse' = KJV 'Surely goodness' (one tag)
+ref	Ps.23.6#1	*	fix:H2896	as above
+ref	Rom.8.28#22	*	fix:G2596	'called of his purpose' = kata
+ref	Jer.14.15#16	*	fix:H3808	KJV source tags 'not' with H559 here; 'not sent' = lo
+ref	Ezek.22.3#26	*	none	'her selfe' has no number of its own here
+ref	2Chr.6.28#37	*	fix:H3605	'any sickenesse' = kol
+ref	Job.27.5#7	*	none	'vntill' is not 'die'
+ref	Ps.22.29#17	*	none	'into' is not 'earth'
+ref	2Sam.12.20#26	*	none	'afterward' is not 'came'
+ref	Dan.6.24#1	*	fix:H560	'by the commandement' = amar
