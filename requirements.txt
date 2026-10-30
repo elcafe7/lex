@@ -1,4 +1,6 @@
 rich
 python-docx
 reportlab
+python-pptx
+Pillow>=13
 defusedxml
