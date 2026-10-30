@@ -16,6 +16,8 @@
 - npm launcher: when it resolves a newer GitHub release than its own version,
   it now extracts that release's archive root instead of failing.
 - `manifest.json` version corrected (main still said 2.6.2).
+- `requirements.txt` now matches `pyproject.toml` (adds python-pptx and
+  Pillow>=13), so the npm launcher stops re-running pip on every start.
 
 ## 2.6.4 — 2026-10-18
 
