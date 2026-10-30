@@ -220,7 +220,7 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.6.2"
+VERSION = "2.6.5"
 # Typographic dashes accepted in references, mapped to ASCII "-".
 REFERENCE_DASH_TRANSLATION = str.maketrans({ch: "-" for ch in "\u2010\u2011\u2012\u2013\u2014\u2015\u2212"})
 HISTORY_FILE = os.path.expanduser("~/.lex_history")

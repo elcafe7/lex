@@ -7,9 +7,9 @@ const launcher = require("../lib/launcher");
 
 test("release URLs use the pinned GitHub release contract", () => {
   const urls = launcher.releaseUrls();
-  assert.equal(urls.archive, "https://github.com/elcafe7/lex/releases/download/v2.6.2/lex-v2.6.2.tar.gz");
-  assert.equal(urls.checksum, "https://github.com/elcafe7/lex/releases/download/v2.6.2/lex-v2.6.2.tar.gz.sha256");
-  assert.equal(launcher.archiveRoot(), "lex-2.6.2");
+  assert.equal(urls.archive, "https://github.com/elcafe7/lex/releases/download/v2.6.5/lex-v2.6.5.tar.gz");
+  assert.equal(urls.checksum, "https://github.com/elcafe7/lex/releases/download/v2.6.5/lex-v2.6.5.tar.gz.sha256");
+  assert.equal(launcher.archiveRoot(), "lex-2.6.5");
 });
 
 test("releaseUrls accepts an explicit tag", () => {
@@ -42,7 +42,7 @@ test("resolveReleaseTag falls back to pinned tag when lookup fails", async () =>
   };
   try {
     const tag = await launcher.resolveReleaseTag();
-    assert.equal(tag, "v2.6.2");
+    assert.equal(tag, "v2.6.5");
   } finally {
     https.get = original;
   }
