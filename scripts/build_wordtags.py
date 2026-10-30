@@ -2,8 +2,16 @@
 """Build runtime-data/wordtags.db: word-level Strong's numbers for early English editions.
 
 The KJV (1769) word/phrase Strong's tagging from the CrossWire SWORD "KJV" module is
-projected onto another edition's text verse by verse (Geneva 1599 now; KJV 1611 and
-KJV 1769 use the same pipeline).
+projected onto another edition's text verse by verse:
+  gen   Geneva 1599 - full matching pipeline (A/B/R/F/C/D/f, reviewed V/X overrides)
+  kj16  KJV 1611    - same pipeline (mostly spelling variants of the same translation)
+  kjv   KJV 1769    - direct: only the module's own word tags (A/B; a handful of C where
+                      the module joins words the text splits, e.g. "bowshot"); no inference
+Small-word rule (all editions): a function word (the, of, vpon, him, ...) keeps a number
+only if the nearest tagged content word beside it, inside the same clause, carries that
+number too. A number that belongs to a content word somewhere else in the verse is not
+lent to an unrelated small word (Isa 53:5 "vpon him" no longer gets H2250 "stripes").
+Dropped words may then take the number of their own head word (F/f) as usual.
 
 Output table `wordtags(edition, ref, tags, tiers)`, one row per canon verse:
   tags  = space-separated, one item per word token of the edition's verse text
@@ -22,7 +30,7 @@ Tokens are WORD_TOKEN_RE matches over the stored verse text (same regex in lex.p
 Build-time needs: the CrossWire KJV module zip and `pysword` (only for --kjv-zip).
 Usage:
   python3 scripts/build_wordtags.py --kjv-zip KJV.zip --cache /tmp/kjv_tokens.json \
-      --editions gen --out runtime-data/wordtags.db [--jobs 8] [--review-dir DIR]
+      --editions gen,kj16,kjv --out runtime-data/wordtags.db [--jobs 8] [--review-dir DIR]
 """
 import argparse, difflib, json, os, re, sqlite3, sys, time
 from collections import Counter, defaultdict
@@ -43,7 +51,9 @@ def extract_kjv(zip_path):
     import html
     from pysword.modules import SwordModules
     m = SwordModules(zip_path); m.parse_modules(); b = m.get_bible_from_module("KJV")
-    W = re.compile(r'<w ([^>]*)>(.*?)</w>|<transChange type="added">(.*?)</transChange>|<note.*?</note>|<[^>]+>|([^<]+)', re.S)
+    # Empty <w .../> elements (untranslated Greek words, e.g. the article) must be skipped,
+    # not read as an opening tag, or the next word takes their number.
+    W = re.compile(r'<w ([^>]*[^/>])>(.*?)</w>|<transChange type="added">(.*?)</transChange>|<note.*?</note>|<[^>]+>|([^<]+)', re.S)
     toks = lambda s: re.findall(r"[A-Za-z]+(?:'[a-z]+)?", s)
     out = {}
     for testament in b.get_structure().get_books().values():
@@ -105,9 +115,18 @@ INHERIT = {norm(w) for w in (
     "have had do did and vnto doth haue hee shee wee bee when whe then so yet also euen even there "
     "this these those all if where shalbe wilbe therefore againe but now thus").split()}
 # verb particles take the verb's number (KJV "Get you up", "sent out"), looking back past one pronoun
-PARTICLE = {norm(w) for w in "vp up out away downe down forth againe backe off".split()}
+# matched on the lower-case spelling: norm("off") would be "of"
+PARTICLE = set("vp up out away awaye downe down forth foorth againe again agayne backe back off".split())
 # object pronouns with no head to the right take the number of the verb before them (KJV "smote him")
 INHERIT_LEFT = {norm(w) for w in "him them me thee it us her you hee".split()}
+
+# function words for the detach rule (a function word may share a content word's number only
+# when that word is its nearest content word on one side, with no punctuation between)
+FUNC = STOP | INHERIT | {norm(w) for w in PARTICLE} | INHERIT_LEFT | CONN | {norm(w) for w in "not no nor yea lo o oh".split()}
+# content words whose normal form collides with a function word ("one" -> "on", "asse" -> "as")
+FUNC_NOT = set("one asse vse ate hisse bake note toe ore fore iie ynne inne".split())
+def is_func(w):
+    return norm(w) in FUNC and w.lower() not in FUNC_NOT
 
 EQUIV = {(norm("ye"), norm("the")), (norm("according"), norm("after")), (norm("that"), norm("the"))}
 
@@ -150,8 +169,10 @@ class Aligner:
         if self.lexok(a, k[1]): return 1.5, "C"
         return None, None
 
-    def align(self, text, ktoks):
-        """Return list of [word, [strongs], tier, kjv_word] per token of text."""
+    def align(self, text, ktoks, direct=False):
+        """Return list of [word, [strongs], tier, kjv_word] per token of text.
+        direct=True (KJV 1769, the module's own text): keep only the module's word links (A/B),
+        plus possessive "s" after an apostrophe, then the small-word rule; no inferred tags."""
         spans = [(m.group(0), m.start(), m.end()) for m in WORD_TOKEN_RE.finditer(text)]
         G = [s[0] for s in spans]
         n, m = len(G), len(ktoks)
@@ -180,6 +201,14 @@ class Aligner:
                 out.append([g, list(k[1]), tier if k[1] else ("S" if k[2] == "added" else "N"), k[0]])
             else:
                 out.append([g, [], None, None])
+        if direct:
+            for gi, row in enumerate(out):
+                if row[2] is None and row[0] == "s" and gi > 0 and text[spans[gi][1] - 1:spans[gi][1]] in "'’" \
+                        and out[gi - 1][2] is not None:
+                    row[1], row[2] = list(out[gi - 1][1]), out[gi - 1][2]
+                if row[2] is None: row[2] = "U"
+            detach(out, text, spans)
+            return out
         def standalone(j):   # KJV word carries its number alone (not part of a tagged phrase)
             t = ktoks[j][1]
             return not ((j > 0 and ktoks[j - 1][1] == t) or (j + 1 < m and ktoks[j + 1][1] == t))
@@ -232,39 +261,7 @@ class Aligner:
             gi += 1
         for row in out:
             if row[2] is None: row[2] = "U"
-        # particles first, so "turned againe" keeps the verb
-        for gi in range(1, len(out)):
-            row = out[gi]
-            if row[2] != "U" or norm(row[0]) not in PARTICLE: continue
-            for back in (1, 2):
-                h = gi - back
-                if h < 0 or BREAK_RE.search(text[spans[h][2]:spans[gi][1]]): break
-                head = out[h]
-                if back == 2 and norm(out[gi - 1][0]) not in INHERIT_LEFT: break
-                if head[2] in TAGGED and head[2] not in "Ff" and norm(head[0]) not in NO_GAP:
-                    row[1] = list(head[1]); row[2] = "F" if head[2] in CONFIDENT else "f"; break
-        # F/f: KJV convention, a run of small words takes the number of the word it belongs to
-        for gi in range(len(out) - 1, -1, -1):
-            row = out[gi]
-            if row[2] != "U" or norm(row[0]) not in INHERIT: continue
-            # walk right through other small untagged words, stop at punctuation
-            j = gi + 1; steps = 0
-            while j < len(out):
-                if BREAK_RE.search(text[spans[j - 1][2]:spans[j][1]]): j = None; break
-                if out[j][2] in TAGGED: break
-                if out[j][2] == "U" and norm(out[j][0]) in INHERIT and steps < 3:
-                    j += 1; steps += 1; continue
-                j = None; break
-            if j is None or j >= len(out): continue
-            head = out[j]
-            row[1] = list(head[1]); row[2] = "F" if head[2] in CONFIDENT else "f"; row[3] = None
-        for gi in range(1, len(out)):
-            row = out[gi]
-            if row[2] != "U" or norm(row[0]) not in INHERIT_LEFT: continue
-            if BREAK_RE.search(text[spans[gi - 1][2]:spans[gi][1]]): continue
-            head = out[gi - 1]
-            if head[2] in TAGGED and head[2] not in "Ff":
-                row[1] = list(head[1]); row[2] = "F" if head[2] in CONFIDENT else "f"
+        inherit(out, text, spans)
         # split compounds: Geneva "first borne" = KJV "firstborn"
         knorm = [(norm(k[0]), k[1]) for k in ktoks]
         for gi in range(len(out) - 1):
@@ -276,7 +273,79 @@ class Aligner:
                     for r in (a, b):
                         r[1], r[2], r[3] = list(kt), "B", None
                     break
+        detach(out, text, spans)
+        inherit(out, text, spans)   # a detached word may still belong to its own head ("take it" -> take)
         return out
+
+def inherit(out, text, spans):
+    """Small words with no number of their own take their head word's number (KJV style)."""
+    # particles first, so "turned againe" keeps the verb
+    for gi in range(1, len(out)):
+        row = out[gi]
+        if row[2] != "U" or row[0].lower() not in PARTICLE: continue
+        for back in (1, 2):
+            h = gi - back
+            if h < 0 or BREAK_RE.search(text[spans[h][2]:spans[gi][1]]): break
+            head = out[h]
+            if back == 2 and norm(out[gi - 1][0]) not in INHERIT_LEFT: break
+            if head[2] in TAGGED and head[2] not in "Ff" and norm(head[0]) not in NO_GAP:
+                row[1] = list(head[1]); row[2] = "F" if head[2] in CONFIDENT else "f"; break
+    # F/f: KJV convention, a run of small words takes the number of the word it belongs to
+    for gi in range(len(out) - 1, -1, -1):
+        row = out[gi]
+        if row[2] != "U" or norm(row[0]) not in INHERIT: continue
+        # walk right through other small untagged words, stop at punctuation
+        j = gi + 1; steps = 0
+        while j < len(out):
+            if BREAK_RE.search(text[spans[j - 1][2]:spans[j][1]]): j = None; break
+            if out[j][2] in TAGGED: break
+            if out[j][2] == "U" and norm(out[j][0]) in INHERIT and steps < 3:
+                j += 1; steps += 1; continue
+            j = None; break
+        if j is None or j >= len(out): continue
+        head = out[j]
+        row[1] = list(head[1]); row[2] = "F" if head[2] in CONFIDENT else "f"; row[3] = None
+    for gi in range(1, len(out)):
+        row = out[gi]
+        if row[2] != "U" or norm(row[0]) not in INHERIT_LEFT: continue
+        if BREAK_RE.search(text[spans[gi - 1][2]:spans[gi][1]]): continue
+        head = out[gi - 1]
+        if head[2] in TAGGED and head[2] not in "Ff":
+            row[1] = list(head[1]); row[2] = "F" if head[2] in CONFIDENT else "f"
+
+def detach(out, text, spans):
+    """Small-word rule: a function word must not carry a number that belongs to a content word
+    elsewhere in the verse unless it is attached to that word: the nearest content word on one side,
+    reached through at most 3 function or untagged words and no punctuation, carries the same number. Detached words become untagged (U).
+    Isa 53:5 Geneva "was vpon him, and with his stripes": "vpon him" lose H2250 (stripes)."""
+    key = lambda r: "+".join(r[1]) if r[1] and r[2] in TAGGED else ""
+    isf = [is_func(r[0]) for r in out]
+    owners = defaultdict(list)
+    for i, r in enumerate(out):
+        if key(r) and not isf[i]:
+            owners[key(r)].append(i)
+    def brk(a, b):   # punctuation between token a and the next token b
+        return BREAK_RE.search(text[spans[a][2]:spans[b][1]]) is not None
+    drop = []
+    for i, r in enumerate(out):
+        kk = key(r)
+        if not kk or not isf[i] or kk not in owners:
+            continue
+        ok = False
+        for step in (-1, 1):   # walk through up to 3 function words (any number), never past punctuation
+            j = i
+            for _ in range(4):
+                nj = j + step
+                if nj < 0 or nj >= len(out) or brk(min(j, nj), max(j, nj)):
+                    break
+                if not isf[nj] and key(out[nj]):   # untagged words ("louing kindnesse") are passed over
+                    ok = key(out[nj]) == kk; break
+                j = nj
+            if ok: break
+        if not ok:
+            drop.append(i)
+    for i in drop:
+        out[i][1], out[i][2], out[i][3] = [], "U", None
 
 # ---------------------------------------------------------------- editions
 def kjv_order_books():
@@ -340,14 +409,15 @@ def apply_overrides(res, ov, used):
             elif dec.startswith("fix:"): t[1], t[2] = dec[4:].split("+"), "X"
 
 # ---------------------------------------------------------------- main
-_AL = None; _ROWS = None
+_AL = None; _ROWS = None; _DIRECT = False
+DIRECT_EDITIONS = {"kjv"}   # the CrossWire module is a KJV 1769 text: its own tags, nothing inferred
 def _work(k):
     ref, text = _ROWS[k]
-    return k, _AL.align(text, _AL.K[k])
+    return k, _AL.align(text, _AL.K[k], direct=_DIRECT)
 
 def build_edition(ed, K, jobs):
-    global _AL, _ROWS
-    _AL = _AL or Aligner(K); _ROWS = edition_rows(ed, K)
+    global _AL, _ROWS, _DIRECT
+    _AL = _AL or Aligner(K); _ROWS = edition_rows(ed, K); _DIRECT = ed in DIRECT_EDITIONS
     keys = [k for k in K if k in _ROWS]
     if jobs > 1:
         from multiprocessing import Pool
