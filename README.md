@@ -154,6 +154,60 @@ lex update
 
 ---
 
+## ✅ Verification
+
+Each release starting with the first one built by
+[`.github/workflows/release.yml`](.github/workflows/release.yml) is built,
+scanned, checksummed and attested by GitHub Actions. These files are attached
+to every such release on the
+[Releases page](https://github.com/elcafe7/lex/releases):
+
+| File | What it is |
+|---|---|
+| `lex-v<VERSION>.tar.gz` | The release archive (what `lex-cli` downloads) |
+| `lex-v<VERSION>.tar.gz.sha256` | Single-file checksum used by the npm launcher |
+| `SHA256SUMS` | SHA-256 checksums for every file in the release |
+| `lex-v<VERSION>.cdx.json` | CycloneDX SBOM (software bill of materials) |
+| `lex-v<VERSION>-requirements.lock.txt` | Python packages resolved at build time |
+| `lex-v<VERSION>-osv-scan.json` / `.md` | Dated OSV-Scanner dependency report |
+
+The scan report is a dated record of the release's dependencies checked
+against the [OSV database](https://osv.dev) on the day it was built. The
+release workflow only publishes when no dependency matches an advisory rated
+CVSS 7.0 or above. The OSV database keeps growing, so to check a release
+against today's data, scan its SBOM yourself:
+
+```bash
+osv-scanner scan source -L lex-v<VERSION>.cdx.json
+```
+
+**Check the checksums** (download the files you want plus `SHA256SUMS` into
+one folder):
+
+```bash
+sha256sum -c --ignore-missing SHA256SUMS        # Linux
+shasum -a 256 -c --ignore-missing SHA256SUMS    # macOS
+```
+
+**Check build provenance** with the [GitHub CLI](https://cli.github.com/).
+This confirms the file was built from this repository by GitHub Actions:
+
+```bash
+gh attestation verify lex-v<VERSION>.tar.gz -R elcafe7/lex
+```
+
+The SBOM is also attested against the archive:
+
+```bash
+gh attestation verify lex-v<VERSION>.tar.gz -R elcafe7/lex \
+  --predicate-type https://cyclonedx.org/bom
+```
+
+Releases published before the workflow existed have only the `.sha256`
+sidecar.
+
+---
+
 ## 📖 Basic Usage
 
 ### Reading
