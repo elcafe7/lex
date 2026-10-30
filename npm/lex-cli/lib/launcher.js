@@ -42,7 +42,11 @@ function installRoot() {
   return path.join(dataHome, "lex-cli", metadata.version);
 }
 
-function archiveRoot() {
+function archiveRoot(tag) {
+  // Release archives are rooted at lex-<version>/ for the tag they were cut
+  // from. When the launcher resolves a newer release than its own version,
+  // extract from that tag's root instead of the launcher's.
+  if (tag && /^v\d+\.\d+\.\d+$/.test(tag)) return `lex-${tag.slice(1)}`;
   return `lex-${metadata.version}`;
 }
 
@@ -187,7 +191,7 @@ async function downloadRelease(tag) {
     const extraction = path.join(temporary, "extracted");
     await fsp.mkdir(extraction);
     checked("tar", ["-xzf", archive, "-C", extraction]);
-    const source = path.join(extraction, archiveRoot());
+    const source = path.join(extraction, archiveRoot(tag));
     if (!validLexHome(source)) throw new Error("release archive does not contain a valid Lex distribution");
     await fsp.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
     try {

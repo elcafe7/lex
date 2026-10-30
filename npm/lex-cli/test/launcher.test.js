@@ -57,3 +57,8 @@ test("venv python path matches the current platform", () => {
     assert.equal(python, path.join(root, ".venv", "bin", "python"));
   }
 });
+
+test("archiveRoot follows a resolved release tag", () => {
+  assert.equal(launcher.archiveRoot("v9.9.9"), "lex-9.9.9");
+  assert.equal(launcher.archiveRoot("not-a-tag"), launcher.archiveRoot());
+});
