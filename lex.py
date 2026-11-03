@@ -220,7 +220,7 @@ class LexUpdateManager:
 # Lex is currently a single-file CLI that reads several local SQLite/JSON data
 # stores. Keep these paths centralized so future packaging can replace them
 # with config/env-driven paths without touching feature code.
-VERSION = "2.6.5"
+VERSION = "2.6.6"
 # Typographic dashes accepted in references, mapped to ASCII "-".
 REFERENCE_DASH_TRANSLATION = str.maketrans({ch: "-" for ch in "\u2010\u2011\u2012\u2013\u2014\u2015\u2212"})
 HISTORY_FILE = os.path.expanduser("~/.lex_history")
@@ -2059,12 +2059,12 @@ class LexAgent:
         also.add_row("Quick Study:", "lex John 3:16 -i")
         also.add_row("Verse Web:", "lex web John 3:16")
         also.add_row("Commentary:", "lex commentary John 3:16")
-        also.add_row("Export:", "lex export John 3:16  (Interactive export menu)")
+        also.add_row("Export:", "lex export John 3:16  (Asks for a format)")
         also.add_row("Nave's Topics:", "lex naves grace  or  lex naves John 3:16")
         also.add_row("Lexicon:", "lex G3056  or  lex logos")
         also.add_row("Creeds:", "lex creed")
         also.add_row("Define:", "lex define grace")
-        also.add_row("Versions:", "lex -v  (Interactive version menu)")
+        also.add_row("Versions:", "lex -v  (Explains -v and lists versions)")
         also.add_row("Switch Bible:", "lex version kjv  or  lex -v nasb")
         also.add_row("Select Once:", "lex -B lxx John 1:1")
 
@@ -2181,16 +2181,22 @@ Search scopes: `-ot`, `-nt`, `-law`, `-history`, `-wisdom`, `-prophets`,
 
 ## Export
 
-*   `lex export "John 3:16"` - interactive export menu
+*   `lex export "John 3:16"` - export, asking which format to save
 *   `lex export "John 3:16" --mode read --format png --ratio 1:1`
 *   `lex export "Ephesians 1" --mode study --format pdf`
 *   `lex export "John 3:16" --mode web --format docx`
 
 ## Versions And Settings
 
-*   `lex -v` - interactive Bible version menu
-*   `lex -v kjv` / `lex version kjv` / `lex bible kjv` - set default Bible
-*   `lex -B nasb John 3:16` - use a Bible version for one command
+*   `lex -v` - explain `-v` and list the 7 versions (current default marked)
+*   `lex -v kjv` / `lex version kjv` / `lex bible kjv` - set the default Bible (sticky)
+*   `lex -B nasb John 3:16` - use a Bible version for one command only (never saved)
+*   `lex -B` - explain `-B` and list the versions
+
+Versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `lxx`, `vulg` (alias `vulgate`).
+
+Any command or flag that needs an argument, run without one (for example
+`lex study`, `lex -B`, `lex --page`), prints a short explainer for it.
 *   `lex -light` / `lex -dark` / `lex -auto` - terminal theme preference
 *   `LEX_THEME=light lex John 3:16` - one-command theme override
 *   `LEX_NO_COLOR=1 lex search covenant` - plain terminal output
@@ -4854,7 +4860,7 @@ images, presentations, or study documents.
 ## Usage
 
 ```bash
-lex export "John 3:16"            # Interactive menu
+lex export "John 3:16"            # Asks which format to save
 lex -dark export "John 3:16" --mode read --format png --ratio 1:1
 lex export "Romans 8:28-39" --mode read --format pptx
 lex export "Ephesians 1" --mode study --format pdf
@@ -5767,6 +5773,159 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
         return True
 
 # ---------------------------------------------------------------------------
+# Command-specific explainers for bare flags
+# ---------------------------------------------------------------------------
+# Any flag that needs a value (`-v`, `-B`, `--page`, ...) prints a short,
+# flag-specific explainer when it is given without one. Explainers exit 0,
+# never raise argparse errors, and never write config or history.
+VALUE_FLAGS = {"-v", "-B", "--bible", "--page", "--limit", "--mode", "--format", "--ratio"}
+FLAG_ALIASES = {"--bible": "-B"}
+CANONICAL_BIBLE_IDS = [key for key, info in BIBLE_VERSIONS.items() if not info.get("alias")]
+
+def resolve_bible_id(value):
+    """Return the canonical Bible id for a user-supplied value, or None."""
+    target = (value or "").strip().lower()
+    if target in BIBLE_VERSIONS and BIBLE_VERSIONS[target].get("alias"):
+        target = BIBLE_VERSIONS[target]["alias"]
+    return target if target in BIBLE_VERSIONS else None
+
+def find_bare_value_flag(argv):
+    """Return the first value-taking flag in argv that has no value after it."""
+    for idx, token in enumerate(argv):
+        if token == "--":
+            break
+        if token not in VALUE_FLAGS:
+            continue
+        nxt = argv[idx + 1] if idx + 1 < len(argv) else None
+        if nxt is None or (nxt.startswith("-") and not re.fullmatch(r"-\d+", nxt)):
+            return FLAG_ALIASES.get(token, token)
+    return None
+
+def bible_versions_table():
+    default_id = load_bible_preference()
+    default_id = resolve_bible_id(default_id) or default_id
+    table = Table(box=None, padding=(0, 2))
+    table.add_column("Id", style="bold cyan", no_wrap=True)
+    table.add_column("Bible", style="text")
+    table.add_column("", style="bold green", no_wrap=True)
+    for bible_id in CANONICAL_BIBLE_IDS:
+        info = BIBLE_VERSIONS[bible_id]
+        name = info["name"]
+        if bible_id == "vulg":
+            name += " (alias: vulgate)"
+        marks = []
+        if bible_id == default_id:
+            marks.append("* current default")
+        if not bible_version_available(bible_id):
+            marks.append("not installed")
+        table.add_row(bible_id, name, ", ".join(marks))
+    return table
+
+FLAG_EXPLAINERS = {
+    "-v": ("Set Default Bible", """
+**`-v` sets your default Bible version.** It is sticky: Lex saves it and uses it
+for every command until you change it again.
+
+**Usage:** `lex -v <version>`
+
+*   `lex -v kjv` - make the KJV your default
+*   `lex -v nasb John 3:16` - switch the default to NASB, then read John 3:16
+*   `lex version esv` / `lex bible esv` - same as `lex -v esv`
+
+For a single command without changing your default, use `-B` instead.
+"""),
+    "-B": ("Bible For One Command", """
+**`-B` picks a Bible version for one command only.** It never changes your saved
+default; the next command goes back to your `-v` default.
+
+**Usage:** `lex -B <version> <reference or command>`
+
+*   `lex -B kjv John 3:16` - read John 3:16 in the KJV once
+*   `lex -B lxx study Genesis 1:1` - study in the Septuagint once
+*   `lex -B nasb strongs G3056` - reverse Strong's with NASB verse text
+
+To change your default instead, use `lex -v <version>`.
+"""),
+    "--page": ("Result Page", """
+**`--page` picks which page of results to show** for `search` and reverse Strong's.
+Pages start at 1 (the default).
+
+**Usage:** `lex search <terms> --page <number>`
+
+*   `lex search covenant --page 2`
+*   `lex strongs G3056 --page 3 --limit 25`
+
+**Valid values:** a whole number, 1 or higher.
+"""),
+    "--limit": ("Results Per Page", """
+**`--limit` sets how many results to show per page** for `search`, `web`,
+`history`, `manuscript`, and reverse Strong's.
+
+**Usage:** `lex <command> ... --limit <number>`
+
+*   `lex search covenant --limit 20`
+*   `lex strongs G3056 --limit 25`
+*   `lex history --limit 5`
+
+**Valid values:** a whole number, 1 or higher.
+"""),
+    "--mode": ("Export Mode", """
+**`--mode` chooses what `lex export` puts in the file.**
+
+**Usage:** `lex export "<reference>" --mode <mode> --format <format>`
+
+*   `lex export "John 3:16" --mode read --format png`
+*   `lex export "Ephesians 1" --mode study --format pdf`
+*   `lex export "John 3:16" --mode web --format docx`
+
+**Valid values:** `read` (verse text; png, pptx), `study` (interlinear, notes,
+TSK; pdf, docx), `web` (verse plus cross-references; pdf, docx). Default: `read`.
+"""),
+    "--format": ("Export Format", """
+**`--format` chooses the file type for `lex export`.** Without it, export asks
+which format you want.
+
+**Usage:** `lex export "<reference>" --format <format>`
+
+*   `lex export "John 3:16" --format png --ratio 1:1`
+*   `lex export "Romans 8:28-39" --format pptx`
+*   `lex export "Ephesians 1" --mode study --format pdf`
+
+**Valid values:** `png`, `pptx` (read mode); `pdf`, `docx` (study and web modes).
+"""),
+    "--ratio": ("PNG Aspect Ratio", """
+**`--ratio` sets the shape of PNG exports.**
+
+**Usage:** `lex export "<reference>" --format png --ratio <ratio>`
+
+*   `lex export "John 3:16" --format png --ratio 1:1`
+*   `lex export "Psalm 23" --format png --ratio 16:9`
+
+**Valid values:** `16:9` (default, slides and screens), `1:1` (square, social posts).
+"""),
+    "-i": ("Interlinear Study Flag", """
+**`-i` shows interlinear study data for a reference** (same as `lex study`).
+
+**Usage:** `lex <reference> -i`
+
+*   `lex John 3:16 -i`
+*   `lex Genesis 1:1 -i`
+*   `lex -B lxx Genesis 1:1 -i`
+"""),
+}
+
+def display_flag_explainer(flag, note=None):
+    """Print the explainer for a value-taking flag. Never writes state."""
+    title, md = FLAG_EXPLAINERS[flag]
+    parts = [Markdown(md.strip())]
+    if note:
+        parts.insert(0, Markdown(f"**Note:** {note}"))
+        parts.insert(1, Text(""))
+    if flag in {"-v", "-B"}:
+        parts.extend([Text(""), Text("Valid versions:", style="bold"), bible_versions_table()])
+    console.print(Panel(Group(*parts), title=f"🧭 lex {flag}: {title}", border_style="ui.border", expand=False))
+
+# ---------------------------------------------------------------------------
 # CLI dispatch
 # ---------------------------------------------------------------------------
 # Keep parsing and routing here thin. Feature behavior should live on LexAgent
@@ -5805,8 +5964,10 @@ def main():
   lex naves grace                   browse Nave's topical index
   lex commentary John 3:16         read available commentary
   lex -v esv                        set the default Bible version
+  lex -B kjv John 3:16              use a Bible version for one command
 
-Run `lex <command>` without an argument for command-specific help.
+Run `lex <command>` or a flag such as `lex -v` without an argument for
+command-specific help.
 """,
     )
     parser.add_argument("query", nargs="*")
@@ -5814,9 +5975,9 @@ Run `lex <command>` without an argument for command-specific help.
     parser.add_argument("-d", "--define", action="store_true", help="Treat the query as a dictionary/encyclopedia lookup")
     parser.add_argument("-c", "--creed", action="store_true", help="Open the creed/confession navigator or lookup")
     parser.add_argument("-s", "--strongs", action="store_true", help="Treat the query as a Strong's lookup")
-    parser.add_argument("-v", dest="bible_version", type=str, default=None, help="Set Bible version (e.g. -v vulgate, -v kjv, -v esv)")
+    parser.add_argument("-v", dest="bible_version", type=str, default=None, help="Set the sticky default Bible version (e.g. -v kjv). Bare `lex -v` explains it and lists versions")
     parser.add_argument("--version", action="version", version=VERSION)
-    parser.add_argument("-B", "--bible", type=str, default=None, choices=BIBLE_VERSIONS.keys(), help="Select Bible version for current command (legacy)")
+    parser.add_argument("-B", "--bible", type=str, default=None, metavar="{" + ",".join(CANONICAL_BIBLE_IDS) + "}", help="Use a Bible version for this one command only; never changes the default")
     parser.add_argument("--update", action="store_true", help="Check for and install data updates")
     theme_group = parser.add_mutually_exclusive_group()
     theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light", help="Use and remember the light terminal theme")
@@ -5834,12 +5995,50 @@ Run `lex <command>` without an argument for command-specific help.
     parser.add_argument("--animate", dest="animate", action="store_true", default=None, help="Animate study/read transitions where supported")
     parser.add_argument("--no-animate", dest="animate", action="store_false", help="Disable study/read transition animation")
     parser.add_argument("--clear", action="store_true", help="Clear command history when used with `lex history`; `lex history clear` also works")
+    # Bare value flags (`lex -v`, `lex -B`, `lex --page`, ...) get a
+    # flag-specific explainer instead of an argparse error. This runs before
+    # any state is touched (theme, config, history, data downloads).
+    bare_flag = find_bare_value_flag(raw_argv)
+    if bare_flag:
+        display_flag_explainer(bare_flag)
+        sys.exit(0)
     args, unknown = parser.parse_known_args(raw_argv)
+    args.query = [f"-{q[len('__lexscope__'):]}" if q.startswith("__lexscope__") else q for q in args.query]
+
+    # -B is always a one-command override. Validate it, and when there is no
+    # command for it to apply to, explain -B instead of saving anything.
+    if args.bible:
+        requested_bible = args.bible
+        args.bible = resolve_bible_id(requested_bible)
+        if not args.bible:
+            console.print(f"[error]Unknown Bible version: {requested_bible}[/]")
+            console.print(f"Available: {', '.join(CANONICAL_BIBLE_IDS)} (see `lex -B`)")
+            sys.exit(1)
+        if not args.query and not unknown and not (args.next or args.prev or args.credits or args.update):
+            display_flag_explainer(
+                "-B",
+                note=(
+                    f"`-B {args.bible}` applies {args.bible.upper()} ({BIBLE_VERSIONS[args.bible]['name']}) "
+                    f"to one command only, and there is no command here, so nothing was changed. "
+                    f"Try `lex -B {args.bible} John 3:16`, or `lex -v {args.bible}` to make it your default."
+                ),
+            )
+            sys.exit(0)
+
+    # Bare `-i` needs a reference to study.
+    if args.interlinear and not args.query and not unknown and not (args.next or args.prev):
+        display_flag_explainer("-i")
+        sys.exit(0)
+
+    # `lex version` / `lex bible` with no id behave like bare `lex -v`.
+    if [q.lower() for q in args.query] in (["version"], ["bible"]) and not args.bible_version:
+        display_flag_explainer("-v")
+        sys.exit(0)
+
     if args.theme_mode == "auto":
         clear_theme_preference()
     elif args.theme_mode:
         save_theme_preference(args.theme_mode)
-    args.query = [f"-{q[len('__lexscope__'):]}" if q.startswith("__lexscope__") else q for q in args.query]
 
     # Initialize Update Manager and ensure data exists
     manager = LexUpdateManager(console, data_dir=DATA_DIR)
@@ -5863,8 +6062,9 @@ Run `lex <command>` without an argument for command-specific help.
 
     # Alias "bible" or "version" to persistent switch
     if query.startswith("bible ") or query.startswith("version "):
-        target = query.split(" ", 1)[1].strip()
-        if target in BIBLE_VERSIONS:
+        requested = query.split(" ", 1)[1].strip()
+        target = resolve_bible_id(requested)
+        if target:
             if not bible_version_available(target):
                 print_missing_bible_version(target)
                 sys.exit(1)
@@ -5872,16 +6072,15 @@ Run `lex <command>` without an argument for command-specific help.
             console.print(f"[success]Default Bible version set to [bold cyan]{target}[/] ({BIBLE_VERSIONS[target]['name']})[/]")
             sys.exit(0)
         else:
-            console.print(f"[error]Unknown Bible version: {target}[/]")
+            console.print(f"[error]Unknown Bible version: {requested}[/]")
+            console.print(f"Available: {', '.join(CANONICAL_BIBLE_IDS)} (see `lex -v`)")
             sys.exit(1)
 
     # Handle -v Bible-version selection cleanly
     if args.bible_version:
-        target = args.bible_version.lower()
-        # Resolve alias (vulgate -> vulg)
-        if target in BIBLE_VERSIONS and BIBLE_VERSIONS[target].get("alias"):
-            target = BIBLE_VERSIONS[target]["alias"]
-        if target in BIBLE_VERSIONS:
+        # -v is the sticky default. Resolve aliases (vulgate -> vulg).
+        target = resolve_bible_id(args.bible_version)
+        if target:
             if not bible_version_available(target):
                 print_missing_bible_version(target)
                 sys.exit(1)
@@ -5891,19 +6090,11 @@ Run `lex <command>` without an argument for command-specific help.
                 sys.exit(0)
             # Continue with the query using the new default
         else:
-            console.print(f"[error]Unknown Bible version: {target}[/]")
-            console.print(f"Available: {', '.join(BIBLE_VERSIONS.keys())}")
+            console.print(f"[error]Unknown Bible version: {args.bible_version}[/]")
+            console.print(f"Available: {', '.join(CANONICAL_BIBLE_IDS)} (see `lex -v`)")
             sys.exit(1)
-        # Interactive menu removed. Use `lex -v <id>` to switch version cleanly.
 
-    # Handle persistent bible selection: "lex -B kjv" with no query
-    if args.bible and not query:
-        if not bible_version_available(args.bible):
-            print_missing_bible_version(args.bible)
-            sys.exit(1)
-        save_bible_preference(args.bible)
-        console.print(f"[success]Default Bible version set to [bold cyan]{args.bible}[/] ({BIBLE_VERSIONS[args.bible]['name']})[/]")
-        sys.exit(0)
+    # -B never writes config: `lex -B kjv` with no command was handled above.
 
     selected_bible = args.bible or load_bible_preference()
     if not bible_version_available(selected_bible):
@@ -5935,6 +6126,37 @@ Run `lex <command>` without an argument for command-specific help.
             sys.exit(1)
         agent.display_query_history(limit=args.limit or 10)
         sys.exit(0)
+
+    # Bare subcommands that need an argument print their command-specific
+    # explainer, exit 0, and are not recorded in history.
+    bare_subcommand_help = {
+        "read": agent.display_read_landing,
+        "study": agent.display_study_landing,
+        "search": agent.display_search_howto,
+        "serch": agent.display_search_howto,
+        "web": agent.display_web_howto,
+        "manuscript": agent.display_manuscript_howto,
+        "export": agent.display_export_howto,
+        "strongs": agent.display_strongs_howto,
+        "topic": agent.display_topic_howto,
+        "naves": agent.display_topic_howto,
+        "commentary": agent.display_commentary_howto,
+        "define": agent.display_dictionary_howto,
+    }
+    words = query.split()
+    if words and words[0] in {"search", "serch"} and all(w.startswith("-") for w in words[1:]):
+        # Scope flags with no search terms (`lex search -nt`) still need terms.
+        query = words[0]
+    if query in bare_subcommand_help and not (args.next or args.prev):
+        bare_subcommand_help[query]()
+        sys.exit(0)
+    if not query and not (args.next or args.prev):
+        if args.strongs:
+            agent.display_strongs_howto()
+            sys.exit(0)
+        if args.define:
+            agent.display_dictionary_howto()
+            sys.exit(0)
 
     if raw_argv:
         agent.save_query_history("lex " + shlex.join(raw_argv))

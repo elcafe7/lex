@@ -294,12 +294,16 @@ To print the Lex application version for scripts or package checks:
 lex --version
 ```
 
-### 1. Interactive Menu
-To see all versions and select a new default through a simple menu:
+### 1. See The Versions
+To see what `-v` does and list all versions, with your current default marked:
 
 ```bash
 lex -v
 ```
+
+Running `lex -B` on its own works the same way for one-time selection. Any
+command or flag that needs an argument, such as `lex study` or `lex --page`,
+prints a short explainer when you run it without one.
 
 ### 2. Direct Switch (Permanent)
 To change your default version instantly:
@@ -315,6 +319,9 @@ To use a different version for just one command without changing your default:
 ```bash
 lex -B lxx Genesis 1:1  # Read the Septuagint once
 ```
+
+`-B` never changes your saved default. `lex -B kjv` with nothing after it just
+explains `-B` and leaves your default alone.
 
 By default, Lex uses the **ESV (English Standard Version)**.
 
