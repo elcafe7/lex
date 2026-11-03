@@ -13,6 +13,7 @@ import sys
 import re
 import json
 import argparse
+import io
 from collections import Counter
 import shlex
 import time
@@ -121,6 +122,62 @@ def rich_lexicon_text(value):
 
 TRUSTED_FETCH_HOSTS = {"raw.githubusercontent.com", "poeta.icu"}
 
+
+STRONGS_REF_GAP = re.compile(r"(?<=\S) (?= )|(?<=[A-Za-z]) (?=[),;.:])|^ (?=[),;])")
+STRONGS_REF_PUNCT_GAP = re.compile(r"(?<=[A-Za-z]) (?=[),;.:])|^ (?=[),;])")
+
+def clean_strongs_definition(raw):
+    """Return (text, refs) for a strongs.db definition.
+
+    About 200 Greek rows store the definition as an XML-to-JSON object such as
+    {"_": " to breathe ... from , which ...", "strongsref": [{"$": {...}}]}.
+    The cross-referenced words were lifted out of the text, leaving gaps like
+    "from , which". Put the Strong's numbers (or Greek/Latin words) back into
+    the gaps when the gap count matches exactly; otherwise append them as
+    "(see G4154, G109)". Plain definitions are returned unchanged.
+    """
+    text = raw or ""
+    stripped = text.strip()
+    if not (stripped.startswith("{") and '"_"' in stripped):
+        return text, []
+    try:
+        data = json.loads(stripped)
+    except (ValueError, TypeError):
+        return text, []
+    if not isinstance(data, dict) or not isinstance(data.get("_"), str):
+        return text, []
+    body = data["_"].replace("\n ", " ").replace("\n", " ")
+    fills, refs = [], []
+    kinds = [kind for kind in ("strongsref", "greek", "latin") if data.get(kind)]
+    for kind in kinds:
+        items = data.get(kind)
+        for item in items if isinstance(items, list) else [items]:
+            attrs = item.get("$", {}) if isinstance(item, dict) else {}
+            if kind == "strongsref":
+                number = str(attrs.get("strongs", "")).lstrip("0")
+                if not number.isdecimal():
+                    continue
+                prefix = "H" if str(attrs.get("language", "")).upper().startswith("HEB") else "G"
+                label = f"{prefix}{int(number)}"
+                refs.append(label)
+            else:
+                label = attrs.get("unicode") or attrs.get("translit") or ""
+                if not label:
+                    continue
+            fills.append(label)
+    filled = False
+    if fills and len(kinds) == 1:
+        for gap in (STRONGS_REF_GAP, STRONGS_REF_PUNCT_GAP):
+            if len(gap.findall(body)) == len(fills):
+                queue = iter(fills)
+                body = gap.sub(lambda _match: " " + next(queue), body)
+                filled = True
+                break
+    body = " ".join(body.split())
+    body = re.sub(r"\s+([),;.:])", r"\1", body)
+    if fills and not filled:
+        body = f"{body} (see {', '.join(fills)})"
+    return body.strip(), refs
 
 def open_trusted_https(url_or_request, *, timeout=15):
     """Open only the fixed HTTPS origins used by Lex update/data fetches."""
@@ -1062,7 +1119,9 @@ def has_theme_override(raw_argv):
     return load_config().get("theme") in {"light", "dark"}
 
 def resolve_no_color(raw_argv):
-    if os.environ.get("LEX_NO_COLOR"):
+    # LEX_NO_COLOR is Lex's own switch; NO_COLOR is the cross-tool convention
+    # (https://no-color.org): any non-empty value disables colour.
+    if os.environ.get("LEX_NO_COLOR") or os.environ.get("NO_COLOR"):
         return True
     return False
 
@@ -5477,7 +5536,9 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
         pieces.append(f"All: lex strongs {strongs_id} --all")
         return "\n\n[dim]" + "  |  ".join(pieces) + "[/]"
 
-    def display_strongs(self, query, page=1, limit=8, show_all=False):
+    def find_strongs_rows(self, query):
+        """Return [(number, word, pronunciation, definition)] for a Strong's number,
+        a pronunciation, or a lexicon full-text match (at most 5 rows)."""
         if re.match(r'^[GH]\d+$', query.upper()):
             _, strongs_db_key, _ = self.normalize_strongs_key(query)
             res = self.strongs_db.query(
@@ -5498,7 +5559,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
             if not res:
                 safe_query = self.escape_fts_query(query)
                 if not safe_query:
-                    return False
+                    return []
                 res = self.strongs_db.query(
                     """
                     SELECT s.number, s.word, s.pronunciation, s.definition
@@ -5509,9 +5570,14 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                     """,
                     (safe_query,)
                 )
+        return res
+
+    def display_strongs(self, query, page=1, limit=8, show_all=False):
+        res = self.find_strongs_rows(query)
         for n, w, p, d in res:
             lang = "Greek" if n.startswith('G') else "Hebrew"
             extended_entry = self.lookup_lexicon_entry(n)
+            d, _brief_refs = clean_strongs_definition(d)
 
             definition_text = rich_escape(d or "")
             if extended_entry["step"] and extended_entry["step"].get("definition"):
@@ -5548,10 +5614,12 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
             console.print(Panel(f"[lexicon.word]{rich_escape(w or '')}[/] ({rich_escape(p or '')})\n\n{definition_text}", title=f"📚 {lang} Lexicon: {n}", border_style="blue"))
         return bool(res)
 
-    def display_english_strongs(self, query):
+    def find_english_strongs(self, query):
+        """Return [(number, word, pronunciation, definition, matched_gloss)] for an
+        English word: interlinear gloss matches first, then lexicon full text."""
         normalized = self.normalize_term(query)
         if not normalized:
-            return False
+            return []
         exact_results = []
         fuzzy_results = []
         seen = set()
@@ -5595,6 +5663,10 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 seen.add(n)
                 if len(results) >= 12:
                     break
+        return results
+
+    def display_english_strongs(self, query):
+        results = self.find_english_strongs(query)
         if not results:
             return False
         table = Table(title=f"🔤 Strong's Lookup: '{rich_escape(query)}'", box=None)
@@ -5604,6 +5676,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
         table.add_column("English", style="text")
         table.add_column("Definition", overflow="fold")
         for number, word, pronunciation, definition, gloss in results:
+            definition = clean_strongs_definition(definition)[0]
             table.add_row(*(rich_escape(str(value or "")) for value in (number, word, pronunciation, gloss, definition)))
         console.print(table)
         return True
@@ -5875,6 +5948,471 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
         return True
 
 # ---------------------------------------------------------------------------
+# Machine-readable output (--json)
+# ---------------------------------------------------------------------------
+# `lex --json ...` prints exactly one JSON document on stdout (schema in
+# docs/json-output.md), never prompts, never animates, and never writes the
+# sticky default Bible, theme, or history. Errors are one JSON object on
+# stderr with a nonzero exit code. Bump JSON_SCHEMA_VERSION only for
+# breaking changes; adding fields is not breaking.
+JSON_SCHEMA_VERSION = 1
+JSON_EXIT_INTERNAL = 1
+JSON_EXIT_USAGE = 2
+JSON_EXIT_NOT_FOUND = 3
+JSON_EXIT_DATA = 4
+JSON_COMMANDS = ["read", "study", "strongs", "web", "search"]
+JSON_UNSUPPORTED_COMMANDS = {
+    "define", "creed", "creeds", "commentary", "naves", "topic", "manuscript",
+    "export", "history", "help", "commands", "options", "all", "update", "words",
+}
+
+class JsonExit(Exception):
+    """A JSON-mode error: becomes {"error": {...}} on stderr and an exit code."""
+
+    def __init__(self, code, message, exit_code=JSON_EXIT_USAGE, hint=None, **extra):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.exit_code = exit_code
+        self.hint = hint
+        self.extra = extra
+
+def json_mode_requested(argv):
+    """True when --json appears before any `--` end-of-options marker."""
+    for token in argv:
+        if token == "--":
+            return False
+        if token == "--json":
+            return True
+    return False
+
+def json_envelope(command, edition=None, **fields):
+    payload = {"schema_version": JSON_SCHEMA_VERSION, "lex_version": VERSION, "command": command}
+    if edition:
+        payload["edition"] = edition
+        payload["edition_name"] = BIBLE_VERSIONS.get(edition, {}).get("name", edition)
+    payload.update(fields)
+    return payload
+
+def json_error_payload(code, message, hint=None, **extra):
+    error = {"code": code, "message": message}
+    if hint:
+        error["hint"] = hint
+    error.update(extra)
+    return {"schema_version": JSON_SCHEMA_VERSION, "lex_version": VERSION, "error": error}
+
+def json_dumps(payload):
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+def json_strongs_codes(raw):
+    """Normalise "g3056", "H0430", "h3651+h5921" to ["G3056"], ["H430"], ["H3651", "H5921"]."""
+    codes = []
+    for match in re.findall(r"[GH]\d+", str(raw or "").upper()):
+        code = f"{match[0]}{int(match[1:])}"
+        if code not in codes:
+            codes.append(code)
+    return codes
+
+def json_ref_fields(agent, db_ref):
+    parts = agent.parse_reference_parts(db_ref)
+    if not parts:
+        return {"ref": db_ref, "key": db_ref}
+    book = agent.reverse_canon_map.get(parts["book"], parts["book"])
+    return {
+        "ref": f"{book} {parts['chapter']}:{parts['verse']}",
+        "key": db_ref,
+        "book": book,
+        "chapter": parts["chapter"],
+        "verse": parts["verse"],
+    }
+
+def json_verse(agent, db_ref, text):
+    verse = json_ref_fields(agent, db_ref)
+    verse["text"] = agent.clean_text(text or "")
+    return verse
+
+def json_passage(agent, query):
+    """Return a passage dict for a verse, verse range, or chapter, or None."""
+    ref_norm, book, chap, verse, v_end = agent.normalize_ref(query)
+    if not ref_norm:
+        return None
+    db_book = agent.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
+    rows = []
+    if verse and v_end:
+        rows = agent.bible_db.query(
+            """
+            SELECT reference, text
+            FROM bible
+            WHERE id >= (SELECT id FROM bible WHERE reference = ? LIMIT 1)
+              AND id <= (SELECT id FROM bible WHERE reference = ? LIMIT 1)
+            ORDER BY id
+            """,
+            (f"{agent.bible_prefix}:{db_book}:{chap}:{verse}", f"{agent.bible_prefix}:{db_book}:{chap}:{v_end}"),
+        )
+        if not rows:
+            v_end = None
+    if verse and not rows:
+        rows = [
+            (ref, text) for _, ref, text in agent.bible_db.query(
+                "SELECT MIN(id), reference, text FROM bible WHERE reference LIKE ? GROUP BY reference LIMIT 1",
+                (f"%:{db_book}:{chap}:{verse}",),
+            )
+        ]
+    elif not verse:
+        rows = agent.bible_db.query(
+            """
+            SELECT reference, text
+            FROM bible
+            WHERE id IN (
+                SELECT MIN(id) FROM bible
+                WHERE reference LIKE ? AND reference NOT LIKE '%:0'
+                GROUP BY reference
+            )
+            ORDER BY id
+            """,
+            (f"%:{db_book}:{chap}:%",),
+        )
+    verses, seen = [], set()
+    for ref, text in rows:
+        if ref in seen or ref.endswith(":0"):
+            continue
+        seen.add(ref)
+        verses.append(json_verse(agent, ref, text))
+    if not verses:
+        return None
+    first, last = verses[0], verses[-1]
+    label = first.get("book", book)
+    if not verse:
+        label = f"{label} {first.get('chapter', chap)}"
+    elif len(verses) == 1:
+        label = first["ref"]
+    else:
+        label = f"{label} {first.get('chapter')}:{first.get('verse')}-{last.get('verse')}"
+    return {
+        "query": query,
+        "ref": label,
+        "book": first.get("book", book),
+        "chapter": first.get("chapter"),
+        "verse_start": first.get("verse") if verse else None,
+        "verse_end": last.get("verse") if verse else None,
+        "verses": verses,
+    }
+
+def json_read(agent, edition, query):
+    parts = [p.strip() for p in re.split(r"[,;]+", query) if p.strip()]
+    passages, missing = [], []
+    for part in parts:
+        passage = json_passage(agent, part)
+        if passage:
+            passages.append(passage)
+        else:
+            missing.append(part)
+    if not passages:
+        raise JsonExit(
+            "not_found", f"No verse or chapter found for: {query}", JSON_EXIT_NOT_FOUND,
+            hint="Check the reference, or use `lex --json search <terms>` for words and `lex --json strongs <number>` for Strong's.",
+        )
+    return json_envelope("read", edition, query=query, passages=passages, not_found=missing)
+
+def json_study_verse(agent, query):
+    ref_norm, book, chap, verse, _v_end = agent.normalize_ref(query)
+    if not ref_norm:
+        return None, f"Not a Bible reference: {query}"
+    db_book = agent.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
+    res = agent.bible_db.query(
+        "SELECT MIN(id), reference, text FROM bible WHERE reference LIKE ? GROUP BY reference LIMIT 1",
+        (f"%:{db_book}:{chap}:{verse or '1'}",),
+    )
+    if not res:
+        return None, f"No verse found for: {query}"
+    _, db_ref, text = res[0]
+    item = json_verse(agent, db_ref, text)
+    version = (agent.parse_reference_parts(db_ref) or {}).get("version")
+    route = agent.resolve_study_source_route(db_ref)
+    if version in {"lxx", "vulg"} or not route:
+        raise JsonExit(
+            "unsupported_edition", f"--json study does not support {(version or '').upper()} yet.", JSON_EXIT_USAGE,
+            hint="Use -B esv (direct interlinear) or -B gen (labelled proxy).",
+        )
+    source = {
+        "base": route["target_base"],
+        "source_key": route.get("source_ref"),
+        "confidence": route["confidence"],
+        "warning": route.get("warning"),
+    }
+    item["source"] = source
+    if not route.get("source_ref"):
+        item["tokens"] = []
+        item["source_text"] = None
+        item["source_translit"] = None
+        return item, None
+    row = agent.resolve_interlinear_row(route["source_ref"])
+    if not row or not row.get("p"):
+        return None, f"No local interlinear data found for {item['ref']}."
+    parsed = [agent.parse_interlinear_token(token) for token in row["p"]]
+    source["language"] = agent.detect_source_language(parsed)
+    ordered = sorted(
+        [token for token in parsed if token["surface"]],
+        key=lambda token: token["source_order"] if token["source_order"] is not None else 9999,
+    )
+    item["source_text"] = " ".join(token["surface"] for token in ordered) or None
+    item["source_translit"] = " ".join(token["translit"] for token in ordered if token["translit"]) or None
+    tokens = []
+    for position, token in enumerate(parsed, start=1):
+        codes = json_strongs_codes(token["strongs"])
+        tokens.append({
+            "position": position,
+            "word": token["english"] or None,
+            "strongs": codes,
+            "gloss": token["gloss"] or None,
+            "lemma": token["lemma"] or None,
+            "lemma_translit": token["lemma_translit"] or None,
+            "surface": token["surface"] or None,
+            "translit": token["translit"] or None,
+            "morph": token["morph"] or None,
+            "source_order": token["source_order"],
+            "confidence": route["confidence"] if codes else "untagged",
+        })
+    item["tokens"] = tokens
+    return item, None
+
+def json_study(agent, edition, query):
+    parts = [p.strip() for p in re.split(r"[,;]+", query) if p.strip()]
+    verses, missing = [], []
+    for part in parts:
+        item, problem = json_study_verse(agent, part)
+        if item:
+            verses.append(item)
+        else:
+            missing.append({"query": part, "message": problem})
+    if not verses:
+        raise JsonExit(
+            "not_found", missing[0]["message"] if missing else f"No study data for: {query}", JSON_EXIT_NOT_FOUND,
+            hint="Run `lex update` if interlinear data is missing.",
+        )
+    return json_envelope("study", edition, query=query, verses=verses, not_found=missing)
+
+def json_strongs_entry(agent, number, word, pronunciation, definition, page, limit, show_all):
+    brief, brief_refs = clean_strongs_definition(definition)
+    extended = agent.lookup_lexicon_entry(number)
+    long_definition = None
+    if extended["step"] and extended["step"].get("definition"):
+        long_definition = {
+            "text": " ".join(plain_lexicon_text(extended["step"]["definition"]).split()),
+            "source": str(extended["step"].get("source") or "Extended Lexicon"),
+        }
+    page = max(1, int(page or 1))
+    limit = max(1, min(int(limit or 8), 250))
+    usage, total = agent.get_strongs_usage(number, page=page, limit=limit, show_all=show_all)
+    verses = []
+    for item in usage:
+        verse = json_ref_fields(agent, item["target_ref"])
+        verse["source_key"] = item["source_ref"]
+        verse["token_count"] = item["token_count"]
+        verse["text"] = item["text"]
+        verses.append(verse)
+    projected_to = agent.bible_prefix if agent.bible_prefix != "esv" else None
+    return {
+        "number": number,
+        "language": "greek" if number.upper().startswith("G") else "hebrew",
+        "lemma": word or None,
+        "pronunciation": pronunciation or None,
+        "brief": " ".join((brief or "").split()) or None,
+        "brief_refs": brief_refs,
+        "definition": long_definition,
+        "usage": {
+            "index": "esv-interlinear",
+            "indexed": bool(total),
+            "projected_to": projected_to,
+            "total": total,
+            "page": None if show_all else page,
+            "limit": None if show_all else limit,
+            "page_count": 1 if show_all else max(1, (total + limit - 1) // limit),
+            "all": bool(show_all),
+            "verses": verses,
+            "note": None if total else (
+                "Not in the ESV interlinear index. This is not proof the word never occurs: "
+                "Textus Receptus-only words and some Hebrew tags are missing from the ESV-keyed index."
+            ),
+        },
+    }
+
+def json_strongs(agent, edition, query, page, limit, show_all):
+    query = query.strip()
+    if re.fullmatch(r"[GHgh]\d+", query):
+        rows = agent.find_strongs_rows(query)
+        if not rows:
+            raise JsonExit("not_found", f"No Strong's entry for {query.upper()}.", JSON_EXIT_NOT_FOUND)
+        entries = [json_strongs_entry(agent, *row, page, limit, show_all) for row in rows]
+        return json_envelope("strongs", edition, query=query, match="number", entries=entries)
+    english = agent.find_english_strongs(query)
+    if english:
+        results = []
+        for number, word, pronunciation, definition, matched in english:
+            brief, brief_refs = clean_strongs_definition(definition)
+            results.append({
+                "number": number,
+                "language": "greek" if str(number).upper().startswith("G") else "hebrew",
+                "lemma": word or None,
+                "pronunciation": pronunciation or None,
+                "matched": matched or None,
+                "brief": " ".join((brief or "").split()) or None,
+                "brief_refs": brief_refs,
+            })
+        return json_envelope("strongs_search", edition, query=query, match="english", results=results)
+    rows = agent.find_strongs_rows(query)
+    if not rows:
+        raise JsonExit("not_found", f"No Strong's entries found for: {query}", JSON_EXIT_NOT_FOUND)
+    entries = [json_strongs_entry(agent, *row, page, limit, show_all) for row in rows]
+    return json_envelope("strongs", edition, query=query, match="lexicon", entries=entries)
+
+def json_web(agent, edition, query, limit):
+    ref_norm, book, chap, verse, _v_end = agent.normalize_ref(query)
+    if not ref_norm or not verse:
+        raise JsonExit("usage", "Cross-references need a single verse, e.g. `lex --json web John 3:16`.", JSON_EXIT_USAGE)
+    db_book = agent.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
+    rows = agent.bible_db.query(
+        "SELECT MIN(id), reference, text FROM bible WHERE reference LIKE ? GROUP BY reference LIMIT 1",
+        (f"%:{db_book}:{chap}:{verse}",),
+    )
+    if not rows:
+        raise JsonExit("not_found", f"No verse found for: {query}", JSON_EXIT_NOT_FOUND)
+    _, db_ref, text = rows[0]
+    limit = max(1, min(int(limit or 12), 100))
+    links = []
+    for rank, (to_ref, votes) in enumerate(agent.get_tsk_crossrefs(db_ref)[:limit], start=1):
+        target = agent.parse_tsk_ref(to_ref)
+        links.append({
+            "rank": rank,
+            "ref": agent.format_tsk_display_ref(to_ref),
+            "key": target,
+            "tsk_ref": to_ref,
+            "votes": votes,
+            "text": agent.get_crossref_text(to_ref),
+        })
+    return json_envelope(
+        "web", edition, query=query, verse=json_verse(agent, db_ref, text),
+        source="openbible-tsk", limit=limit, cross_references=links,
+    )
+
+def json_search(agent, edition, query, page, limit):
+    state = agent.resolve_search(query, page=page or 1, limit=limit or 10)
+    if not state:
+        raise JsonExit("not_found", f"No scripture search results for: {query}", JSON_EXIT_NOT_FOUND)
+    results = []
+    for idx, (ref, text) in enumerate(state["results"], start=1):
+        item = {"rank": state["offset"] + idx}
+        item.update(json_verse(agent, ref, text))
+        results.append(item)
+    scope = state.get("scope")
+    return json_envelope(
+        "search", edition,
+        query=state["query"],
+        effective_query=state["effective_query"],
+        corrections=[{"from": old, "to": new} for old, new in state.get("corrections") or []],
+        mode=state["mode"],
+        scope={"label": scope["label"], "books": list(scope["books"])} if scope else None,
+        page=state["page"], limit=state["limit"], page_count=state["page_count"], total=state["total"],
+        results=results,
+    )
+
+def json_dispatch(raw_argv):
+    parser = build_arg_parser()
+
+    def usage_error(message):
+        raise JsonExit("usage", message, JSON_EXIT_USAGE, hint="Run `lex help`; JSON schema: docs/json-output.md")
+
+    parser.error = usage_error
+    argv = protect_search_scope_flags(raw_argv)
+    bare_flag = find_bare_value_flag(argv)
+    if bare_flag:
+        raise JsonExit("usage", f"`{bare_flag}` needs a value.", JSON_EXIT_USAGE, hint=f"Run `lex {bare_flag}` for an explainer.")
+    args, unknown = parser.parse_known_args(argv)
+    args.query = [f"-{q[len('__lexscope__'):]}" if q.startswith("__lexscope__") else q for q in args.query]
+    query = " ".join(args.query).strip()
+    words = query.split()
+    first = words[0].lower() if words else ""
+
+    if args.bible_version or (first in {"version", "bible"}):
+        requested = args.bible_version or (words[1] if len(words) > 1 else "<version>")
+        raise JsonExit(
+            "sticky_default_in_json", "`-v`, `lex version` and `lex bible` change the saved default Bible, so --json does not allow them.",
+            JSON_EXIT_USAGE, hint=f"Use `-B {requested}` to pick a Bible for one command.",
+        )
+    if args.update or args.credits or args.next or args.prev or args.clear or args.define or args.creed or first in JSON_UNSUPPORTED_COMMANDS:
+        raise JsonExit(
+            "unsupported_in_json", f"`{first or 'that option'}` does not have JSON output yet.", JSON_EXIT_USAGE,
+            supported=JSON_COMMANDS,
+        )
+
+    edition = None
+    if args.bible:
+        edition = resolve_bible_id(args.bible)
+        if not edition:
+            raise JsonExit("unknown_edition", f"Unknown Bible version: {args.bible}", JSON_EXIT_USAGE, available=CANONICAL_BIBLE_IDS)
+
+    if unknown:
+        if first in {"search", "serch", "read"} and all(u.startswith("-") and not u.startswith("--") for u in unknown):
+            args.query.extend(unknown)
+            query = " ".join(args.query).strip()
+            words = query.split()
+        else:
+            usage_error(f"unrecognized arguments: {' '.join(unknown)}")
+
+    if not query or (first in {"search", "serch"} and all(w.startswith("-") for w in words[1:])) or (
+        first in {"read", "study", "strongs", "web"} and len(words) == 1
+    ):
+        raise JsonExit(
+            "usage", f"`{first or 'lex --json'}` needs something to look up.", JSON_EXIT_USAGE,
+            hint="Examples: lex --json John 3:16 | lex --json strongs G3056 | lex --json search grace", supported=JSON_COMMANDS,
+        )
+
+    manager = LexUpdateManager(console, data_dir=DATA_DIR)
+    if not manager.ensure_data():
+        raise JsonExit("data_missing", "Lex data is not installed and could not be downloaded.", JSON_EXIT_DATA, hint="Run `lex update`.")
+    edition = edition or resolve_bible_id(load_bible_preference()) or load_bible_preference()
+    if not bible_version_available(edition):
+        raise JsonExit("edition_not_installed", f"Bible version {edition} is not installed.", JSON_EXIT_DATA, hint="Run `lex update`.")
+    agent = LexAgent(bible_id=edition)
+    rest = query.split(" ", 1)[1].strip() if " " in query else ""
+
+    if first in {"search", "serch"}:
+        return json_search(agent, edition, rest, args.page, args.limit)
+    if first == "web":
+        return json_web(agent, edition, rest, args.limit)
+    if first == "study":
+        return json_study(agent, edition, rest)
+    if first == "strongs":
+        return json_strongs(agent, edition, rest, args.page, args.limit, args.all)
+    if args.strongs or re.fullmatch(r"[GHgh]\d+", query):
+        return json_strongs(agent, edition, query, args.page, args.limit, args.all)
+    if first == "read":
+        query = rest
+    if args.interlinear:
+        return json_study(agent, edition, query)
+    return json_read(agent, edition, query)
+
+def run_json_cli(raw_argv):
+    """Entry point for `lex --json ...`. Never returns; exits with a JSON-mode code."""
+    global console
+    # Swallow any Rich output from shared code paths (downloads, warnings) so
+    # stdout carries only the JSON document.
+    console = Console(file=io.StringIO(), theme=custom_theme, no_color=True, width=120, emoji=False)
+    try:
+        payload = json_dispatch(raw_argv)
+    except JsonExit as exc:
+        sys.stderr.write(json_dumps(json_error_payload(exc.code, exc.message, exc.hint, **exc.extra)) + "\n")
+        sys.exit(exc.exit_code)
+    except SystemExit:
+        raise
+    except Exception as exc:  # report, don't print a traceback into an agent's parser
+        sys.stderr.write(json_dumps(json_error_payload("internal", f"{type(exc).__name__}: {exc}"[:500])) + "\n")
+        sys.exit(JSON_EXIT_INTERNAL)
+    sys.stdout.write(json_dumps(payload) + "\n")
+    sys.stdout.flush()
+    sys.exit(0)
+
+# ---------------------------------------------------------------------------
 # Command-specific explainers for bare flags
 # ---------------------------------------------------------------------------
 # Any flag that needs a value (`-v`, `-B`, `--page`, ...) prints a short,
@@ -6032,8 +6570,8 @@ def display_flag_explainer(flag, note=None):
 # ---------------------------------------------------------------------------
 # Keep parsing and routing here thin. Feature behavior should live on LexAgent
 # so commands can eventually be tested without shelling out.
-def main():
-    raw_argv = sys.argv[1:]
+def protect_search_scope_flags(raw_argv):
+    """Hide `lex search grace -nt` style scope flags from argparse."""
     if "search" in raw_argv or "serch" in raw_argv:
         command_idx = raw_argv.index("search") if "search" in raw_argv else raw_argv.index("serch")
         protected_argv = []
@@ -6048,6 +6586,9 @@ def main():
             else:
                 protected_argv.append(token)
         raw_argv = protected_argv
+    return raw_argv
+
+def build_arg_parser():
     parser = argparse.ArgumentParser(
         prog="lex",
         description="Lex: local-first Bible reading, study, search, Strong's, manuscript tools, and export.",
@@ -6096,7 +6637,16 @@ command-specific help.
     parser.add_argument("--ratio", type=str, choices=["16:9", "1:1"], default="16:9", help="Aspect ratio for PNG exports")
     parser.add_argument("--animate", dest="animate", action="store_true", default=None, help="Animate study/read transitions where supported")
     parser.add_argument("--no-animate", dest="animate", action="store_false", help="Disable study/read transition animation")
+    parser.add_argument("--json", action="store_true", help="Print one JSON document (schema: docs/json-output.md); never prompts or changes settings")
     parser.add_argument("--clear", action="store_true", help="Clear command history when used with `lex history`; `lex history clear` also works")
+    return parser
+
+def main():
+    raw_argv = sys.argv[1:]
+    if json_mode_requested(raw_argv):
+        run_json_cli(raw_argv)
+    raw_argv = protect_search_scope_flags(raw_argv)
+    parser = build_arg_parser()
     # Bare value flags (`lex -v`, `lex -B`, `lex --page`, ...) get a
     # flag-specific explainer instead of an argparse error. This runs before
     # any state is touched (theme, config, history, data downloads).

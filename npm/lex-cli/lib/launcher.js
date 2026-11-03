@@ -12,6 +12,22 @@ const { pipeline } = require("node:stream/promises");
 const metadata = require("../package.json");
 const config = metadata.lexCli;
 
+// `lex --json ...` must keep stdout for the JSON document and stderr for a
+// JSON error, so launcher chatter and child install output are silenced.
+let quiet = false;
+
+function jsonModeRequested(args) {
+  for (const arg of args) {
+    if (arg === "--") return false;
+    if (arg === "--json") return true;
+  }
+  return false;
+}
+
+function note(message) {
+  if (!quiet) console.error(message);
+}
+
 function releaseBaseUrl(tag) {
   const releaseTag = tag || config.releaseTag;
   return process.env.LEX_CLI_RELEASE_BASE_URL ||
@@ -84,10 +100,10 @@ async function resolveReleaseTag() {
   if (override) return override;
   try {
     const tag = await latestReleaseTag();
-    console.error(`lex: latest release is ${tag}`);
+    note(`lex: latest release is ${tag}`);
     return tag;
   } catch (err) {
-    console.error(`lex: couldn't resolve latest release, using pinned ${config.releaseTag} (${err.message})`);
+    note(`lex: couldn't resolve latest release, using pinned ${config.releaseTag} (${err.message})`);
     return config.releaseTag;
   }
 }
@@ -138,7 +154,7 @@ async function expectedChecksum(url) {
 }
 
 function checked(command, args, options = {}) {
-  const result = spawnSync(command, args, { stdio: "inherit", ...options });
+  const result = spawnSync(command, args, { stdio: quiet ? "ignore" : "inherit", ...options });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} exited with status ${result.status}`);
 }
@@ -184,7 +200,7 @@ async function downloadRelease(tag) {
   try {
     const urls = releaseUrls(tag);
     const archive = path.join(temporary, config.assetName);
-    console.error(`lex: downloading ${config.releaseTag} release data…`);
+    note(`lex: downloading ${config.releaseTag} release data…`);
     const [expected] = await Promise.all([expectedChecksum(urls.checksum), download(urls.archive, archive)]);
     const actual = await sha256(archive);
     if (actual !== expected) throw new Error("release archive checksum mismatch");
@@ -218,7 +234,12 @@ async function resolveLexHome() {
   return downloadRelease(tag);
 }
 
+function setQuiet(value) {
+  quiet = Boolean(value);
+}
+
 async function main(args) {
+  setQuiet(jsonModeRequested(args));
   if (args.length === 1 && args[0] === "--npm-version") {
     console.log(metadata.version);
     return;
@@ -238,5 +259,7 @@ module.exports = {
   validLexHome,
   pythonPath,
   dependenciesInstalled,
+  jsonModeRequested,
+  setQuiet,
   main,
 };
