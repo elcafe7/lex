@@ -6663,6 +6663,88 @@ def run_json_cli(raw_argv):
     sys.exit(0)
 
 # ---------------------------------------------------------------------------
+# Plain text output (--plain)
+# ---------------------------------------------------------------------------
+# `lex --plain ...` runs the normal command but renders it as plain text for
+# pipes, logs, and screen readers: no colour or ANSI codes, no panel/table
+# borders, no prompts, pagers, or animation. Settings behave exactly as without
+# --plain (-v stays sticky, -B stays one-command). --json wins if both are given.
+PLAIN_BOX_RE = re.compile(r"[\u2500-\u257f]")
+PLAIN_MODE = False
+
+def plain_mode_requested(argv):
+    """True when --plain appears before any `--` end-of-options marker."""
+    for token in argv:
+        if token == "--":
+            return False
+        if token == "--plain":
+            return True
+    return False
+
+def strip_plain_flags(argv):
+    out, seen_end = [], False
+    for token in argv:
+        if not seen_end and token in {"--plain", "--animate"}:
+            continue
+        if token == "--":
+            seen_end = True
+        out.append(token)
+    return out
+
+def plain_text(rendered):
+    """Remove Rich borders from already colour-free console output."""
+    lines = []
+    for line in rendered.splitlines():
+        stripped = line.strip()
+        if stripped and not PLAIN_BOX_RE.sub("", stripped).strip():
+            line = ""  # a border or rule with no text
+        elif stripped and PLAIN_BOX_RE.match(stripped[0]) and PLAIN_BOX_RE.match(stripped[-1]) and len(stripped) > 1 and (
+            stripped[1] == PLAIN_BOX_RE.match(stripped[0]).group(0) or stripped[0] in "╭╰┏┗┌└╔╚"
+        ):
+            line = PLAIN_BOX_RE.sub(" ", stripped).strip()  # a titled top/bottom border or rule
+        else:
+            body = line.lstrip()
+            if body[:1] and PLAIN_BOX_RE.match(body[0]):
+                body = body[1:]
+                body = body[1:] if body.startswith(" ") else body
+                body = re.sub(r"\s*[\u2500-\u257f]\s*$", "", body)
+                line = body
+            line = PLAIN_BOX_RE.sub(" ", line)
+        lines.append(line.rstrip())
+    out, blank = [], 0
+    for line in lines:
+        blank = blank + 1 if not line else 0
+        if blank <= 1:
+            out.append(line)
+    text = "\n".join(out).strip("\n")
+    return text + "\n" if text else ""
+
+def run_plain_cli(raw_argv):
+    """Entry point for `lex --plain ...`: run main() into a buffer, print plain text."""
+    global console, FORCE_NON_INTERACTIVE, PLAIN_MODE
+    PLAIN_MODE = True
+    FORCE_NON_INTERACTIVE = True
+    buffer = io.StringIO()
+    try:
+        width = int(os.environ.get("COLUMNS", "")) if os.environ.get("COLUMNS", "").isdigit() else 100
+    except ValueError:
+        width = 100
+    console = Console(
+        file=buffer, theme=custom_theme, no_color=True, color_system=None, width=max(40, width),
+        emoji=False, highlight=False, force_terminal=False, force_interactive=False,
+    )
+    sys.argv = [sys.argv[0]] + strip_plain_flags(raw_argv)
+    code = 0
+    try:
+        main()
+    except SystemExit as exc:
+        code = exc.code
+    finally:
+        sys.stdout.write(plain_text(buffer.getvalue()))
+        sys.stdout.flush()
+    sys.exit(code)
+
+# ---------------------------------------------------------------------------
 # Command-specific explainers for bare flags
 # ---------------------------------------------------------------------------
 # Any flag that needs a value (`-v`, `-B`, `--page`, ...) prints a short,
@@ -6888,6 +6970,7 @@ command-specific help.
     parser.add_argument("--animate", dest="animate", action="store_true", default=None, help="Animate study/read transitions where supported")
     parser.add_argument("--no-animate", dest="animate", action="store_false", help="Disable study/read transition animation")
     parser.add_argument("--json", action="store_true", help="Print one JSON document (schema: docs/json-output.md); never prompts or changes settings")
+    parser.add_argument("--plain", action="store_true", help="Plain text output: no colour, borders, prompts, or animation")
     parser.add_argument("--clear", action="store_true", help="Clear command history when used with `lex history`; `lex history clear` also works")
     return parser
 
@@ -6895,6 +6978,8 @@ def main():
     raw_argv = sys.argv[1:]
     if json_mode_requested(raw_argv):
         run_json_cli(raw_argv)
+    if plain_mode_requested(raw_argv) and not PLAIN_MODE:
+        run_plain_cli(raw_argv)
     raw_argv = protect_search_scope_flags(raw_argv)
     parser = build_arg_parser()
     # Bare value flags (`lex -v`, `lex -B`, `lex --page`, ...) get a
