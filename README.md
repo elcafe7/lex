@@ -295,6 +295,24 @@ lex creed westminster
 
 ---
 
+## 🤖 Scripts, Agents & Pipes
+`--json` prints one JSON document (schema: [docs/json-output.md](docs/json-output.md)).
+`--plain` prints the normal output as plain text. Neither ever prompts, and `--json`
+never changes your saved Bible, theme, or history.
+
+```bash
+lex --json John 3:16                 # {"schema_version":1,"command":"read",...}
+lex --json -B kjv strongs G3056      # -B is still a one-command override
+lex --json search grace -nt --limit 5
+lex --plain study John 1:1 | less    # no colour, borders, or prompts
+NO_COLOR=1 lex John 3:16             # colour off, normal layout
+```
+
+JSON errors go to stderr as `{"error":{"code":...}}` with exit code 2 (usage),
+3 (not found) or 4 (data missing). `-v` is refused in JSON mode; use `-B`.
+
+---
+
 ## 🎨 Themes & Customization
 Lex automatically chooses a theme based on your terminal background.
 

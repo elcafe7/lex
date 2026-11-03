@@ -1,6 +1,6 @@
 # `lex --json` — machine-readable output (schema v1)
 
-Status: draft for review (issue #16). Branch `feat/json-output`.
+Status: draft for review (issue #16).
 
 `--json` gives scripts and AI agents a stable, parseable result instead of the
 Rich terminal UI. Put it anywhere before `--`:
@@ -224,8 +224,14 @@ stderr, one line:
 `manuscript`, `export`, `help`/`commands`, `update`, `--credits`,
 `words` (Geneva/KJV word tags, pending the geneva-word branch), `--next`/`--prev`. These fail fast rather than falling back to terminal output.
 
+## `--plain`
+
+`lex --plain <anything>` runs the normal command and prints its output as plain text: no
+ANSI codes, no panel/table borders, no prompts, pagers or animation. Unlike `--json` it is
+not a schema and may change between releases; settings behave as without the flag
+(`-v` stays sticky). If both are given, `--json` wins.
+
 ## Planned
 
 - `words` → `tokens[{word, strongs[], confidence}]` from the word-tag tier.
-- `--plain`: stable plain text (no colour/boxes/prompts) for humans in pipes.
 - Per-edition Strong's usage index (KJV/Geneva), so `usage.total` is edition-correct.
