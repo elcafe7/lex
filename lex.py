@@ -1232,8 +1232,13 @@ def line_fill_sequence():
         return ""
     return "\033[48;5;231m\033[K" if ACTIVE_THEME_MODE == "light" else "\033[40m\033[K"
 
+# Set by --json and --plain: never prompt, even on a TTY.
+FORCE_NON_INTERACTIVE = False
+
 def stdin_is_interactive():
     """True only when a person can answer prompts (stdin is an open TTY)."""
+    if FORCE_NON_INTERACTIVE:
+        return False
     try:
         return sys.stdin is not None and sys.stdin.isatty()
     except (AttributeError, ValueError, OSError):
@@ -4346,7 +4351,7 @@ text from the active Bible version when available.
                 proof_count = str(len(section["proofs"])) if section["proofs"] else "-"
                 table.add_row(str(i), section["title"], proof_count)
             console.print(table)
-            if not sys.stdin.isatty():
+            if not stdin_is_interactive():
                 console.print(f"[dim]Use an interactive terminal to browse sections for: lex creed {topic}[/]")
                 return True
             try:
@@ -4428,7 +4433,7 @@ text from the active Bible version when available.
             )
             last_tradition = tradition
         console.print(table)
-        if not sys.stdin.isatty():
+        if not stdin_is_interactive():
             console.print("[dim]Use: lex creed <document name>[/]")
             return True
         try:
@@ -6394,7 +6399,8 @@ def json_dispatch(raw_argv):
 
 def run_json_cli(raw_argv):
     """Entry point for `lex --json ...`. Never returns; exits with a JSON-mode code."""
-    global console
+    global console, FORCE_NON_INTERACTIVE
+    FORCE_NON_INTERACTIVE = True
     # Swallow any Rich output from shared code paths (downloads, warnings) so
     # stdout carries only the JSON document.
     console = Console(file=io.StringIO(), theme=custom_theme, no_color=True, width=120, emoji=False)
