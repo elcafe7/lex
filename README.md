@@ -14,6 +14,11 @@ lex web Romans 1:1
 
 Current version: `2.6.5`
 
+## 📚 Documentation
+- **Lex CLI Docs (web):** [apocalypse.press/lex/docs](https://apocalypse.press/lex/docs/) - the full user and developer reference for 2.6.5.
+- **Download as Markdown:** [lex-docs.md](https://apocalypse.press/lex/docs/lex-docs.md)
+- **In this repo:** [docs/lex-docs.md](docs/lex-docs.md) (Markdown) and [docs/lex-docs.html](docs/lex-docs.html) (offline HTML copy)
+
 
 ---
 
