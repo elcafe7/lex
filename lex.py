@@ -30,10 +30,26 @@ from rich.markdown import Markdown
 from rich.theme import Theme
 from rich.prompt import Prompt, IntPrompt
 from rich.rule import Rule
+from rich.markup import escape as rich_escape
 
 import urllib.request
 from urllib.parse import urlparse
 import hashlib
+
+
+ANGLE_TAG_NAME = re.compile(r"\s*(/?)\s*([A-Za-z][A-Za-z0-9]*)")
+
+
+def angle_tag_name(raw_tag):
+    """Return the normalized name of an imported angle-bracket tag.
+
+    Handles attributes glued on with "=", e.g. <ref='Mat.8.8'> -> "ref",
+    </ref> -> "/ref", <BR /> -> "br". Returns "" for anything else.
+    """
+    match = ANGLE_TAG_NAME.match(raw_tag or "")
+    if not match:
+        return ""
+    return match.group(1) + match.group(2).casefold()
 
 
 def transform_angle_markup(value, replacements=None):
@@ -51,11 +67,7 @@ def transform_angle_markup(value, replacements=None):
         if end < 0:
             parts.append(text[start:])
             break
-        raw_tag = text[start + 1:end].strip()
-        tag_name = raw_tag.casefold().split(None, 1)[0].rstrip("/") if raw_tag else ""
-        if raw_tag.startswith("/"):
-            tag_name = "/" + raw_tag[1:].casefold().split(None, 1)[0]
-        parts.append(replacements.get(tag_name, ""))
+        parts.append(replacements.get(angle_tag_name(text[start + 1:end]), ""))
         position = end + 1
     return "".join(parts)
 
@@ -64,11 +76,41 @@ def plain_lexicon_text(value, break_replacement=" "):
     return transform_angle_markup(value, {"br": break_replacement})
 
 
+RICH_LEXICON_STYLES = {"b": "bold", "i": "italic", "ref": "cyan"}
+
+
 def rich_lexicon_text(value):
-    return transform_angle_markup(value, {
-        "br": "\n", "b": "[bold]", "/b": "[/]", "i": "[italic]",
-        "/i": "[/]", "ref": "[cyan]", "/ref": "[/]",
-    })
+    """Convert imported lexicon markup to balanced, escaped Rich markup.
+
+    Literal text is escaped with rich.markup.escape; a closing tag is only
+    emitted when its opening tag is still open, and anything left open is
+    closed at the end, so the result can never raise MarkupError.
+    """
+    text = str(value or "")
+    parts, stack, position = [], [], 0
+    while position < len(text):
+        start = text.find("<", position)
+        end = text.find(">", start + 1) if start >= 0 else -1
+        if start < 0 or end < 0:
+            parts.append(rich_escape(text[position:]))
+            break
+        parts.append(rich_escape(text[position:start]))
+        name = angle_tag_name(text[start + 1:end])
+        if name == "br":
+            parts.append("\n")
+        elif name in RICH_LEXICON_STYLES:
+            stack.append(name)
+            parts.append(f"[{RICH_LEXICON_STYLES[name]}]")
+        elif name.startswith("/") and name[1:] in RICH_LEXICON_STYLES and name[1:] in stack:
+            while stack:
+                opened = stack.pop()
+                parts.append(f"[/{RICH_LEXICON_STYLES[opened]}]")
+                if opened == name[1:]:
+                    break
+        position = end + 1
+    while stack:
+        parts.append(f"[/{RICH_LEXICON_STYLES[stack.pop()]}]")
+    return "".join(parts)
 
 
 TRUSTED_FETCH_HOSTS = {"raw.githubusercontent.com", "poeta.icu"}
@@ -1341,9 +1383,9 @@ class LexAgent:
         for idx, row in enumerate(rows, 1):
             table.add_row(
                 str(idx),
-                row.get("ts", ""),
-                (row.get("version") or "-").upper(),
-                row.get("command", ""),
+                rich_escape(str(row.get("ts", ""))),
+                rich_escape(str(row.get("version") or "-").upper()),
+                rich_escape(str(row.get("command", ""))),
             )
         meta = Text()
         meta.append("Stored in ", style="ui.meta")
@@ -2572,7 +2614,7 @@ cached for later offline use.
         summary = Table.grid(padding=(0, 2))
         summary.add_column(style="ui.meta", no_wrap=True)
         summary.add_column(style="text", overflow="fold")
-        summary.add_row("Reference", reference)
+        summary.add_row("Reference", rich_escape(str(reference)))
         summary.add_row(
             "Coverage",
             f"{coverage.get('unique_witnesses', 0)} unique witnesses · "
@@ -2585,15 +2627,15 @@ cached for later offline use.
             for source in source_rows
         )
         if source_label:
-            summary.add_row("Source", source_label)
-        console.print(Panel(summary, title=f"Manuscripts · {reference}", border_style="source.border"))
+            summary.add_row("Source", rich_escape(source_label))
+        console.print(Panel(summary, title=f"Manuscripts · {rich_escape(str(reference))}", border_style="source.border"))
 
         base_text = payload.get("base_text") or {}
         if base_text.get("text"):
             console.print(Panel(
                 Text(base_text["text"], style="source.text"),
-                title=base_text.get("label") or "Collation base",
-                subtitle=base_text.get("note") or None,
+                title=rich_escape(str(base_text.get("label") or "Collation base")),
+                subtitle=rich_escape(str(base_text["note"])) if base_text.get("note") else None,
                 border_style="source.border",
             ))
 
@@ -2612,9 +2654,9 @@ cached for later offline use.
                     witnesses.append(f"{label}({instance})" if instance and instance != "1" else label)
                 table.add_row(
                     str(reading.get("count") or 0),
-                    reading.get("reading") or reading.get("display") or "-",
-                    ", ".join(witnesses) or "-",
-                    ", ".join(reading.get("flags") or []) or "-",
+                    rich_escape(str(reading.get("reading") or reading.get("display") or "-")),
+                    rich_escape(", ".join(witnesses) or "-"),
+                    rich_escape(", ".join(reading.get("flags") or []) or "-"),
                 )
             console.print(table)
             if len(readings) > limit:
@@ -2633,16 +2675,16 @@ cached for later offline use.
                 if instance and instance != "1":
                     label += f" ({instance})"
                 table.add_row(
-                    label,
-                    witness.get("tradition") or "-",
-                    witness.get("plain") or witness.get("display") or "-",
-                    ", ".join(witness.get("flags") or []) or "-",
+                    rich_escape(str(label)),
+                    rich_escape(str(witness.get("tradition") or "-")),
+                    rich_escape(str(witness.get("plain") or witness.get("display") or "-")),
+                    rich_escape(", ".join(witness.get("flags") or []) or "-"),
                 )
             console.print(table)
             if len(witnesses) > limit:
                 console.print(f"[ui.meta]Showing {limit} of {len(witnesses)} witnesses.[/]")
         for note in payload.get("notes") or []:
-            console.print(f"[ui.meta]{note}[/]")
+            console.print(f"[ui.meta]{rich_escape(str(note))}[/]")
         return True
 
     def render_manuscript_profile(self, payload, limit=10):
@@ -2651,19 +2693,19 @@ cached for later offline use.
         details = Table.grid(padding=(0, 2))
         details.add_column(style="ui.meta", no_wrap=True)
         details.add_column(style="text", overflow="fold")
-        details.add_row("Semantic name", name)
+        details.add_row("Semantic name", rich_escape(str(name)))
         details.add_row("Internal ID", str(profile.get("id") or "-"))
         date = " – ".join(str(value) for value in (profile.get("origEarly"), profile.get("origLate")) if value)
         details.add_row("Date", date or "-")
-        details.add_row("Language", profile.get("language") or "-")
+        details.add_row("Language", rich_escape(str(profile.get("language") or "-")))
         if profile.get("tradition"):
-            details.add_row("Tradition", profile["tradition"])
+            details.add_row("Tradition", rich_escape(str(profile["tradition"])))
         external = profile.get("external") or {}
         if external.get("intfWorkspace"):
             details.add_row("INTF", external["intfWorkspace"])
         if external.get("sourceRepository"):
-            details.add_row("Source", external["sourceRepository"])
-        console.print(Panel(details, title=f"Manuscript · {name}", border_style="source.border"))
+            details.add_row("Source", rich_escape(str(external["sourceRepository"])))
+        console.print(Panel(details, title=f"Manuscript · {rich_escape(str(name))}", border_style="source.border"))
 
         shelves = profile.get("shelfInstances") or []
         if shelves:
@@ -2674,10 +2716,10 @@ cached for later offline use.
             table.add_column("Contents", style="text", overflow="fold")
             for shelf in shelves[:limit]:
                 table.add_row(
-                    shelf.get("institution") or "-",
-                    shelf.get("shelfNumber") or "-",
-                    ", ".join(value for value in (shelf.get("place"), shelf.get("country")) if value) or "-",
-                    shelf.get("contentOverview") or shelf.get("leaves") or "-",
+                    rich_escape(str(shelf.get("institution") or "-")),
+                    rich_escape(str(shelf.get("shelfNumber") or "-")),
+                    rich_escape(", ".join(str(value) for value in (shelf.get("place"), shelf.get("country")) if value) or "-"),
+                    rich_escape(str(shelf.get("contentOverview") or shelf.get("leaves") or "-")),
                 )
             console.print(table)
 
@@ -2685,7 +2727,7 @@ cached for later offline use.
         refs = coverage.get("poc_references") or []
         if refs:
             console.print(Panel(
-                "  ·  ".join(refs[:limit]),
+                rich_escape("  ·  ".join(str(ref) for ref in refs[:limit])),
                 title=f"Mapped references · {coverage.get('poc_reference_count', len(refs))}",
                 border_style="ui.border",
             ))
@@ -2697,15 +2739,15 @@ cached for later offline use.
             table.add_column("Flags", style="warning", overflow="fold")
             for sample in samples[:limit]:
                 table.add_row(
-                    sample.get("reference") or "-",
-                    sample.get("plain") or sample.get("display") or "-",
-                    ", ".join(sample.get("flags") or []) or "-",
+                    rich_escape(str(sample.get("reference") or "-")),
+                    rich_escape(str(sample.get("plain") or sample.get("display") or "-")),
+                    rich_escape(", ".join(sample.get("flags") or []) or "-"),
                 )
             console.print(table)
         for link in external.get("links") or []:
-            console.print(f"[ui.meta]{link.get('label', 'External resource')}: {link.get('url', '')}[/]")
+            console.print(f"[ui.meta]{rich_escape(str(link.get('label', 'External resource')))}: {rich_escape(str(link.get('url', '')))}[/]")
         for note in payload.get("notes") or []:
-            console.print(f"[ui.meta]{note}[/]")
+            console.print(f"[ui.meta]{rich_escape(str(note))}[/]")
         return True
 
     def display_manuscript(self, query, limit=10):
@@ -2725,11 +2767,11 @@ cached for later offline use.
         key = re.sub(r"^ga\s*", "", query.strip(), flags=re.IGNORECASE).lower()
         profile_path = (manifest or {}).get("manuscripts", {}).get(key)
         if not profile_path:
-            console.print(f"[warning]No manuscript profile matches {query}. Try P66, 1Qisaa, WLC, or a Bible reference.[/]")
+            console.print(f"[warning]No manuscript profile matches {rich_escape(query)}. Try P66, 1Qisaa, WLC, or a Bible reference.[/]")
             return False
         payload = self.load_manuscript_asset(profile_path)
         if not payload:
-            console.print(f"[warning]The manuscript profile for {query} could not be loaded.[/]")
+            console.print(f"[warning]The manuscript profile for {rich_escape(query)} could not be loaded.[/]")
             return False
         if limit is None:
             limit = 10
@@ -3256,7 +3298,7 @@ text from the active Bible version when available.
                 if narrow_notes:
                     lex_table.add_row(strongs, study_lexicon_text(lemma or "-", details))
                 else:
-                    lex_table.add_row(strongs, lemma or "-", details)
+                    lex_table.add_row(strongs, rich_escape(lemma or "-"), rich_escape(details))
                 if len(seen) >= 12:
                     break
             console.print(lex_table)
@@ -3294,8 +3336,8 @@ text from the active Bible version when available.
                     )
                 lex_table.add_row(
                     f"{strongs}?",
-                    token["lemma"] or "-",
-                    " | ".join(detail for detail in details if detail) or "-",
+                    rich_escape(token["lemma"] or "-"),
+                    rich_escape(" | ".join(detail for detail in details if detail) or "-"),
                 )
                 if len(seen) >= 12:
                     break
@@ -3886,7 +3928,7 @@ text from the active Bible version when available.
             if narrow_notes:
                 lex_table.add_row(strongs, study_lexicon_text(lemma or "-", details))
             else:
-                lex_table.add_row(strongs, lemma or "-", details)
+                lex_table.add_row(strongs, rich_escape(lemma or "-"), rich_escape(details))
             if len(seen) >= 12:
                 break
         console.print(lex_table)
@@ -4214,7 +4256,7 @@ text from the active Bible version when available.
             if len(matches) == 1:
                 return self.display_creed_sections(matches[0][0])
             if len(matches) > 1:
-                table = Table(title=f"📜 Matching Creeds: {query}", box=None)
+                table = Table(title=f"📜 Matching Creeds: {rich_escape(query)}", box=None)
                 table.add_column("Document", style="bold green")
                 table.add_column("Sections", style="dim cyan")
                 table.add_column("Source", style="dim")
@@ -4525,7 +4567,7 @@ text from the active Bible version when available.
         console.print(
             Panel(
                 body,
-                title=f"🔍 Search: {query}",
+                title=f"🔍 Search: {rich_escape(query)}",
                 subtitle=f"page {page}/{state['page_count']}",
                 border_style="ui.border",
                 padding=(1, 2),
@@ -5414,12 +5456,12 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
             lang = "Greek" if n.startswith('G') else "Hebrew"
             extended_entry = self.lookup_lexicon_entry(n)
 
-            definition_text = d
+            definition_text = rich_escape(d or "")
             if extended_entry["step"] and extended_entry["step"].get("definition"):
                 step_def = extended_entry["step"]["definition"]
                 step_def = rich_lexicon_text(step_def)
-                source = extended_entry["step"].get("source", "Extended Lexicon")
-                definition_text = f"{step_def}\n\n[dim]---\nSource: {source}\nBrief: {d}[/]"
+                source = rich_escape(str(extended_entry["step"].get("source", "Extended Lexicon")))
+                definition_text = f"{step_def}\n\n[dim]---\nSource: {source}\nBrief: {rich_escape(d or '')}[/]"
 
             usage, total = self.get_strongs_usage(n, page=page, limit=limit, show_all=show_all)
             if usage:
@@ -5430,8 +5472,8 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 for item in usage:
                     disp_ref = self.format_display_ref(item["target_ref"])
                     count_note = f" x{item['token_count']}" if item["token_count"] > 1 else ""
-                    preview = item["text"][:240]
-                    usage_text += f"\n[cyan]{disp_ref}[/][dim]{count_note}[/] {preview}"
+                    preview = rich_escape(item["text"][:240])
+                    usage_text += f"\n[cyan]{rich_escape(disp_ref)}[/][dim]{count_note}[/] {preview}"
                 if not show_all:
                     remaining = total - (max(1, int(page or 1)) * max(1, int(limit or 8)))
                     if remaining > 0:
@@ -5446,7 +5488,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 )
             elif self.strongs_refs_db:
                 definition_text += "\n\n[dim]No verse usage found in the ESV interlinear index.[/]"
-            console.print(Panel(f"[lexicon.word]{w}[/] ({p})\n\n{definition_text}", title=f"📚 {lang} Lexicon: {n}", border_style="blue"))
+            console.print(Panel(f"[lexicon.word]{rich_escape(w or '')}[/] ({rich_escape(p or '')})\n\n{definition_text}", title=f"📚 {lang} Lexicon: {n}", border_style="blue"))
         return bool(res)
 
     def display_english_strongs(self, query):
@@ -5498,14 +5540,14 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                     break
         if not results:
             return False
-        table = Table(title=f"🔤 Strong's Lookup: '{query}'", box=None)
+        table = Table(title=f"🔤 Strong's Lookup: '{rich_escape(query)}'", box=None)
         table.add_column("No.", style="lexicon.num")
         table.add_column("Lemma", style="lexicon.word")
         table.add_column("Pronunciation")
         table.add_column("English", style="text")
         table.add_column("Definition", overflow="fold")
         for number, word, pronunciation, definition, gloss in results:
-            table.add_row(number, word, pronunciation, gloss, definition)
+            table.add_row(*(rich_escape(str(value or "")) for value in (number, word, pronunciation, gloss, definition)))
         console.print(table)
         return True
 
@@ -5706,7 +5748,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
             return True
         else:
             # Multiple results - show picker
-            table = Table(title=f"Nave's Results for '{query}'", border_style="ui.border", box=box.SIMPLE_HEAVY, expand=True)
+            table = Table(title=f"Nave's Results for '{rich_escape(query)}'", border_style="ui.border", box=box.SIMPLE_HEAVY, expand=True)
             table.add_column("ID", justify="right", style="ui.action.key")
             table.add_column("Subject", style="dict.topic")
             for i, row in enumerate(res, 1):

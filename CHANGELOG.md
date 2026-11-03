@@ -20,8 +20,19 @@
   valid list instead of an argparse error.
 - `lex help`, the intro screen, `docs/components/LEX_CLI.md`, and the user guide
   no longer describe `lex -v` as an interactive menu.
-- New regression tests: `tests/test_flag_explainers.py`
-  (`python3 -m unittest discover -s tests`).
+- **Fixed: `lex strongs G3056` crashed** with Rich `MarkupError: closing tag
+  '[/]' ... has nothing to close` (5,176 of 14,298 Strong's entries, 5,145
+  Greek and 31 Hebrew, crashed on 2.6.5). Lexicon tags with attributes such as
+  `<ref='Mat.8.8'>` lost their opening style but kept the closing `[/]`. The
+  lexicon converter now matches tag names properly, escapes source text with
+  `rich.markup.escape`, and always emits balanced markup, so brackets in
+  entries (`[in LXX chiefly for ...]`, `Mrk.16:[20]`) now show instead of being
+  swallowed. The same escaping now covers user queries and data shown in
+  `lex history`, `lex strongs <word>`, search, creed, Nave's, manuscript, and
+  study lexicon tables, so a query like `lex manuscript "x[/b]"` no longer
+  crashes (and no longer breaks `lex history` afterwards).
+- New regression tests: `tests/test_flag_explainers.py` and
+  `tests/test_strongs_markup.py` (`python3 -m unittest discover -s tests`).
 
 ## 2.6.5 — 2026-10-30
 
