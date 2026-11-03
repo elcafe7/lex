@@ -326,7 +326,7 @@
       <header class="hero" id="overview">
         <p class="eyebrow">Local-first Bible study CLI</p>
         <h1>Lex CLI Docs</h1>
-        <p class="subtitle" id="last-updated">Last updated: <time datetime="2026-11-03T11:05:00-05:00">November 3, 2026, 11:05 AM ET</time></p>
+        <p class="subtitle" id="last-updated">Last updated: <time datetime="2026-11-03T12:47:00-05:00">November 3, 2026, 12:47 PM ET</time></p>
         <p class="lead">Lex reads Scripture, searches local Bible databases, opens interlinear study views, maps cross-references and manuscript witnesses, browses creeds, and exports study work from the terminal.</p>
         <p>Prefer a browser? <a href="https://apocalypse.press/lex-web/">Lex Web</a> is the browser edition of Lex, with the same seven Bible editions.</p>
         <div class="meta-row" aria-label="Key facts">
@@ -633,11 +633,12 @@ lex -B lxx Genesis 1:1</code></pre>
           <thead><tr><th>Symptom</th><th>What To Check</th></tr></thead>
           <tbody>
             <tr><td><code>lex</code> not found</td><td>Confirm <code>~/.local/bin</code> is on <code>PATH</code> and rerun <code>./setup.sh</code>. For npm installs, confirm the npm global bin folder is on <code>PATH</code>.</td></tr>
+            <tr><td><code>lex</code> runs the flex lexer (<code>lex --version</code> prints <code>lex 2.6.4</code>)</td><td><code>/usr/bin/lex</code> is the flex lexer and comes first in <code>PATH</code>. Run <code>type -a lex</code> or <code>./scripts/check_lex_command.sh</code>, open a new terminal after <code>./setup.sh</code>, or install a second name with <code>./setup.sh --alias lexb</code>.</td></tr>
             <tr><td>Setup or first run fails</td><td>Check <code>python3 --version</code>. Lex needs Python 3.12 or newer.</td></tr>
             <tr><td>Not sure which version is running</td><td>Run <code>lex --version</code> for the Lex app and <code>lex --npm-version</code> for the npm launcher.</td></tr>
             <tr><td>Wrong checkout running</td><td>Run <code>type -a lex</code> and <code>head -5 ~/.local/bin/lex</code>.</td></tr>
             <tr><td>No reference result</td><td>Try the full book name, such as <code>lex 1 Corinthians 13</code>.</td></tr>
-            <tr><td>No study data</td><td>The verse can still be read, but study requires the matching local source-language dataset.</td></tr>
+            <tr><td>No study data</td><td>The verse can still be read, but study requires the matching local source-language dataset. If study says the interlinear data is not installed, run <code>lex update</code>.</td></tr>
             <tr><td>Missing encyclopedia entry</td><td>The local ISBE import is incomplete. It currently covers only Volume II (Clement–Heresh).</td></tr>
           </tbody>
         </table>

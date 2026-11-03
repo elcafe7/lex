@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- **`lex` vs. the flex lexer (#1).** Many systems already have `/usr/bin/lex`
+  (flex). `setup.sh` now also adds `~/.local/bin` to `~/.zshrc` when zsh is
+  your shell, then checks which `lex` a new terminal will run, names any flex
+  `lex` it finds, and says how to fix `PATH` if Lex is not first. New
+  `./setup.sh --alias NAME` installs a second name (e.g. `lexb`) that cannot
+  clash. New `scripts/check_lex_command.sh` runs the same check any time. The
+  command is still `lex`.
+- **Fixed: study mode said "No local interlinear data found" (#2)** when Lex ran
+  from the `~/bible-lexicon-data` fallback, even with the data there (the JSON
+  loader only allowed `runtime-data/`). When the interlinear files really are
+  missing, study mode now names the data folder and missing files and says to
+  run `lex update`. Full clones and npm installs already ship the data.
+- **Fixed: piped or closed stdin crashed follow-up prompts.** `lex study`,
+  `lex John 3:16 -i`, `lex search`, and the export/navigation prompts ended
+  with an `EOFError` traceback (exit 1) when stdin was not a terminal, e.g.
+  `lex study John 1:1 < /dev/null` or `echo | lex search israel`. Lex now
+  skips follow-up prompts when stdin is not a TTY, and Ctrl-D or Ctrl-C at a
+  prompt exits 0 with no traceback. Interactive terminals are unchanged.
+
 ## 2.6.6 — 2026-11-03
 
 - **Bare flags explain themselves.** Any flag or subcommand that needs an

@@ -1,6 +1,6 @@
 # Lex CLI Docs
 
-Last updated: November 3, 2026, 11:05 AM ET
+Last updated: November 3, 2026, 12:47 PM ET
 
 *Local-first Bible study CLI*
 
@@ -327,11 +327,12 @@ Lex chooses a theme from explicit flags, environment variables, saved config, te
 | Symptom | What To Check |
 |---|---|
 | `lex` not found | Confirm `~/.local/bin` is on `PATH` and rerun `./setup.sh`. For npm installs, confirm the npm global bin folder is on `PATH`. |
+| `lex` runs the flex lexer (`lex --version` prints `lex 2.6.4`) | `/usr/bin/lex` is the flex lexer and comes first in `PATH`. Run `type -a lex` or `./scripts/check_lex_command.sh`, open a new terminal after `./setup.sh`, or install a second name with `./setup.sh --alias lexb`. |
 | Setup or first run fails | Check `python3 --version`. Lex needs Python 3.12 or newer. |
 | Not sure which version is running | Run `lex --version` for the Lex app and `lex --npm-version` for the npm launcher. |
 | Wrong checkout running | Run `type -a lex` and `head -5 ~/.local/bin/lex`. |
 | No reference result | Try the full book name, such as `lex 1 Corinthians 13`. |
-| No study data | The verse can still be read, but study requires the matching local source-language dataset. |
+| No study data | The verse can still be read, but study requires the matching local source-language dataset. If study says the interlinear data is not installed, run `lex update`. |
 | Missing encyclopedia entry | The local ISBE import is incomplete. It currently covers only Volume II (Clement–Heresh). |
 
 ## Developer Backend Overview
