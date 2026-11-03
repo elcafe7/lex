@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -158,9 +159,6 @@ class JsonCliTest(unittest.TestCase):
         tagged = [t for t in verse["tokens"] if t["strongs"]]
         self.assertTrue(tagged and all(t["confidence"] == "proxy" for t in tagged))
 
-    def test_study_unsupported_edition(self):
-        self.fails(2, "unsupported_edition", "-B", "lxx", "study", "Genesis", "1:1")
-
     # --- strongs --------------------------------------------------------
     def test_strongs_number(self):
         payload = self.ok("strongs", "G3056", "--limit", "3")
@@ -211,6 +209,58 @@ class JsonCliTest(unittest.TestCase):
         self.assertEqual([r["rank"] for r in payload["results"]], [6, 7, 8, 9, 10])
         self.assertTrue(all(r["book"] in payload["scope"]["books"] for r in payload["results"]))
 
+    # --- reference works ------------------------------------------------
+    def test_define(self):
+        for argv in (("define", "grace"), ("-d", "grace")):
+            payload = self.ok(*argv)
+            self.assertEqual(payload["command"], "define")
+            entry = payload["dictionary"][0]
+            self.assertEqual((entry["topic"], entry["match"]), ("Grace", "exact"))
+            self.assertIn("Easton", entry["source"])
+            self.assertIn("encyclopedia", payload)
+        self.fails(3, "not_found", "define", "zzqqxx")
+
+    def test_commentary(self):
+        payload = self.ok("commentary", "John", "3:16")
+        self.assertEqual((payload["chapter"], payload["verse"]), (3, 16))
+        first = payload["sections"][0]
+        self.assertEqual(first["commentator"], "Matthew Henry")
+        self.assertLessEqual(first["verse_start"], 16)
+        self.assertGreaterEqual(first["verse_end"], 16)
+        self.assertTrue(first["text"] and first["markdown"])
+
+    def test_naves_topic_and_verse(self):
+        payload = self.ok("topic", "prayer")
+        self.assertEqual(payload["match"], "exact")
+        self.assertEqual(payload["topics"][0]["subject"], "PRAYER")
+        self.assertTrue(payload["topics"][0]["refs"])
+        payload = self.ok("naves", "John", "3:16")
+        self.assertEqual(payload["match"], "verse")
+        self.assertIn("GOD", payload["subjects"])
+
+    def test_creed_list_document_matches_and_search(self):
+        listing = self.ok("creed")
+        self.assertEqual(listing["command"], "creed_list")
+        self.assertEqual(listing["documents"][0]["id"], 1)
+        doc = self.ok("creed", "apostles")["document"]
+        self.assertEqual(doc["topic"], "The Apostles' Creed")
+        self.assertTrue(doc["sections"][0]["text"].startswith("I believe in God"))
+        self.assertGreater(len(self.ok("creed", "westminster")["matches"]), 1)
+        self.assertEqual(self.ok("creed", "justification")["command"], "creed_search")
+
+    def test_history_is_read_only(self):
+        payload = self.ok("history")
+        self.assertEqual(payload["items"], [])
+        self.assertEqual(sorted(os.listdir(self.home)), [".lex_config.json"])
+
+    def test_lxx_and_vulgate_study_report_missing_data(self):
+        # The release data ships lxx/vulg reading text but not the parsed study sets.
+        lex = load_lex_module()
+        if not os.path.exists(lex.LXX_DB_PATH):
+            self.fails(4, "data_missing", "-B", "lxx", "study", "Genesis", "1:1")
+        if not os.path.exists(lex.get_lex_path("latin.db")):
+            self.fails(4, "data_missing", "-B", "vulg", "study", "John", "1:1")
+
     # --- errors ---------------------------------------------------------
     def test_sticky_default_refused(self):
         self.fails(2, "sticky_default_in_json", "-v", "kjv", "John", "3:16")
@@ -222,7 +272,8 @@ class JsonCliTest(unittest.TestCase):
         self.fails(2, "usage", "-B")
         self.fails(2, "usage", "John", "3:16", "--bogus")
         self.fails(2, "unknown_edition", "-B", "xyz", "John", "3:16")
-        self.fails(2, "unsupported_in_json", "define", "grace")
+        self.fails(2, "unsupported_in_json", "manuscript", "John", "1:1")
+        self.fails(2, "unsupported_in_json", "history", "clear")
 
     def test_not_found(self):
         self.fails(3, "not_found", "Hezekiah", "4:1")
@@ -239,6 +290,54 @@ class JsonCliTest(unittest.TestCase):
                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
         self.assertEqual(proc.returncode, 0, proc.stdout[-500:])
         self.assertEqual(json.loads(proc.stdout.strip())["command"], "study")
+
+
+class LxxVulgateStudyBuilderTest(unittest.TestCase):
+    """lxx/vulg study JSON against small synthetic datasets (the real ones are optional downloads)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.lex = load_lex_module()
+
+    def make_db(self, sql):
+        path = os.path.join(tempfile.mkdtemp(prefix="lex-json-db-"), "x.db")
+        con = sqlite3.connect(path)
+        con.executescript(sql)
+        con.commit()
+        con.close()
+        self.addCleanup(shutil.rmtree, os.path.dirname(path), True)
+        return self.lex.LexDB(path)
+
+    def test_lxx_tokens(self):
+        agent = self.lex.LexAgent(bible_id="lxx")
+        agent.lxx_db = self.make_db("""
+            CREATE TABLE lxx_text (book, chapter, verse, word_num, text, lemma, strong, morph, pos, gloss, head, dependency);
+            CREATE TABLE lxx_lemma_strong_map (book, lemma, strong, confidence, occurrence_count, lemma_token_count, lexicon_source);
+            INSERT INTO lxx_text VALUES ('Gen',1,1,1,'ἐν','ἐν','G1722','P','prep','in',NULL,'');
+            INSERT INTO lxx_text VALUES ('Gen',1,1,2,'ἀρχῇ','ἀρχή','','N-DSF','noun','beginning',1,'obj');
+            INSERT INTO lxx_lemma_strong_map VALUES ('Gen','ἀρχή','G746',0.9,10,11,'test');
+        """)
+        agent.get_lxx_book_code = lambda book: "Gen"
+        item, problem = self.lex.json_study_verse(agent, "Genesis 1:1")
+        self.assertIsNone(problem)
+        self.assertEqual(item["source"]["language"], "Greek")
+        first, second = item["tokens"]
+        self.assertEqual((first["strongs"], first["confidence"]), (["G1722"], "direct"))
+        self.assertEqual((second["strongs"], second["confidence"], second["candidate_strongs"]), ([], "candidate", ["G746"]))
+        self.assertEqual(item["source_text"], "ἐν ἀρχῇ")
+
+    def test_vulgate_tokens(self):
+        agent = self.lex.LexAgent(bible_id="vulg")
+        agent.latin_db = self.make_db("""
+            CREATE TABLE latin (headword, part_of_speech, definition, normalized);
+            INSERT INTO latin VALUES ('principium','n','beginning','principio');
+        """)
+        item, problem = self.lex.json_study_verse(agent, "John 1:1")
+        self.assertIsNone(problem)
+        self.assertEqual(item["source"]["language"], "Latin")
+        tagged = [t for t in item["tokens"] if t["confidence"] == "lexicon"]
+        self.assertEqual([(t["surface"].lower(), t["lemma"]) for t in tagged], [("principio", "principium")])
+        self.assertTrue(all(t["strongs"] == [] for t in item["tokens"]))
 
 
 class StrongsDefinitionCleanupTest(unittest.TestCase):

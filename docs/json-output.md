@@ -37,7 +37,7 @@ Every success object starts with:
 |---|---|---|
 | `schema_version` | int | `1`. Bumped only on breaking changes; new fields may be added in v1. |
 | `lex_version` | string | e.g. `"2.6.6"` |
-| `command` | string | `read`, `study`, `strongs`, `strongs_search`, `web`, `search` |
+| `command` | string | `read`, `study`, `strongs`, `strongs_search`, `web`, `search`, `define`, `commentary`, `naves`, `creed`, `creed_list`, `creed_matches`, `creed_search`, `history` |
 | `edition` | string | edition id actually used (`esv`, `kjv`, `gen`, …) |
 | `edition_name` | string | display name |
 
@@ -84,7 +84,14 @@ Whole chapters have `verse_start`/`verse_end` set to the chapter's range. Exit 3
 - `confidence`: `direct` (ESV interlinear), `proxy` (another English edition mapped onto the
   ESV interlinear, e.g. `-B gen`), `variant/proxy`, or `untagged` for tokens with no number.
 - `source.warning` carries the same caveat the UI shows for proxy editions.
-- `lxx` and `vulg` return `unsupported_edition` for now.
+- `-B lxx`: tokens come from the parsed LXX dataset (`lxx.db`). `confidence` is `direct` when the
+  token carries a Strong's number, `candidate` when only a lemma→Strong's mapping exists (then
+  `candidate_strongs` and `candidate_confidence` are set), else `untagged`. Extra token fields:
+  `pos`, `dependency`, `head`. `source.warning` describes coverage.
+- `-B vulg`: each Latin word is matched to a `latin.db` headword by spelling (`confidence`
+  `lexicon`, `lemma` = headword, `gloss` = definition, `pos`); `strongs` is always `[]`.
+- The release data ships LXX/Vulgate *reading* text but not these study sets; without them
+  study returns exit 4 `data_missing`.
 
 ### `strongs` — `lex --json strongs <G/H number>` (also bare `g26`)
 
@@ -141,6 +148,55 @@ Whole chapters have `verse_start`/`verse_end` set to the chapter's range. Exit 3
   a book…) and the books searched.
 - `--page N`, `--limit N` (default 10). No results is exit 3 `not_found`.
 
+### `define` — `lex --json define <term>` (also `-d <term>`)
+
+```json
+{ ...envelope, "query":"grace",
+  "dictionary":[{"topic":"Grace","source":"Easton's Bible Dictionary","match":"exact",
+                 "text":"Grace — (1.) Of form or person…","markdown":"…"}],
+  "encyclopedia":[ ...same shape... ] }
+```
+
+Up to 3 per source. `match` is `exact`, `prefix` or `fulltext`. `text` is the Markdown with
+emphasis/heading markers removed; `markdown` is the source.
+
+### `commentary` — `lex --json commentary <reference>`
+
+```json
+{ ...envelope, "query":"John 3:16", "ref":"John 3:16", "book":"John", "chapter":3, "verse":16,
+  "sections":[{"commentator":"Matthew Henry","source":"Matthew Henry's Commentary…",
+               "title":"Christ's Interview with Nicodemus","verse_start":1,"verse_end":21,
+               "text":"…","markdown":"…"}] }
+```
+
+A chapter reference (`verse: null`) returns every section in the chapter. Coverage follows the
+installed commentary data (no match → exit 3).
+
+### `naves` / `topic` — `lex --json naves <subject or reference>`
+
+```json
+{ ...envelope, "query":"prayer", "match":"exact",
+  "topics":[{"subject":"PRAYER","entry":"-MISCELLANY…\n     -Daily…","refs":["PSA 5:3", "..."]}] }
+```
+
+`match` is `exact`, `substring` (up to 50) or `fulltext` (up to 20). `entry` keeps Nave's
+indentation; `refs` are the references found in it, as written. A verse reference with no
+subject match returns `{"match":"verse","verse":<verse fields>,"subjects":[...]}`.
+
+### `creed` — `lex --json creed [<name or text>]` (also `-c`)
+
+- No query → `command:"creed_list"`, `documents:[{id, topic, source, tradition, date, section_count}]`.
+- One matching document → `command:"creed"`, `document:{topic, source, tradition, date,
+  description, note, section_count, sections:[{title, text, markdown, proofs[], original}]}`.
+  `original` is `{language, text}` when Lex has the original-language text, else `null`.
+- Several documents → `command:"creed_matches"`, `matches:[{topic, source, tradition, section_count}]`.
+- No title match → full-text: `command:"creed_search"`, `results:[{topic, title, source, text, proofs[]}]` (up to 8).
+
+### `history` — `lex --json history [--limit N]`
+
+Read-only: `items:[{ts, edition, command}]`, newest first (default 10). `history clear` /
+`--clear` are refused in JSON mode.
+
 ## Errors
 
 stderr, one line:
@@ -158,16 +214,15 @@ stderr, one line:
 | 2 | `sticky_default_in_json` | `-v`, `lex version`, `lex bible` |
 | 2 | `unsupported_in_json` | command without a JSON schema yet (below) |
 | 2 | `unknown_edition` | `-B xyz` |
-| 2 | `unsupported_edition` | e.g. `study` with `lxx` / `vulg` |
+| 2 | `unsupported_edition` | `study` on an edition with no study route |
 | 3 | `not_found` | reference, Strong's number or search with no result |
 | 4 | `data_missing` / `edition_not_installed` | runtime data not present |
 | 4 | `launcher` | npm launcher could not install/start Lex |
 
 ## Not yet in JSON mode (`unsupported_in_json`)
 
-`define`, `creed`, `commentary`, `naves`, `manuscript`, `export`, `history`, `help`,
-`update`, `words` (Geneva/KJV word tags, pending the geneva-word branch),
-`--next`/`--prev`. These fail fast rather than falling back to terminal output.
+`manuscript`, `export`, `help`/`commands`, `update`, `--credits`,
+`words` (Geneva/KJV word tags, pending the geneva-word branch), `--next`/`--prev`. These fail fast rather than falling back to terminal output.
 
 ## Planned
 

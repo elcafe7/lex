@@ -5965,11 +5965,8 @@ JSON_EXIT_INTERNAL = 1
 JSON_EXIT_USAGE = 2
 JSON_EXIT_NOT_FOUND = 3
 JSON_EXIT_DATA = 4
-JSON_COMMANDS = ["read", "study", "strongs", "web", "search"]
-JSON_UNSUPPORTED_COMMANDS = {
-    "define", "creed", "creeds", "commentary", "naves", "topic", "manuscript",
-    "export", "history", "help", "commands", "options", "all", "update", "words",
-}
+JSON_COMMANDS = ["read", "study", "strongs", "web", "search", "define", "commentary", "naves", "topic", "creed", "history"]
+JSON_UNSUPPORTED_COMMANDS = {"manuscript", "export", "help", "commands", "options", "all", "update", "words"}
 
 class JsonExit(Exception):
     """A JSON-mode error: becomes {"error": {...}} on stderr and an exit code."""
@@ -6133,8 +6130,13 @@ def json_study_verse(agent, query):
     _, db_ref, text = res[0]
     item = json_verse(agent, db_ref, text)
     version = (agent.parse_reference_parts(db_ref) or {}).get("version")
+    if version == "lxx":
+        found = json_lxx_study_item(agent, item, db_ref)
+        return (found, None) if found else (None, f"No parsed LXX data for {item['ref']}.")
+    if version == "vulg":
+        return json_vulgate_study_item(agent, item), None
     route = agent.resolve_study_source_route(db_ref)
-    if version in {"lxx", "vulg"} or not route:
+    if not route:
         raise JsonExit(
             "unsupported_edition", f"--json study does not support {(version or '').upper()} yet.", JSON_EXIT_USAGE,
             hint="Use -B esv (direct interlinear) or -B gen (labelled proxy).",
@@ -6321,6 +6323,231 @@ def json_search(agent, edition, query, page, limit):
         results=results,
     )
 
+def json_markdown_text(markdown):
+    """Markdown source as plain text: drop emphasis/heading markers, keep line breaks."""
+    text = re.sub(r"^#{1,6}\s*", "", markdown or "", flags=re.M)
+    text = re.sub(r"(\*\*|__)(.+?)\1", r"\2", text)
+    text = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?!\w)", r"\1", text)
+    return text.strip()
+
+def json_define(agent, edition, query):
+    def rows_for(db, table, fts_table):
+        if not db:
+            return []
+        tables = {row[0] for row in db.query("SELECT name FROM sqlite_master WHERE type='table'")}
+        if table not in tables:
+            return []
+        res = db.query(f"SELECT topic, content, source FROM {table} WHERE lower(topic) = lower(?) LIMIT 3", (query,))
+        match = "exact"
+        if not res:
+            match = "prefix"
+            res = db.query(
+                f"SELECT topic, content, source FROM {table} WHERE lower(topic) LIKE lower(?) "
+                "ORDER BY CASE WHEN lower(topic) LIKE lower(?) THEN 0 ELSE 1 END, topic LIMIT 3",
+                (f"{query}%", f"%{query}%"),
+            )
+        if not res and fts_table in tables:
+            safe = agent.escape_fts_query(query)
+            if safe:
+                match = "fulltext"
+                res = db.query(f"SELECT topic, content, source FROM {fts_table} WHERE {fts_table} MATCH ? LIMIT 3", (safe,))
+        return [{"topic": t, "source": s, "match": match, "text": json_markdown_text(c), "markdown": c} for t, c, s in res]
+
+    dictionary = rows_for(agent.dictionary_db, "dictionary", "dictionary_fts")
+    encyclopedia = rows_for(agent.encyclopedia_db, "encyclopedia", "encyclopedia_fts")
+    if not dictionary and not encyclopedia:
+        raise JsonExit("not_found", f"No dictionary or encyclopedia entry found for: {query}", JSON_EXIT_NOT_FOUND)
+    return json_envelope("define", edition, query=query, dictionary=dictionary, encyclopedia=encyclopedia)
+
+def json_commentary(agent, edition, query):
+    ref_norm, book, chap, verse, _v_end = agent.normalize_ref(query)
+    if not ref_norm:
+        raise JsonExit("not_found", f"Not a Bible reference: {query}", JSON_EXIT_NOT_FOUND)
+    db_book = agent.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
+    notes = []
+    for commentator, db in (("Matthew Henry", agent.henry_db), ("John Calvin", agent.calvin_db)):
+        if not db:
+            continue
+        if verse:
+            rows = db.query(
+                "SELECT section_title, markdown, source, verse_start, verse_end FROM commentary "
+                "WHERE book = ? AND chapter = ? AND verse_start <= ? AND verse_end >= ? ORDER BY section_order",
+                (db_book, chap, verse, verse),
+            )
+        else:
+            rows = db.query(
+                "SELECT section_title, markdown, source, verse_start, verse_end FROM commentary "
+                "WHERE book = ? AND chapter = ? ORDER BY section_order",
+                (db_book, chap),
+            )
+        for title, markdown, source, v_start, v_end in rows:
+            notes.append({
+                "commentator": commentator, "source": source, "title": title,
+                "verse_start": v_start, "verse_end": v_end,
+                "text": json_markdown_text(markdown), "markdown": markdown,
+            })
+    ref_label = f"{book} {chap}" + (f":{verse}" if verse else "")
+    if not notes:
+        raise JsonExit("not_found", f"No commentary notes found for {ref_label}.", JSON_EXIT_NOT_FOUND)
+    return json_envelope(
+        "commentary", edition, query=query, ref=ref_label, book=book, chapter=int(chap),
+        verse=int(verse) if verse else None, sections=notes,
+    )
+
+NAVES_REF_PATTERN = re.compile(r"\b(?:[1-3]\s?)?[A-Z][a-z]{0,3}\s\d+:\d+[0-9:,\-]*|\b(?:[1-3]\s?)?[A-Z]{2,4}\s\d+:\d+[0-9:,\-]*")
+
+def json_naves(agent, edition, query):
+    if not agent.naves_db:
+        raise JsonExit("data_missing", "Nave's Topical Bible data is not installed.", JSON_EXIT_DATA, hint="Run `lex update`.")
+    rows = agent.naves_db.query("SELECT subject, entry FROM topics WHERE subject_upper = ?", (query.upper(),))
+    match = "exact"
+    if not rows:
+        match = "substring"
+        rows = agent.naves_db.query(
+            "SELECT subject, entry FROM topics WHERE subject_upper LIKE ? ORDER BY subject LIMIT 50", (f"%{query.upper()}%",)
+        )
+    if not rows:
+        match = "fulltext"
+        try:
+            rows = agent.naves_db.query("SELECT subject, entry FROM topics_fts WHERE entry MATCH ? LIMIT 20", (query,))
+        except sqlite3.Error:
+            rows = []
+    if rows:
+        topics = [
+            {"subject": subject, "entry": entry.strip("\n"), "refs": [m.strip() for m in NAVES_REF_PATTERN.findall(entry)]}
+            for subject, entry in rows
+        ]
+        return json_envelope("naves", edition, query=query, match=match, topics=topics)
+    ref_norm, _book, _chap, verse, _v_end = agent.normalize_ref(query)
+    if ref_norm and verse:
+        db_ref = f"{agent.bible_prefix}:{ref_norm}"
+        subjects = agent.get_reverse_naves(db_ref)
+        if subjects:
+            return json_envelope(
+                "naves", edition, query=query, match="verse", verse=json_ref_fields(agent, db_ref), subjects=list(subjects),
+            )
+    raise JsonExit("not_found", f"No Nave's Topical Bible entry found for: {query}", JSON_EXIT_NOT_FOUND)
+
+def json_creed_document(agent, topic, source):
+    sections = agent.build_creed_sections(topic)
+    out = []
+    for section in sections:
+        original, language = agent.get_creed_original(topic, section["title"])
+        body = "\n\n".join(section["body_parts"])
+        out.append({
+            "title": section["title"],
+            "text": json_markdown_text(body),
+            "markdown": body,
+            "proofs": list(section["proofs"]),
+            "original": {"language": language, "text": original} if original else None,
+        })
+    return {
+        "topic": topic,
+        "source": source,
+        "tradition": agent.creed_tradition(topic),
+        "date": agent.format_creed_source(topic, source).split(" | ")[0],
+        "description": agent.format_creed_source(topic, source),
+        "note": CREED_NOTES.get(topic),
+        "section_count": len(out),
+        "sections": out,
+    }
+
+def json_creed(agent, edition, query):
+    if not query:
+        rows = sorted(
+            agent.creeds_db.query("SELECT topic, source FROM creeds GROUP BY topic, source"),
+            key=lambda row: agent.creed_tradition_sort_key(row[0]),
+        )
+        documents = [{
+            "id": i, "topic": t, "source": s, "tradition": agent.creed_tradition(t),
+            "date": agent.format_creed_source(t, s).split(" | ")[0],
+            "section_count": len(agent.build_creed_sections(t)),
+        } for i, (t, s) in enumerate(rows, start=1)]
+        return json_envelope("creed_list", edition, documents=documents)
+    matches = agent.find_creed_topics(query)
+    if len(matches) == 1:
+        return json_envelope("creed", edition, query=query, document=json_creed_document(agent, *matches[0]))
+    if matches:
+        return json_envelope("creed_matches", edition, query=query, matches=[
+            {"topic": t, "source": s, "tradition": agent.creed_tradition(t), "section_count": len(agent.build_creed_sections(t))}
+            for t, s in matches
+        ])
+    rows = agent.creeds_db.query(
+        "SELECT topic, content, source FROM creeds WHERE content LIKE ? AND content NOT LIKE '[]%' LIMIT 8", (f"%{query}%",)
+    )
+    if not rows:
+        raise JsonExit("not_found", f"No creed or confession entry found for: {query}", JSON_EXIT_NOT_FOUND)
+    hits = [{
+        "topic": t, "title": agent.extract_creed_title(c) or t, "source": s,
+        "text": json_markdown_text(agent.strip_creed_title(c)), "proofs": agent.extract_scripture_refs(c),
+    } for t, c, s in rows]
+    return json_envelope("creed_search", edition, query=query, results=hits)
+
+def json_history(agent, edition, limit):
+    rows = agent.load_query_history(limit=limit or 10)
+    items = [{"ts": row.get("ts") or None, "edition": row.get("version") or None, "command": row.get("command")} for row in rows]
+    return json_envelope("history", edition, limit=limit or 10, items=items)
+
+def json_lxx_study_item(agent, item, db_ref):
+    if not agent.lxx_db:
+        raise JsonExit(
+            "data_missing", "Parsed LXX study data (lxx.db) is not installed.", JSON_EXIT_DATA,
+            hint="`lex -B lxx` reading works; study needs the parsed LXX dataset.",
+        )
+    rows = agent.get_lxx_tokens(db_ref)
+    if not rows:
+        return None
+    tokens = []
+    for position, token in enumerate(rows, start=1):
+        codes = json_strongs_codes(token["strongs"])
+        candidates = json_strongs_codes(token.get("candidate_strongs"))
+        tokens.append({
+            "position": position, "word": None, "strongs": codes, "gloss": token["gloss"] or None,
+            "lemma": token["lemma"] or None, "lemma_translit": None, "surface": token["surface"] or None,
+            "translit": None, "morph": token["morph"] or None, "source_order": token["source_order"],
+            "confidence": "direct" if codes else ("candidate" if candidates else "untagged"),
+            "candidate_strongs": candidates,
+            "candidate_confidence": token.get("candidate_confidence") or None,
+            "pos": token["pos"] or None,
+            "dependency": token["dependency"] or None,
+            "head": token["head"],
+        })
+    item["source"] = {
+        "base": "LXX (Rahlfs parsed)", "source_key": db_ref, "confidence": "direct",
+        "warning": agent.describe_lxx_coverage(rows), "language": "Greek",
+    }
+    item["source_text"] = " ".join(t["surface"] for t in rows if t["surface"]) or None
+    item["source_translit"] = None
+    item["tokens"] = tokens
+    return item
+
+def json_vulgate_study_item(agent, item):
+    if not agent.latin_db:
+        raise JsonExit(
+            "data_missing", "Latin dictionary data (latin.db) is not installed.", JSON_EXIT_DATA,
+            hint="`lex -B vulg` reading works; study needs latin.db.",
+        )
+    tokens = []
+    for position, word in enumerate(re.findall(r"\b\w+\b", item["text"]), start=1):
+        entry = agent.latin_db.query(
+            "SELECT headword, part_of_speech, definition FROM latin WHERE normalized = ? LIMIT 1", (word.lower(),)
+        )
+        headword, pos, definition = entry[0] if entry else (None, None, None)
+        tokens.append({
+            "position": position, "word": None, "strongs": [], "gloss": definition or None, "lemma": headword,
+            "lemma_translit": None, "surface": word, "translit": None, "morph": None, "source_order": position - 1,
+            "confidence": "lexicon" if entry else "untagged", "pos": pos or None,
+        })
+    item["source"] = {
+        "base": "Clementine Vulgate + latin.db", "source_key": item["key"], "confidence": "lexicon",
+        "warning": "Latin words are matched to dictionary headwords by spelling only; no Strong's tagging.",
+        "language": "Latin",
+    }
+    item["source_text"] = item["text"]
+    item["source_translit"] = None
+    item["tokens"] = tokens
+    return item
+
 def json_dispatch(raw_argv):
     parser = build_arg_parser()
 
@@ -6344,7 +6571,12 @@ def json_dispatch(raw_argv):
             "sticky_default_in_json", "`-v`, `lex version` and `lex bible` change the saved default Bible, so --json does not allow them.",
             JSON_EXIT_USAGE, hint=f"Use `-B {requested}` to pick a Bible for one command.",
         )
-    if args.update or args.credits or args.next or args.prev or args.clear or args.define or args.creed or first in JSON_UNSUPPORTED_COMMANDS:
+    if args.clear or (first == "history" and len(words) > 1):
+        raise JsonExit(
+            "unsupported_in_json", "Clearing history changes saved state, so --json does not allow it.", JSON_EXIT_USAGE,
+            hint="Run `lex history clear` without --json.",
+        )
+    if args.update or args.credits or args.next or args.prev or first in JSON_UNSUPPORTED_COMMANDS:
         raise JsonExit(
             "unsupported_in_json", f"`{first or 'that option'}` does not have JSON output yet.", JSON_EXIT_USAGE,
             supported=JSON_COMMANDS,
@@ -6364,8 +6596,10 @@ def json_dispatch(raw_argv):
         else:
             usage_error(f"unrecognized arguments: {' '.join(unknown)}")
 
-    if not query or (first in {"search", "serch"} and all(w.startswith("-") for w in words[1:])) or (
-        first in {"read", "study", "strongs", "web"} and len(words) == 1
+    if (args.creed and not query) or first in {"creed", "creeds", "history"}:
+        pass
+    elif not query or (first in {"search", "serch"} and all(w.startswith("-") for w in words[1:])) or (
+        first in {"read", "study", "strongs", "web", "define", "commentary", "naves", "topic"} and len(words) == 1
     ):
         raise JsonExit(
             "usage", f"`{first or 'lex --json'}` needs something to look up.", JSON_EXIT_USAGE,
@@ -6381,6 +6615,16 @@ def json_dispatch(raw_argv):
     agent = LexAgent(bible_id=edition)
     rest = query.split(" ", 1)[1].strip() if " " in query else ""
 
+    if first == "history":
+        return json_history(agent, edition, args.limit)
+    if args.creed or first in {"creed", "creeds"}:
+        return json_creed(agent, edition, rest if first in {"creed", "creeds"} else query)
+    if args.define or first == "define":
+        return json_define(agent, edition, rest if first == "define" else query)
+    if first == "commentary":
+        return json_commentary(agent, edition, rest)
+    if first in {"naves", "topic"}:
+        return json_naves(agent, edition, rest)
     if first in {"search", "serch"}:
         return json_search(agent, edition, rest, args.page, args.limit)
     if first == "web":
