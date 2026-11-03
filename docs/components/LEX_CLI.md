@@ -123,8 +123,40 @@ the saved preference and returns to detection. Lex ignores global `NO_COLOR` for
 themed terminal output; set `LEX_NO_COLOR=1` to intentionally disable Lex color.
 
 `lex --version` is reserved for plain, non-interactive application version
-output. `lex -v` opens the Bible-version picker in an interactive terminal and
-prints the version list without prompting when stdin is non-interactive.
+output.
+
+Bible versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `lxx`, `vulg` (alias
+`vulgate`).
+
+- `lex -v <id>` (also `lex version <id>` / `lex bible <id>`) sets the sticky
+  default and saves it as `"bible"` in `~/.lex_config.json`. It can be combined
+  with a command (`lex -v nasb John 3:16`).
+- `lex -B <id> <command>` uses a version for that one command only. `-B` never
+  writes config. `lex -B kjv` with no command prints the `-B` explainer, says
+  KJV would apply to one command only, and changes nothing.
+- An unknown id for `-v` or `-B` prints the valid ids and exits 1.
+
+### Bare flags and subcommands (command-specific explainers)
+
+Any flag or subcommand that needs an argument, run without one, prints a short
+explainer for that command and exits 0. Explainers never raise argparse errors
+and never change state: no config, theme, or history writes.
+
+| Bare input | Explainer |
+| :--- | :--- |
+| `lex -v`, `lex version`, `lex bible` | `-v` explainer plus the 7 version ids, current default marked |
+| `lex -B`, `lex --bible`, `lex -B <id>` (no command) | `-B` explainer plus the version list |
+| `lex --page`, `lex --limit` | paging explainers |
+| `lex --mode`, `lex --format`, `lex --ratio` | export option explainers with valid values |
+| `lex -i` | interlinear flag explainer |
+| `lex -s`, `lex strongs` | Strong's help |
+| `lex -d`, `lex define` | dictionary help |
+| `lex read`, `lex study`, `lex search`, `lex web`, `lex manuscript`, `lex export`, `lex topic` / `lex naves`, `lex commentary` | that command's help page |
+
+Bare value flags are detected in `find_bare_value_flag()` before argparse runs:
+a value flag is bare when it is the last token or is followed by another flag.
+Explainer text lives in `FLAG_EXPLAINERS`. `lex creed` with no argument opens
+the creed navigator by design. Regression tests: `tests/test_flag_explainers.py`.
 
 `lex history` reads `~/.lex_query_history`, which is a JSON-lines file capped to
 the most recent local commands. It is intentionally separate from
@@ -159,4 +191,7 @@ python3 ./lex.py search Jeremiah --limit 2
 python3 ./lex.py strongs G3056 --limit 2
 python3 ./lex.py 2 jn 1:2
 python3 ./lex.py define heliodorus
+python3 ./lex.py -v
+python3 ./lex.py -B
+python3 -m unittest discover -s tests
 ```
