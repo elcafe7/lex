@@ -14,6 +14,12 @@
   loader only allowed `runtime-data/`). When the interlinear files really are
   missing, study mode now names the data folder and missing files and says to
   run `lex update`. Full clones and npm installs already ship the data.
+- **Fixed: piped or closed stdin crashed follow-up prompts.** `lex study`,
+  `lex John 3:16 -i`, `lex search`, and the export/navigation prompts ended
+  with an `EOFError` traceback (exit 1) when stdin was not a terminal, e.g.
+  `lex study John 1:1 < /dev/null` or `echo | lex search israel`. Lex now
+  skips follow-up prompts when stdin is not a TTY, and Ctrl-D or Ctrl-C at a
+  prompt exits 0 with no traceback. Interactive terminals are unchanged.
 
 ## 2.6.6 — 2026-11-03
 

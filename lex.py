@@ -1173,6 +1173,30 @@ def line_fill_sequence():
         return ""
     return "\033[48;5;231m\033[K" if ACTIVE_THEME_MODE == "light" else "\033[40m\033[K"
 
+def stdin_is_interactive():
+    """True only when a person can answer prompts (stdin is an open TTY)."""
+    try:
+        return sys.stdin is not None and sys.stdin.isatty()
+    except (AttributeError, ValueError, OSError):
+        return False
+
+
+def ask(label, default="q", **kwargs):
+    """Prompt.ask for follow-up prompts that never crashes.
+
+    With piped, redirected, or closed stdin there is nobody to answer, so the
+    default (quit/back) is used without prompting. EOF (Ctrl-D) or Ctrl-C at a
+    prompt ends Lex cleanly with exit 0 instead of a traceback.
+    """
+    if not stdin_is_interactive():
+        return default
+    try:
+        return Prompt.ask(label, default=default, **kwargs)
+    except (EOFError, KeyboardInterrupt):
+        console.print()
+        raise SystemExit(0)
+
+
 console = Console(
     color_system="256",
     theme=custom_theme,
@@ -3587,7 +3611,7 @@ text from the active Bible version when available.
                     ("q", "back"),
                 ],
             )
-            action = Prompt.ask("Export action", choices=["d", "f", "p", "o", "q"], default="q").lower()
+            action = ask("Export action", choices=["d", "f", "p", "o", "q"], default="q").lower()
             if action == "q":
                 return
             if action == "o":
@@ -3627,7 +3651,7 @@ text from the active Bible version when available.
         ))
 
         choices = list(supported.keys()) + ["q"]
-        action = Prompt.ask("Format", choices=choices, default="q").lower()
+        action = ask("Format", choices=choices, default="q").lower()
 
         if action == "q":
             return
@@ -3647,7 +3671,7 @@ text from the active Bible version when available.
                 border_style="cyan",
                 expand=False
             ))
-            ratio_action = Prompt.ask("Ratio", choices=["1", "2"], default="1")
+            ratio_action = ask("Ratio", choices=["1", "2"], default="1")
             ratio = "16:9" if ratio_action == "1" else "1:1"
 
         theme = "auto"
@@ -3663,7 +3687,7 @@ text from the active Bible version when available.
                 border_style="cyan",
                 expand=False
             ))
-            theme_action = Prompt.ask("Theme", choices=["1", "2"], default="1")
+            theme_action = ask("Theme", choices=["1", "2"], default="1")
             theme = "light" if theme_action == "1" else "dark"
 
         self.handle_bulk_export(refs_str, mode=mode, format=fmt, ratio=ratio, theme=theme)
@@ -3681,7 +3705,7 @@ text from the active Bible version when available.
                     ("q", "done"),
                 ],
             )
-            action = Prompt.ask("Study action", choices=["n", "p", "r", "w", "e", "q"], default="q").lower()
+            action = ask("Study action", choices=["n", "p", "r", "w", "e", "q"], default="q").lower()
             if action == "q":
                 return
             if action == "e":
@@ -3978,7 +4002,7 @@ text from the active Bible version when available.
 
         self.pause_study_section(animate)
         self.display_study_tsk(study_ref, parsed_tokens)
-        use_actions = console.is_terminal if actions is None else actions
+        use_actions = (console.is_terminal and stdin_is_interactive()) if actions is None else actions
         if use_actions:
             self.prompt_study_actions(db_ref)
         return True
@@ -4267,7 +4291,7 @@ text from the active Bible version when available.
                 console.print(f"[dim]Use an interactive terminal to browse sections for: lex creed {topic}[/]")
                 return True
             try:
-                choice = Prompt.ask("Select section, or q to quit", default="1").strip().lower()
+                choice = ask("Select section, or q to quit", default="1").strip().lower()
             except EOFError:
                 console.print(f"[dim]Use an interactive terminal to browse sections for: lex creed {topic}[/]")
                 return True
@@ -4349,7 +4373,7 @@ text from the active Bible version when available.
             console.print("[dim]Use: lex creed <document name>[/]")
             return True
         try:
-            choice = Prompt.ask("Select ID, or q to quit", default="1").strip().lower()
+            choice = ask("Select ID, or q to quit", default="1").strip().lower()
         except EOFError:
             console.print("[dim]Use: lex creed <document name>[/]")
             return True
@@ -4419,7 +4443,7 @@ text from the active Bible version when available.
             console.print(f"[dim]Section {art_idx+1}/{len(sections)} of '{topic}'[/]")
             console.print("[dim][n] Next | [p] Prev | [m] Sections | [q] Quit[/]")
 
-            nav = Prompt.ask("Navigate", choices=["n", "p", "m", "q"], default="q").lower()
+            nav = ask("Navigate", choices=["n", "p", "m", "q"], default="q").lower()
             if nav == "n" and art_idx < len(sections)-1: art_idx += 1
             elif nav == "p" and art_idx > 0: art_idx -= 1
             elif nav == "m": break
@@ -5367,7 +5391,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                     ("q", "back"),
                 ],
             )
-            action = Prompt.ask("Export action", choices=["d", "f", "p", "o", "q"], default="q").lower()
+            action = ask("Export action", choices=["d", "f", "p", "o", "q"], default="q").lower()
             if action == "q":
                 return
             if action == "o":
@@ -5396,7 +5420,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
         state = self.resolve_search(query, page=page, limit=limit)
         if not state:
             return False
-        use_interactive = console.is_terminal if interactive is None else interactive
+        use_interactive = (console.is_terminal and stdin_is_interactive()) if interactive is None else interactive
         use_interactive = use_interactive and page == 1 and state["page_count"] > 1
         if not use_interactive:
             self.render_search_page(state)
@@ -5404,12 +5428,12 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
         while True:
             console.clear()
             self.render_search_page(state, interactive=True)
-            nav = Prompt.ask("Search action", default="q").strip().lower()
+            nav = ask("Search action", default="q").strip().lower()
             if nav == "q":
                 return True
             if nav == "e":
                 self.prompt_search_export(state)
-                Prompt.ask("Press Enter to continue", default="")
+                ask("Press Enter to continue", default="")
                 continue
             if nav.isdigit():
                 ref = self.search_result_ref(state, nav)
@@ -5421,7 +5445,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 ref = self.search_result_ref(state, read_match.group(1))
                 if ref:
                     self.display_verse(self.format_display_ref(ref))
-                    Prompt.ask("Press Enter to return to search", default="")
+                    ask("Press Enter to return to search", default="")
                 continue
             if nav not in {"n", "p"}:
                 continue
@@ -5787,6 +5811,9 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
             for i, row in enumerate(res, 1):
                 table.add_row(str(i), row[0])
             console.print(table)
+            if not stdin_is_interactive():
+                console.print("[dim]Use: lex topic <subject>[/]")
+                return True
 
             try:
                 choice = console.input(f"\n [ui.action]Select ID [1-{len(res)}]: [/]").strip()
