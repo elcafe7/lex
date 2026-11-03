@@ -37,7 +37,7 @@ from urllib.parse import urlparse
 import hashlib
 
 
-ANGLE_TAG_NAME = re.compile(r"\s*(/?)\s*([A-Za-z][A-Za-z0-9]*)")
+ANGLE_TAG_NAME = re.compile(r"[A-Za-z][A-Za-z0-9]*")
 
 
 def angle_tag_name(raw_tag):
@@ -46,10 +46,16 @@ def angle_tag_name(raw_tag):
     Handles attributes glued on with "=", e.g. <ref='Mat.8.8'> -> "ref",
     </ref> -> "/ref", <BR /> -> "br". Returns "" for anything else.
     """
-    match = ANGLE_TAG_NAME.match(raw_tag or "")
+    # Strip whitespace with str methods instead of a "\s*/?\s*" regex
+    # prefix, which backtracks polynomially on long runs of spaces.
+    text = (raw_tag or "").lstrip()
+    slash = ""
+    if text.startswith("/"):
+        slash, text = "/", text[1:].lstrip()
+    match = ANGLE_TAG_NAME.match(text)
     if not match:
         return ""
-    return match.group(1) + match.group(2).casefold()
+    return slash + match.group(0).casefold()
 
 
 def transform_angle_markup(value, replacements=None):
