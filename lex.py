@@ -342,6 +342,31 @@ STEP_GREEK_PATH = get_lex_path("theolog-ai/data/biblical-languages/stepbible-lex
 STEP_HEBREW_PATH = get_lex_path("theolog-ai/data/biblical-languages/stepbible-lexicons/tbesh-hebrew.json")
 HISTORICAL_DOCS_DIR = get_lex_path("theolog-ai/data/historical-documents")
 
+def missing_interlinear_files():
+    """Return the interlinear data files study mode needs but cannot find."""
+    return [path for path in (INTERLINEAR_PATH, INTERLINEAR_STRONGS_PATH) if not os.path.isfile(path)]
+
+
+def missing_interlinear_message():
+    """Explain why study mode has no interlinear row, with a concrete fix."""
+    missing = missing_interlinear_files()
+    if not missing:
+        return "No local interlinear data found for this verse."
+    lines = [
+        "Interlinear study data is not installed, so study mode cannot show word-by-word Greek/Hebrew.",
+        "",
+        f"Data folder: {DATA_DIR}",
+        "Missing:",
+    ]
+    lines.extend(f"  {os.path.relpath(path, DATA_DIR)}" for path in missing)
+    lines.extend([
+        "",
+        "Fix: run `lex update` to download it (about 57 MB), or reinstall with",
+        "`npm install -g @n8te_/lex-cli` or a full `git clone https://github.com/elcafe7/lex.git`.",
+    ])
+    return "\n".join(lines)
+
+
 # The creeds table in lexicon.db has placeholder rows for some documents. This
 # map lets the UI fall back to the complete local JSON document when needed.
 HISTORICAL_DOC_FILES = {
@@ -1608,7 +1633,9 @@ class LexAgent:
         return f"{prefix}{int(num)}", f"{prefix.upper()}{int(num)}", f"{prefix.upper()}{int(num):04d}"
 
     def load_json_file(self, path):
-        allowed_roots = (RUNTIME_DATA_DIR, MANUSCRIPT_CACHE_DIR, HISTORICAL_DOCS_DIR)
+        # DATA_DIR is runtime-data/ for clones and npm installs, or the
+        # ~/bible-lexicon-data fallback when lex.py runs without a bundle.
+        allowed_roots = (DATA_DIR, RUNTIME_DATA_DIR, MANUSCRIPT_CACHE_DIR, HISTORICAL_DOCS_DIR)
         try:
             resolved = os.path.realpath(path)
             if not any(os.path.commonpath((resolved, os.path.realpath(root))) == os.path.realpath(root) for root in allowed_roots):
@@ -3841,7 +3868,7 @@ text from the active Bible version when available.
         row = self.resolve_interlinear_row(study_ref)
 
         if not row or not row.get("p"):
-            console.print(Panel("No local interlinear data found for this verse.", border_style="warning"))
+            console.print(Panel(missing_interlinear_message(), border_style="warning"))
             return False
         parsed_tokens = [self.parse_interlinear_token(token) for token in row["p"]]
         if context:
