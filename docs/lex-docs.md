@@ -1,5 +1,7 @@
 # Lex CLI Docs
 
+Last updated: November 3, 2026, 11:05 AM ET
+
 *Local-first Bible study CLI*
 
 Lex reads Scripture, searches local Bible databases, opens interlinear study views, maps cross-references and manuscript witnesses, browses creeds, and exports study work from the terminal.
