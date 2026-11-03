@@ -71,8 +71,30 @@ cd lex
 - Creates a repo-local `.venv` (Python 3.12+ required)
 - Installs Python dependencies
 - Installs a `lex` wrapper into `~/.local/bin` that points at this checkout
+- Puts `~/.local/bin` first in `PATH` in `~/.bashrc` (and `~/.zshrc` when zsh is your shell)
+- Checks for other commands named `lex` (see below)
 
 Local edits to `lex.py` or data files take effect immediately.
+
+#### If `lex` runs the flex lexer instead
+
+Linux and macOS often already have `/usr/bin/lex`: the flex lexical-analyzer
+generator, a programming tool unrelated to Lex. Whichever `lex` comes first in
+`PATH` wins. If `lex --version` prints something like `lex 2.6.4`, or
+`lex John 3:16` complains it can't open `John`, flex is running. Check with:
+
+```bash
+type -a lex                      # first line is the one your shell runs
+./scripts/check_lex_command.sh   # explains the result and the fix
+```
+
+Fixes, in order of preference:
+
+1. Open a new terminal (or `source ~/.bashrc` / `source ~/.zshrc`) after `./setup.sh`; it puts `~/.local/bin` ahead of `/usr/bin`.
+2. For other shells, put Lex's folder first yourself, e.g. fish: `fish_add_path ~/.local/bin`.
+3. Install a second name that cannot clash: `./setup.sh --alias lexb`, then use `lexb John 3:16`. `lex` keeps working wherever it already does.
+
+flex itself is untouched and still runs as `flex`.
 
 #### Verify Git checkout data
 
@@ -140,7 +162,12 @@ For launcher diagnostics:
 ```bash
 lex --npm-version      # Node launcher version
 lex --version          # Lex application version
+type -a lex            # which `lex` your shell runs first
 ```
+
+If `type -a lex` lists `/usr/bin/lex` (the flex lexer) before npm's global
+`bin` folder (`npm prefix -g` + `/bin`), put that folder earlier in `PATH`.
+See [If `lex` runs the flex lexer instead](#if-lex-runs-the-flex-lexer-instead).
 
 ### Updating
 
