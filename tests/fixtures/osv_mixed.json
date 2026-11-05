@@ -1,0 +1,23 @@
+{
+  "results": [
+    {
+      "source": {"path": "/fixture/requirements.lock.txt", "type": "lockfile"},
+      "packages": [
+        {
+          "package": {"name": "pillow", "version": "9.0.0", "ecosystem": "PyPI"},
+          "groups": [
+            {"ids": ["GHSA-test-crit"], "aliases": ["GHSA-test-crit", "CVE-0000-0001"], "max_severity": "9.8"},
+            {"ids": ["GHSA-test-med"], "aliases": ["GHSA-test-med"], "max_severity": "5.3"}
+          ]
+        },
+        {
+          "package": {"name": "examplepkg", "version": "1.0.0", "ecosystem": "PyPI"},
+          "groups": [
+            {"ids": ["PYSEC-test-noscore"], "aliases": ["PYSEC-test-noscore"], "max_severity": ""},
+            {"ids": ["OSV-test-null%"], "max_severity": null}
+          ]
+        }
+      ]
+    }
+  ]
+}

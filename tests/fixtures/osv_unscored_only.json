@@ -1,0 +1,21 @@
+{
+  "results": [
+    {
+      "source": {"path": "/fixture/lex.cdx.json", "type": "sbom"},
+      "packages": [
+        {
+          "package": {"name": "examplepkg", "version": "1.0.0", "ecosystem": "PyPI"},
+          "groups": [
+            {"ids": ["PYSEC-test-noscore"], "aliases": ["PYSEC-test-noscore"], "max_severity": ""}
+          ]
+        },
+        {
+          "package": {"name": "lowpkg", "version": "2.0.0", "ecosystem": "PyPI"},
+          "groups": [
+            {"ids": ["GHSA-test-low"], "aliases": ["GHSA-test-low"], "max_severity": "3.1"}
+          ]
+        }
+      ]
+    }
+  ]
+}
