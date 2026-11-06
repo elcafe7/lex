@@ -142,6 +142,10 @@ class LexUpdateManager:
     def __init__(self, console, data_dir=None):
         self.console = console
         self.data_dir = data_dir or RUNTIME_DATA_DIR
+        # Set by perform_update(): the manifest's data version and whether
+        # any files were downloaded this run.
+        self.remote_version = None
+        self.data_changed = False
 
     def get_local_hash(self, filepath):
         if not os.path.exists(filepath):
@@ -217,9 +221,10 @@ class LexUpdateManager:
         updates, remote_version, remote = self.check_for_updates()
         if updates is None:
             return False
+        self.remote_version = remote_version
 
         if not updates:
-            self.console.print("[success]Lex is already up to date.[/]")
+            self.console.print(f"[success]Lex data is already up to date ({remote_version}).[/]")
             return True
 
         self.console.print(f"[info]Updating Lex data to {remote_version}... ({len(updates)} files)[/]")
@@ -259,8 +264,83 @@ class LexUpdateManager:
                 self.console.print(f"[error]Failed to download {rel_path}: {e}[/]")
                 return False
 
-        self.console.print(f"[success]Successfully updated Lex to {remote_version}![/]")
+        self.data_changed = True
+        self.console.print(f"[success]Lex data updated to {remote_version}.[/]")
         return True
+
+
+def _version_tuple(version):
+    match = re.match(r"^v?(\d+)\.(\d+)\.(\d+)", str(version or "").strip())
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
+def cli_update_status(latest_data_version, env=None, base_dir=None):
+    """Describe the CLI side of `lex update` (#19).
+
+    The npm launcher checks npm, upgrades itself when it can, and passes the
+    outcome in LEX_CLI_* environment variables. Without the launcher (a git
+    clone or a direct `python3 lex.py`), `lex update` stays data-only, so
+    compare this code's VERSION with the manifest and say how to upgrade.
+    Returns a dict with cli_version, latest, status, and command.
+    """
+    env = os.environ if env is None else env
+    base_dir = base_dir or BASE_DIR
+    cli_version = env.get("LEX_CLI_PACKAGE_VERSION") or VERSION
+    status = env.get("LEX_CLI_UPDATE_STATUS")
+    if status:
+        return {
+            "cli_version": cli_version,
+            "latest": env.get("LEX_CLI_LATEST_VERSION") or None,
+            "status": status,
+            "updated_from": env.get("LEX_CLI_UPDATED_FROM") or None,
+            "command": env.get("LEX_CLI_UPGRADE_COMMAND") or "npm install -g @n8te_/lex-cli@latest",
+        }
+    latest = latest_data_version
+    current, newest = _version_tuple(cli_version), _version_tuple(latest)
+    if not current or not newest:
+        return {"cli_version": cli_version, "latest": latest, "status": "unchecked", "updated_from": None,
+                "command": None}
+    if current >= newest:
+        return {"cli_version": cli_version, "latest": latest, "status": "current", "updated_from": None,
+                "command": None}
+    if os.path.isdir(os.path.join(base_dir, ".git")):
+        command = f"git -C {shlex.quote(base_dir)} pull --ff-only && {shlex.quote(os.path.join(base_dir, 'setup.sh'))}"
+    else:
+        command = "npm install -g @n8te_/lex-cli@latest"
+    return {"cli_version": cli_version, "latest": latest, "status": "behind", "updated_from": None,
+            "command": command}
+
+
+def print_update_summary(console, manager, data_ok, env=None, base_dir=None):
+    """Print the CLI and data versions after `lex update`. Returns the exit code."""
+    info = cli_update_status(manager.remote_version, env=env, base_dir=base_dir)
+    cli, latest, status = info["cli_version"], info["latest"], info["status"]
+    console.print("")
+    if status == "updated":
+        from_note = f"updated from {info['updated_from']}" if info["updated_from"] else "updated"
+        console.print(f"[success]Lex CLI:  {cli} ({from_note})[/]")
+    elif status == "current":
+        console.print(f"[success]Lex CLI:  {cli} (latest)[/]")
+    elif status in ("failed", "behind"):
+        behind = f"behind the latest {latest}" if latest else "not the latest"
+        console.print(f"[warning]Lex CLI:  {cli} ({behind}; NOT updated)[/]")
+        if status == "behind":
+            console.print("[info]`lex update` only refreshes data for this install. To upgrade the CLI, run:[/]")
+        else:
+            console.print("[info]To upgrade the CLI, run:[/]")
+        console.print(f"  {rich_escape(info['command'])}")
+    else:
+        console.print(f"[warning]Lex CLI:  {cli} (couldn't check for a newer version)[/]")
+        if info["command"]:
+            console.print(f"[info]To upgrade the CLI yourself, run:[/] {rich_escape(info['command'])}")
+    if data_ok and manager.remote_version:
+        data_note = "updated" if manager.data_changed else "up to date"
+        console.print(f"[success]Lex data: {manager.remote_version} ({data_note})[/]")
+    else:
+        console.print("[error]Lex data: update did not complete[/]")
+    if not data_ok:
+        return 1
+    return 1 if status == "failed" else 0
 
 # ---------------------------------------------------------------------------
 # Runtime paths and bundled-data adapters
@@ -6080,7 +6160,7 @@ command-specific help.
     parser.add_argument("-v", dest="bible_version", type=str, default=None, help="Set the sticky default Bible version (e.g. -v kjv). Bare `lex -v` explains it and lists versions")
     parser.add_argument("--version", action="version", version=VERSION)
     parser.add_argument("-B", "--bible", type=str, default=None, metavar="{" + ",".join(CANONICAL_BIBLE_IDS) + "}", help="Use a Bible version for this one command only; never changes the default")
-    parser.add_argument("--update", action="store_true", help="Check for and install data updates")
+    parser.add_argument("--update", action="store_true", help="Update the Lex CLI (npm installs) and its data, then report both versions")
     theme_group = parser.add_mutually_exclusive_group()
     theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light", help="Use and remember the light terminal theme")
     theme_group.add_argument("-dark", dest="theme_mode", action="store_const", const="dark", help="Use and remember the dark terminal theme")
@@ -6147,9 +6227,8 @@ command-specific help.
 
     # If the user is running an update, we handle it and exit
     if args.update or (len(args.query) > 0 and args.query[0] == "update"):
-        if not manager.perform_update():
-            sys.exit(1)
-        sys.exit(0)
+        data_ok = manager.perform_update()
+        sys.exit(print_update_summary(console, manager, data_ok))
 
     # Ensure critical data exists (downloads if missing)
     if not manager.ensure_data():

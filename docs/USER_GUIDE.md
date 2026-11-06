@@ -336,8 +336,13 @@ lex update
 ```
 
 This verifies file integrity using hashes and downloads only changed data files.
-The updater is intentionally restricted to `runtime-data/`; it does not overwrite
-the CLI code. Code updates should be handled with Git from the Lex checkout:
+With the npm launcher (`npm install -g @n8te_/lex-cli`), `lex update` also
+upgrades the CLI package when a newer version is published, then prints both
+the CLI version and the data version. If it can't upgrade the CLI (for example,
+no write permission), it prints the exact `npm install -g ...` command to run.
+
+In a git checkout, the data updater only writes to `runtime-data/` and does
+not overwrite the CLI code. Update the code with Git from the Lex checkout:
 
 ```bash
 cd /path/to/lex

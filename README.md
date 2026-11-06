@@ -177,12 +177,24 @@ git pull
 ./setup.sh
 ```
 
-**Refresh only the offline runtime data** (Bibles, lexicons, etc.)
+**npm installs: update the CLI and the data**
+```bash
+lex update        # or: lex --update
+```
+
+With the npm launcher, `lex update` upgrades `@n8te_/lex-cli` when a newer
+version is published, refreshes the offline runtime data, and prints both
+versions. If it can't upgrade the CLI (for example, no write permission to the
+npm prefix), it prints the exact `npm install -g ...` command to run.
+
+**Git clones: refresh only the offline runtime data** (Bibles, lexicons, etc.)
 ```bash
 lex update
 ```
 
-`lex update` is intentionally data-only and will not overwrite your local code changes.
+In a git clone, `lex update` only updates data and won't overwrite your local
+code changes. If your code is older than the data, it prints the `git pull`
+command to run.
 
 ---
 
