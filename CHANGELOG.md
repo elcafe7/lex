@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.6.7 — 2026-11-06
 
 - **`lex --update` now updates the CLI too, not only the data (#19).** Before,
   `lex --update` pulled the 2.6.6 data but left an npm install at 2.6.2, so
