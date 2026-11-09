@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 2.6.8 — 2026-11-09
+
+- **Verified releases (#11, #10).** Tag pushes now build the release, write a
+  CycloneDX SBOM, scan it with OSV-Scanner (fails on CVSS 7.0 or higher),
+  write and check `SHA256SUMS`, attest build provenance and only then publish.
+  Each clean release opens a PR with its report folder under
+  `security/reports/`. See `docs/RELEASE_VERIFICATION.md`.
 
 - **Filesystem boundaries for untrusted paths (CodeQL `py/path-injection`,
   #6, #8, #9).** Paths built from downloaded or updated data (the `lex
