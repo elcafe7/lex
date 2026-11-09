@@ -50,3 +50,4 @@ pre-public/
 
 # Locally-built GitHub release assets for the npm launcher
 dist/
+build/

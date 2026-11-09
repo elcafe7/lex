@@ -1,0 +1,20 @@
+# Keeps the SHA-pinned actions in .github/workflows current. Dependabot
+# updates the commit SHA and the "# vX.Y.Z" version comment together.
+#
+# No pip entry: the repo has no lockfile and its Python dependencies are
+# unpinned (or ">=" floors), so version-update PRs would have nothing to
+# bump. Vulnerable Python packages are still covered by Dependabot alerts
+# (dependency graph) and by the OSV-Scanner gate in release.yml, which scans
+# what `pip install .` resolves at release time.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "ci"

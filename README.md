@@ -1,5 +1,13 @@
 # Lex | The Elegant Bible Terminal 📖
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/elcafe7/lex/badge)](https://scorecard.dev/viewer/?uri=github.com/elcafe7/lex)
+<!-- OpenSSF Best Practices badge slot: set PROJECT_ID and uncomment (security/MANUAL-STEPS.md)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/PROJECT_ID/badge)](https://www.bestpractices.dev/projects/PROJECT_ID)
+-->
+<!-- Socket.dev badge slot: set SOCKET_URL and uncomment (security/MANUAL-STEPS.md)
+[![Socket](https://socket.dev/api/badge/npm/package/@n8te_/lex-cli)](SOCKET_URL)
+-->
+
 ![Lex Banner](docs/images/banner.png)
 
 **A local-first Bible study terminal for reading, searching, studying, and exporting Scripture work.**
@@ -195,6 +203,85 @@ lex update
 In a git clone, `lex update` only updates data and won't overwrite your local
 code changes. If your code is older than the data, it prints the `git pull`
 command to run.
+
+---
+
+## ✅ Verification
+
+Each release starting with the first one built by
+[`.github/workflows/release.yml`](.github/workflows/release.yml) is built,
+scanned, checksummed and attested by GitHub Actions. These files are attached
+to every such release on the
+[Releases page](https://github.com/elcafe7/lex/releases):
+
+| File | What it is |
+|---|---|
+| `lex-v<VERSION>.tar.gz` | The release archive (what `lex-cli` downloads) |
+| `lex-v<VERSION>.tar.gz.sha256` | Single-file checksum used by the npm launcher |
+| `SHA256SUMS` | SHA-256 checksums for every file in the release |
+| `lex-v<VERSION>.cdx.json` | CycloneDX SBOM (software bill of materials) |
+| `lex-v<VERSION>-requirements.lock.txt` | Python packages resolved at build time |
+| `lex-v<VERSION>-osv-scan.json` / `.md` | Dated OSV-Scanner dependency report |
+| `verification.json` | Scan summary (tool, date, result, report link) for download pages |
+
+The scan report is a dated record of the release's dependencies checked
+against the [OSV database](https://osv.dev) on the day it was built. The
+release workflow only publishes when the scan is clean: an advisory rated
+CVSS 7.0 or above fails the release, and lower-rated ones hold it too, so a
+published report always says 0 known vulnerabilities (advisories with no CVSS
+score are listed as warnings). If any check fails, nothing is published; the
+findings and a suggested fix go to a "Release blocked" issue instead (details in
+[docs/RELEASE_VERIFICATION.md](docs/RELEASE_VERIFICATION.md)). The OSV database
+keeps growing, so to check a release against today's data, scan its SBOM
+yourself:
+
+```bash
+osv-scanner scan source -L lex-v<VERSION>.cdx.json
+```
+
+**Check the checksums** (download the files you want plus `SHA256SUMS` into
+one folder):
+
+```bash
+sha256sum -c --ignore-missing SHA256SUMS        # Linux
+shasum -a 256 -c --ignore-missing SHA256SUMS    # macOS
+```
+
+**Check build provenance** with the [GitHub CLI](https://cli.github.com/).
+This confirms the file was built from this repository by GitHub Actions:
+
+```bash
+gh attestation verify lex-v<VERSION>.tar.gz -R elcafe7/lex
+```
+
+The SBOM is also attested against the archive:
+
+```bash
+gh attestation verify lex-v<VERSION>.tar.gz -R elcafe7/lex \
+  --predicate-type https://cyclonedx.org/bom
+```
+
+Releases published before the workflow existed have only the `.sha256`
+sidecar.
+
+Maintainer notes (repo settings, VirusTotal, badge data):
+[docs/RELEASE_VERIFICATION.md](docs/RELEASE_VERIFICATION.md).
+
+---
+
+## 🔒 Security reports
+
+Every clean release also opens a PR that adds a dated report folder,
+`security/reports/<tag>_<UTC timestamp>/`, with a `summary.md` (each check,
+its result, date and time in UTC) and one file per check: OSV-Scanner report,
+SBOM, SHA256SUMS, attestation link, VirusTotal links (when turned on) and the
+OpenSSF Scorecard JSON. Index of all runs, newest first:
+[security/README.md](security/README.md) (machine-readable:
+[security/latest.json](security/latest.json)).
+
+<!-- security-reports:start -->
+Latest: none yet. The first verified release adds its report here. All runs: [security/README.md](security/README.md).
+<!-- security-reports:end -->
 
 ---
 
