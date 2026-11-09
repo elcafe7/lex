@@ -6,6 +6,7 @@ import re
 import sqlite3
 
 from init_lxx_db import DEFAULT_DB, init_lxx_db
+from safe_paths import MissingSourceFile, UnsafePathError, safe_source_file
 
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "runtime-data")
@@ -116,9 +117,13 @@ def fetch_lxx_text(conn, lxx_name, chapter, verse):
 
 def import_book(conn, bible_conn, lemma_dir, word_list, book_abbr):
     book_code, lxx_name = BOOKS[book_abbr]
-    lemma_path = os.path.join(lemma_dir, f"{book_abbr}.js")
-    if not os.path.exists(lemma_path):
+    # The lemma directory is a downloaded checkout: confine each book file.
+    try:
+        lemma_path = safe_source_file(lemma_dir, f"{book_abbr}.js")
+    except MissingSourceFile:
         return {"book": book_code, "rows": 0, "refs": 0, "mismatches": 0, "missing_text": 0}
+    except UnsafePathError as exc:
+        raise SystemExit(f"Refusing unsafe lemma file: {exc}")
 
     conn.execute("DELETE FROM lxx_text WHERE book = ?", (book_code,))
     conn.execute("DELETE FROM lxx_lemma_strong_map WHERE book = ?", (book_code,))
@@ -201,11 +206,12 @@ def main():
     args = parser.parse_args()
 
     lemma_dir = os.path.join(args.source, "LxxLemmas")
-    word_list_path = os.path.join(args.source, "GreekWordList.js")
     if not os.path.isdir(lemma_dir):
         raise SystemExit(f"Missing LxxLemmas directory: {lemma_dir}")
-    if not os.path.exists(word_list_path):
-        raise SystemExit(f"Missing GreekWordList.js: {word_list_path}")
+    try:
+        word_list_path = safe_source_file(args.source, "GreekWordList.js")
+    except UnsafePathError as exc:
+        raise SystemExit(f"Missing or unsafe GreekWordList.js in {args.source}: {exc}")
 
     init_lxx_db(args.db, replace=False)
     word_list = load_word_list(word_list_path)

@@ -130,6 +130,105 @@ def open_trusted_https(url_or_request, *, timeout=15):
         raise ValueError("Lex refused an untrusted update URL")
     return urllib.request.urlopen(url_or_request, timeout=timeout)
 
+# ---------------------------------------------------------------------------
+# Filesystem boundaries (CodeQL py/path-injection, issues #6/#8)
+# ---------------------------------------------------------------------------
+# Anything that comes from downloaded or updated data (the update manifest,
+# manuscript manifests, fetched JSON, SQLite rows) or from the environment is
+# untrusted. Paths built from it must stay inside a known Lex root.
+class UnsafePathError(ValueError):
+    """Raised when a path would leave its allowed base directory."""
+
+
+_ENCODED_TRAVERSAL = re.compile(r"%(?:2e|2f|5c|00)", re.IGNORECASE)
+_WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:")
+
+
+def check_relative_part(part):
+    """Reject a relative path piece that is empty, absolute, or traverses."""
+    if not isinstance(part, str) or not part:
+        raise UnsafePathError("empty path")
+    if "\x00" in part:
+        raise UnsafePathError("NUL byte in path")
+    if _ENCODED_TRAVERSAL.search(part):
+        raise UnsafePathError("encoded dot, separator, or NUL in path")
+    if part.startswith(("/", "\\")) or _WINDOWS_DRIVE.match(part) or os.path.isabs(part):
+        raise UnsafePathError("absolute path")
+    if any(segment == ".." for segment in re.split(r"[\\/]+", part)):
+        raise UnsafePathError("parent-directory segment in path")
+    return part
+
+
+def confine_path(path, roots):
+    """Resolve ``path`` (following symlinks) and return it if it is inside one
+    of ``roots``; raise UnsafePathError otherwise.
+
+    The comparison uses the real path of each root plus a trailing separator,
+    so ``/data-evil`` never matches ``/data`` and a symlink inside a root that
+    points outside it is rejected.
+    """
+    if not isinstance(path, str) or not path or "\x00" in path:
+        raise UnsafePathError("invalid path")
+    resolved = os.path.realpath(path)
+    for root in roots:
+        if not root:
+            continue
+        root_real = os.path.realpath(root)
+        prefix = root_real if root_real.endswith(os.sep) else root_real + os.sep
+        if resolved.startswith(prefix):
+            return resolved
+    raise UnsafePathError("path is outside the allowed directories")
+
+
+def safe_join(base, *parts):
+    """Join untrusted relative ``parts`` under ``base`` and return the real
+    path, guaranteed to stay inside ``base``."""
+    if not parts:
+        raise UnsafePathError("no path given")
+    for part in parts:
+        check_relative_part(part)
+    base_real = os.path.realpath(base)
+    candidate = os.path.realpath(os.path.join(base_real, *parts))
+    prefix = base_real if base_real.endswith(os.sep) else base_real + os.sep
+    if not candidate.startswith(prefix):
+        raise UnsafePathError("path escapes its base directory")
+    return candidate
+
+
+FONT_EXTENSIONS = (".ttf", ".otf", ".ttc")
+
+
+def pdf_font_roots(bundled_fonts, win_fonts):
+    """Directories PDF export may load fonts from (LEX_PDF_FONT included)."""
+    home = os.path.expanduser("~")
+    roots = [
+        bundled_fonts,
+        "/usr/share/fonts",
+        "/usr/local/share/fonts",
+        "/System/Library/Fonts",
+        "/Library/Fonts",
+        os.path.join(home, ".fonts"),
+        os.path.join(home, ".local", "share", "fonts"),
+        os.path.join(home, "Library", "Fonts"),
+        win_fonts,
+    ]
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        roots.append(os.path.join(local_app_data, "Microsoft", "Windows", "Fonts"))
+    return tuple(roots)
+
+
+def trusted_font_path(candidate, roots):
+    """Return a real font file path inside a font directory, else None."""
+    if not candidate or not candidate.lower().endswith(FONT_EXTENSIONS):
+        return None
+    try:
+        resolved = confine_path(candidate, roots)
+    except (UnsafePathError, OSError, ValueError):
+        return None
+    return resolved if os.path.isfile(resolved) else None
+
+
 # ... (rest of imports)
 
 # ---------------------------------------------------------------------------
@@ -165,20 +264,14 @@ class LexUpdateManager:
             return None
 
     def resolve_asset_path(self, rel_path):
-        if not rel_path.startswith("runtime-data/"):
+        # Manifest keys come from the network: confine them to the data dir.
+        if not isinstance(rel_path, str) or not rel_path.startswith("runtime-data/"):
             return None
         actual_rel = rel_path.replace("runtime-data/", "", 1)
-        if not actual_rel or actual_rel.startswith(("/", "\\")):
-            return None
-
-        data_root = os.path.realpath(self.data_dir)
-        target_path = os.path.realpath(os.path.join(data_root, actual_rel))
         try:
-            if os.path.commonpath([data_root, target_path]) != data_root:
-                return None
-        except ValueError:
+            return safe_join(self.data_dir, actual_rel)
+        except (UnsafePathError, OSError, ValueError):
             return None
-        return target_path
 
     def check_for_updates(self):
         remote = self.fetch_remote_manifest()
@@ -359,6 +452,21 @@ MANUSCRIPT_CACHE_DIR = os.path.expanduser("~/.cache/lex/manuscripts")
 # The browser UI lives on apocalypse.press, while its generated data assets are
 # served from Poeta's static /lex-web/ tree.
 MANUSCRIPT_WEB_BASE = "https://poeta.icu/lex-web/"
+# Shape of a manuscript asset path (bundled, cached, or listed in the fetched
+# profiles manifest): slash-separated [A-Za-z0-9._-] segments that never start
+# with a dot, ending in .json. Checked without a regex (no backtracking).
+_MANUSCRIPT_SEGMENT_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+
+
+def is_manuscript_asset_path(value):
+    if not isinstance(value, str) or not value.endswith(".json") or len(value) > 512:
+        return False
+    for segment in value.split("/"):
+        if not segment or not segment[0].isascii() or not segment[0].isalnum():
+            return False
+        if not set(segment) <= _MANUSCRIPT_SEGMENT_CHARS:
+            return False
+    return True
 
 # Local-first path resolution. Clones ship the compact runtime data bundle
 # (SQLite DBs and JSON) under runtime-data/, while local developer worktrees
@@ -1741,10 +1849,8 @@ class LexAgent:
         # ~/bible-lexicon-data fallback when lex.py runs without a bundle.
         allowed_roots = (DATA_DIR, RUNTIME_DATA_DIR, MANUSCRIPT_CACHE_DIR, HISTORICAL_DOCS_DIR)
         try:
-            resolved = os.path.realpath(path)
-            if not any(os.path.commonpath((resolved, os.path.realpath(root))) == os.path.realpath(root) for root in allowed_roots):
-                return None
-        except (OSError, ValueError):
+            resolved = confine_path(path, allowed_roots)
+        except (UnsafePathError, OSError, ValueError):
             return None
         if not os.path.isfile(resolved):
             return None
@@ -1753,10 +1859,15 @@ class LexAgent:
 
     def load_manuscript_asset(self, relative_path):
         """Load a bundled/cached manuscript shard, fetching it only if absent."""
-        if not relative_path or relative_path.startswith(('/', '\\')) or '..' in relative_path.split('/'):
+        # Profile paths come from a fetched manifest: allowlist their shape,
+        # then confine both the bundled and the cache location.
+        if not is_manuscript_asset_path(relative_path):
             return None
-        local_path = get_lex_path(relative_path)
-        cache_path = os.path.join(MANUSCRIPT_CACHE_DIR, *relative_path.split('/'))
+        try:
+            local_path = safe_join(DATA_DIR, *relative_path.split('/'))
+            cache_path = safe_join(MANUSCRIPT_CACHE_DIR, *relative_path.split('/'))
+        except (UnsafePathError, OSError, ValueError):
+            return None
         for path in (local_path, cache_path):
             try:
                 payload = self.load_json_file(path)
@@ -4740,13 +4851,13 @@ text from the active Bible version when available.
             return
         exports_root = os.path.realpath(self.search_export_dir())
         try:
-            target = os.path.realpath(path)
-            if os.path.commonpath((exports_root, target)) != exports_root:
-                console.print("[error]Refusing to open a path outside Lex exports.[/]")
-                return
-        except (OSError, ValueError):
+            if isinstance(path, str) and "\x00" not in path and os.path.realpath(path) == exports_root:
+                path = exports_root
+            else:
+                path = confine_path(path, (exports_root,))
+        except (UnsafePathError, OSError, ValueError):
+            console.print("[error]Refusing to open a path outside Lex exports.[/]")
             return
-        path = target
         if sys.platform.startswith("win"):
             try:
                 os.startfile(path)
@@ -4825,9 +4936,11 @@ text from the active Bible version when available.
                     *common_unicode_fonts,
                 ],
             }
+            font_roots = pdf_font_roots(bundled_fonts, win_fonts)
             for font_name, candidates in font_paths.items():
-                for font_path in candidates:
-                    if font_path and os.path.exists(font_path) and font_name not in pdfmetrics.getRegisteredFontNames():
+                for candidate in candidates:
+                    font_path = trusted_font_path(candidate, font_roots)
+                    if font_path and font_name not in pdfmetrics.getRegisteredFontNames():
                         pdfmetrics.registerFont(TTFont(font_name, font_path))
                         break
             base_font = "LexSans" if "LexSans" in pdfmetrics.getRegisteredFontNames() else "Helvetica"

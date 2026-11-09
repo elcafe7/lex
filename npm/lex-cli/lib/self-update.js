@@ -54,8 +54,13 @@ function latestPublishedVersion({ registry, timeoutMs = 10000 } = {}) {
       response.on("end", () => {
         try {
           const version = JSON.parse(body).version;
-          if (!parseVersion(version)) reject(new Error("npm registry response had no version"));
-          else resolve(version);
+          // The version from the registry is passed to `npm install`; accept
+          // only a plain X.Y.Z so it cannot carry a path, URL, or tag spec.
+          if (typeof version !== "string" || !/^\d+\.\d+\.\d+$/.test(version)) {
+            reject(new Error("npm registry response had no X.Y.Z version"));
+          } else {
+            resolve(version);
+          }
         } catch (err) {
           reject(err);
         }

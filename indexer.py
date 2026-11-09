@@ -92,7 +92,14 @@ def load_historical_docs(conn):
         entries = []
         for filename in os.listdir(docs_dir):
             if filename.endswith(".json"):
-                with open(os.path.join(docs_dir, filename), 'r') as f:
+                # Downloaded checkout: skip entries (e.g. symlinks) that
+                # resolve outside the historical-documents directory.
+                docs_real = os.path.realpath(docs_dir)
+                doc_path = os.path.realpath(os.path.join(docs_real, filename))
+                if not doc_path.startswith(docs_real + os.sep) or not os.path.isfile(doc_path):
+                    print(f"Skipping unsafe historical document: {filename}")
+                    continue
+                with open(doc_path, 'r') as f:
                     try:
                         doc = json.load(f)
                         title = doc.get('title', filename)

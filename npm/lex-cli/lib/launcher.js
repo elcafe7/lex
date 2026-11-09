@@ -13,6 +13,15 @@ const metadata = require("../package.json");
 const { isUpdateCommand, selfUpdate } = require("./self-update");
 const config = metadata.lexCli;
 
+// Release tags come from the GitHub API or the environment. Only plain
+// vX.Y.Z tags are accepted, so a tag can never add path segments to a URL or
+// to the archive root used during extraction.
+const RELEASE_TAG = /^v\d+\.\d+\.\d+$/;
+
+function validReleaseTag(tag) {
+  return typeof tag === "string" && RELEASE_TAG.test(tag);
+}
+
 function releaseBaseUrl(tag) {
   const releaseTag = tag || config.releaseTag;
   return process.env.LEX_CLI_RELEASE_BASE_URL ||
@@ -71,6 +80,7 @@ function latestReleaseTag() {
         try {
           const tag = JSON.parse(body).tag_name;
           if (!tag) reject(new Error("latest release response had no tag_name"));
+          else if (!validReleaseTag(tag)) reject(new Error("latest release tag_name is not a vX.Y.Z tag"));
           else resolve(tag);
         } catch (err) {
           reject(err);
@@ -82,7 +92,11 @@ function latestReleaseTag() {
 
 async function resolveReleaseTag() {
   const override = process.env.LEX_CLI_RELEASE_TAG;
-  if (override) return override;
+  if (override) {
+    if (validReleaseTag(override)) return override;
+    console.error(`lex: ignoring LEX_CLI_RELEASE_TAG (not a vX.Y.Z tag), using pinned ${config.releaseTag}`);
+    return config.releaseTag;
+  }
   try {
     const tag = await latestReleaseTag();
     console.error(`lex: latest release is ${tag}`);
@@ -144,6 +158,76 @@ function checked(command, args, options = {}) {
   if (result.status !== 0) throw new Error(`${command} exited with status ${result.status}`);
 }
 
+// --- Zip-slip guard for the downloaded release archive -----------------------
+// The archive is checksum-verified, but the checksum comes from the same
+// release, so its contents are still treated as untrusted. Every entry must be
+// a regular file or directory under the expected lex-<version>/ root.
+
+const ENCODED_TRAVERSAL = /%(?:2e|2f|5c|00)/i;
+
+function archiveEntryProblem(name, root) {
+  if (typeof name !== "string" || name.length === 0) return "empty entry name";
+  if (name.includes("\0")) return "NUL byte in entry name";
+  if (ENCODED_TRAVERSAL.test(name)) return "encoded traversal in entry name";
+  if (name.startsWith("/") || name.startsWith("\\") || /^[A-Za-z]:/.test(name)) return "absolute entry path";
+  const segments = name.split(/[\\/]+/);
+  if (segments.includes("..")) return "parent-directory segment in entry";
+  const trimmed = name.replace(/^\.\//, "");
+  if (trimmed !== root && trimmed !== `${root}/` && !trimmed.startsWith(`${root}/`)) {
+    return `entry outside ${root}/`;
+  }
+  return null;
+}
+
+// `tar -tv` prints an ls-style mode string; its first character is the entry
+// type for both GNU tar and bsdtar. Only regular files and directories pass.
+function archiveTypeProblem(verboseLine) {
+  const type = verboseLine.charAt(0);
+  if (type !== "-" && type !== "d") return `unsupported entry type '${type}'`;
+  if (/ (?:->|link to) /.test(verboseLine)) return "link entry";
+  return null;
+}
+
+function listArchive(archive, verbose) {
+  const result = spawnSync("tar", [verbose ? "-tvzf" : "-tzf", archive], {
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`tar listing exited with status ${result.status}`);
+  return result.stdout.split("\n").filter((line) => line.length > 0);
+}
+
+function verifyArchiveEntries(archive, root) {
+  const names = listArchive(archive, false);
+  const details = listArchive(archive, true);
+  if (names.length === 0) throw new Error("release archive is empty");
+  if (names.length !== details.length) throw new Error("release archive listing is inconsistent");
+  names.forEach((name, index) => {
+    const problem = archiveEntryProblem(name, root) || archiveTypeProblem(details[index]);
+    if (problem) throw new Error(`unsafe release archive entry ${JSON.stringify(name)}: ${problem}`);
+  });
+}
+
+// Second line of defence after extraction: nothing may be a symlink and every
+// path must still resolve inside the extraction directory.
+function verifyExtractedTree(extraction) {
+  const base = fs.realpathSync(extraction);
+  const prefix = base.endsWith(path.sep) ? base : base + path.sep;
+  const pending = [base];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      const stat = fs.lstatSync(full);
+      if (stat.isSymbolicLink()) throw new Error(`release archive contains a symlink: ${path.relative(base, full)}`);
+      if (!fs.realpathSync(full).startsWith(prefix)) throw new Error(`release archive entry escapes extraction: ${entry.name}`);
+      if (stat.isDirectory()) pending.push(full);
+      else if (!stat.isFile()) throw new Error(`release archive contains a special file: ${path.relative(base, full)}`);
+    }
+  }
+}
+
 function validLexHome(directory) {
   return fs.existsSync(path.join(directory, "lex.py")) &&
     fs.existsSync(path.join(directory, "requirements.txt")) &&
@@ -191,8 +275,11 @@ async function downloadRelease(tag) {
     if (actual !== expected) throw new Error("release archive checksum mismatch");
     const extraction = path.join(temporary, "extracted");
     await fsp.mkdir(extraction);
-    checked("tar", ["-xzf", archive, "-C", extraction]);
-    const source = path.join(extraction, archiveRoot(tag));
+    const root = archiveRoot(tag);
+    verifyArchiveEntries(archive, root);
+    checked("tar", ["-xzf", archive, "-C", extraction, "--no-same-owner"]);
+    verifyExtractedTree(extraction);
+    const source = path.join(extraction, root);
     if (!validLexHome(source)) throw new Error("release archive does not contain a valid Lex distribution");
     await fsp.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
     try {
@@ -257,6 +344,11 @@ async function main(args) {
 
 module.exports = {
   archiveRoot,
+  archiveEntryProblem,
+  archiveTypeProblem,
+  verifyArchiveEntries,
+  verifyExtractedTree,
+  validReleaseTag,
   installRoot,
   releaseUrls,
   resolveReleaseTag,
