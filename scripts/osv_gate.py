@@ -5,7 +5,8 @@ Usage: osv_gate.py <osv.json> <report.md> [--threshold 7.0] [--title T]
                    [--badge-json verification.json --report-url URL
                     --tool-version 2.7.0 --release TAG --repository o/r]
 
-Exit codes: 0 = clean (publish), 1 = findings (do not publish).
+Exit codes: 0 = clean (publish), 1 = findings (do not publish),
+            2 = bad arguments or a path outside the workspace (do not publish).
 
 - Advisories with a CVSS score at or above --threshold (7.0 = High,
   9.0 = Critical) fail the release.
@@ -20,14 +21,46 @@ The Markdown report always ends with a "Suggested fix" section (fixed
 versions from OSV where known) and a fix prompt that can be pasted into an
 issue or a coding agent. --badge-json is written ONLY when the result is
 PASS; a failed scan never produces badge data.
+
+Every input and output path must resolve (realpath, symlinks followed) to a
+location under GITHUB_WORKSPACE, or the current directory when that is not
+set. Anything else (".." escapes, absolute paths elsewhere, NUL bytes,
+symlinks pointing outside) stops the gate with exit code 2 before any file
+is read or written, so nothing is published.
 Standard library only.
 """
 
 import argparse
 import datetime as dt
 import json
+import os
 import sys
 from pathlib import Path
+
+
+class UnsafePathError(ValueError):
+    """A path argument resolves outside the allowed base directory."""
+
+
+def allowed_base():
+    """GITHUB_WORKSPACE when set (Actions), else the current directory; resolved."""
+    return os.path.realpath(os.environ.get("GITHUB_WORKSPACE") or os.getcwd())
+
+
+def safe_path(raw, what):
+    """Resolve a user-supplied path and require it to sit under allowed_base().
+
+    normpath + realpath (follows symlinks, so a link pointing outside the base
+    is rejected), then a startswith check on base + os.sep. Relative paths are
+    taken relative to the base. Returns the resolved absolute path.
+    """
+    if not isinstance(raw, str) or not raw or "\0" in raw:
+        raise UnsafePathError(f"{what}: empty path or NUL byte")
+    base = allowed_base()
+    resolved = os.path.realpath(os.path.normpath(os.path.join(base, raw)))
+    if not resolved.startswith(base + os.sep):
+        raise UnsafePathError(f"{what}: {raw!r} resolves outside {base}")
+    return resolved
 
 
 def label(score):
@@ -93,7 +126,18 @@ def main():
     parser.add_argument("--repository", default="", help="owner/repo")
     args = parser.parse_args()
 
-    data = json.loads(Path(args.report_json).read_text(encoding="utf-8"))
+    # Check every path before reading or writing anything.
+    try:
+        report_json = safe_path(args.report_json, "report_json")
+        report_md = safe_path(args.report_md, "report_md")
+        badge_json = safe_path(args.badge_json, "--badge-json") if args.badge_json else None
+    except UnsafePathError as exc:
+        print(f"::error title=osv_gate::{annotation_escape(str(exc))}")
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    with open(report_json, encoding="utf-8") as fh:
+        data = json.loads(fh.read())
     rows = []
     sources = []
     for result in data.get("results") or []:
@@ -196,13 +240,14 @@ def main():
             "Nothing was published for this tag: no release, assets, report or badge data.",
             "```",
         ]
-    Path(args.report_md).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    with open(report_md, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
     print("\n".join(lines[:8]))
 
-    if args.badge_json:
-        badge_path = Path(args.badge_json)
+    if badge_json:
         if failed:
-            badge_path.unlink(missing_ok=True)
+            if os.path.lexists(badge_json):
+                os.remove(badge_json)
         else:
             badge = {
                 "schema": 1,
@@ -219,7 +264,8 @@ def main():
                 "repository": args.repository,
                 "stale_after_days": 30,
             }
-            badge_path.write_text(json.dumps(badge, indent=2) + "\n", encoding="utf-8")
+            with open(badge_json, "w", encoding="utf-8") as fh:
+                fh.write(json.dumps(badge, indent=2) + "\n")
     return 1 if failed else 0
 
 
