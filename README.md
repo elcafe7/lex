@@ -271,7 +271,7 @@ Maintainer notes (repo settings, VirusTotal, badge data):
 
 ## 🔒 Security reports
 
-Every clean release also commits a dated report folder,
+Every clean release also opens a PR that adds a dated report folder,
 `security/reports/<tag>_<UTC timestamp>/`, with a `summary.md` (each check,
 its result, date and time in UTC) and one file per check: OSV-Scanner report,
 SBOM, SHA256SUMS, attestation link, VirusTotal links (when turned on) and the
