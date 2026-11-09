@@ -7,9 +7,9 @@ const launcher = require("../lib/launcher");
 
 test("release URLs use the pinned GitHub release contract", () => {
   const urls = launcher.releaseUrls();
-  assert.equal(urls.archive, "https://github.com/elcafe7/lex/releases/download/v2.6.2/lex-v2.6.2.tar.gz");
-  assert.equal(urls.checksum, "https://github.com/elcafe7/lex/releases/download/v2.6.2/lex-v2.6.2.tar.gz.sha256");
-  assert.equal(launcher.archiveRoot(), "lex-2.6.2");
+  assert.equal(urls.archive, "https://github.com/elcafe7/lex/releases/download/v2.6.7/lex-v2.6.7.tar.gz");
+  assert.equal(urls.checksum, "https://github.com/elcafe7/lex/releases/download/v2.6.7/lex-v2.6.7.tar.gz.sha256");
+  assert.equal(launcher.archiveRoot(), "lex-2.6.7");
 });
 
 test("releaseUrls accepts an explicit tag", () => {
@@ -42,7 +42,7 @@ test("resolveReleaseTag falls back to pinned tag when lookup fails", async () =>
   };
   try {
     const tag = await launcher.resolveReleaseTag();
-    assert.equal(tag, "v2.6.2");
+    assert.equal(tag, "v2.6.7");
   } finally {
     https.get = original;
   }
@@ -56,4 +56,9 @@ test("venv python path matches the current platform", () => {
   } else {
     assert.equal(python, path.join(root, ".venv", "bin", "python"));
   }
+});
+
+test("archiveRoot follows a resolved release tag", () => {
+  assert.equal(launcher.archiveRoot("v9.9.9"), "lex-9.9.9");
+  assert.equal(launcher.archiveRoot("not-a-tag"), launcher.archiveRoot());
 });

@@ -57,6 +57,11 @@ the next page, more results per page, and all matches.
 
 ## Launcher Notes
 
+Many systems already have `/usr/bin/lex`, the flex lexer. If `lex --version`
+prints something like `lex 2.6.4` instead of a Lex version, flex is earlier in
+`PATH` than npm's global `bin` folder. Run `type -a lex` to see the order, then
+put `$(npm prefix -g)/bin` ahead of `/usr/bin` in your shell's startup file.
+
 For development, `LEX_CLI_HOME` may point to an existing valid Lex checkout.
 Use `lex --npm-version` to report the launcher version without downloading the
 release archive.
@@ -66,6 +71,6 @@ back to its pinned release tag if that lookup is unavailable. Override it for
 testing with:
 
 ```sh
-LEX_CLI_RELEASE_TAG=v2.6.2 lex --version
+LEX_CLI_RELEASE_TAG=v2.6.7 lex --version
 LEX_CLI_RELEASE_BASE_URL=https://example.invalid/releases lex --version
 ```

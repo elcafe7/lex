@@ -12,7 +12,12 @@ lex naves grace
 lex web Romans 1:1
 ```
 
-Current version: `2.6.2`
+Current version: `2.6.7`
+
+## 📚 Documentation
+- **Lex CLI Docs (web):** [apocalypse.press/lex/docs](https://apocalypse.press/lex/docs/) - the full user and developer reference for 2.6.5.
+- **Download as Markdown:** [lex-docs.md](https://apocalypse.press/lex/docs/lex-docs.md)
+- **In this repo:** [docs/lex-docs.md](docs/lex-docs.md) (Markdown) and [docs/lex-docs.html](docs/lex-docs.html) (offline HTML copy)
 
 
 ---
@@ -66,8 +71,30 @@ cd lex
 - Creates a repo-local `.venv` (Python 3.12+ required)
 - Installs Python dependencies
 - Installs a `lex` wrapper into `~/.local/bin` that points at this checkout
+- Puts `~/.local/bin` first in `PATH` in `~/.bashrc` (and `~/.zshrc` when zsh is your shell)
+- Checks for other commands named `lex` (see below)
 
 Local edits to `lex.py` or data files take effect immediately.
+
+#### If `lex` runs the flex lexer instead
+
+Linux and macOS often already have `/usr/bin/lex`: the flex lexical-analyzer
+generator, a programming tool unrelated to Lex. Whichever `lex` comes first in
+`PATH` wins. If `lex --version` prints something like `lex 2.6.4`, or
+`lex John 3:16` complains it can't open `John`, flex is running. Check with:
+
+```bash
+type -a lex                      # first line is the one your shell runs
+./scripts/check_lex_command.sh   # explains the result and the fix
+```
+
+Fixes, in order of preference:
+
+1. Open a new terminal (or `source ~/.bashrc` / `source ~/.zshrc`) after `./setup.sh`; it puts `~/.local/bin` ahead of `/usr/bin`.
+2. For other shells, put Lex's folder first yourself, e.g. fish: `fish_add_path ~/.local/bin`.
+3. Install a second name that cannot clash: `./setup.sh --alias lexb`, then use `lexb John 3:16`. `lex` keeps working wherever it already does.
+
+flex itself is untouched and still runs as `flex`.
 
 #### Verify Git checkout data
 
@@ -99,9 +126,9 @@ If you are installing from a GitHub release archive instead of `git clone`, use
 the release checksum sidecar before unpacking:
 
 ```bash
-curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.2/lex-v2.6.2.tar.gz
-curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.2/lex-v2.6.2.tar.gz.sha256
-shasum -a 256 -c lex-v2.6.2.tar.gz.sha256
+curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.7/lex-v2.6.7.tar.gz
+curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.7/lex-v2.6.7.tar.gz.sha256
+shasum -a 256 -c lex-v2.6.7.tar.gz.sha256
 ```
 
 ### Alternative: npm launcher
@@ -135,7 +162,12 @@ For launcher diagnostics:
 ```bash
 lex --npm-version      # Node launcher version
 lex --version          # Lex application version
+type -a lex            # which `lex` your shell runs first
 ```
+
+If `type -a lex` lists `/usr/bin/lex` (the flex lexer) before npm's global
+`bin` folder (`npm prefix -g` + `/bin`), put that folder earlier in `PATH`.
+See [If `lex` runs the flex lexer instead](#if-lex-runs-the-flex-lexer-instead).
 
 ### Updating
 
@@ -145,12 +177,24 @@ git pull
 ./setup.sh
 ```
 
-**Refresh only the offline runtime data** (Bibles, lexicons, etc.)
+**npm installs: update the CLI and the data**
+```bash
+lex update        # or: lex --update
+```
+
+With the npm launcher, `lex update` upgrades `@n8te_/lex-cli` when a newer
+version is published, refreshes the offline runtime data, and prints both
+versions. If it can't upgrade the CLI (for example, no write permission to the
+npm prefix), it prints the exact `npm install -g ...` command to run.
+
+**Git clones: refresh only the offline runtime data** (Bibles, lexicons, etc.)
 ```bash
 lex update
 ```
 
-`lex update` is intentionally data-only and will not overwrite your local code changes.
+In a git clone, `lex update` only updates data and won't overwrite your local
+code changes. If your code is older than the data, it prints the `git pull`
+command to run.
 
 ---
 

@@ -10,6 +10,7 @@ const { spawnSync } = require("node:child_process");
 const { pipeline } = require("node:stream/promises");
 
 const metadata = require("../package.json");
+const { isUpdateCommand, selfUpdate } = require("./self-update");
 const config = metadata.lexCli;
 
 function releaseBaseUrl(tag) {
@@ -42,7 +43,11 @@ function installRoot() {
   return path.join(dataHome, "lex-cli", metadata.version);
 }
 
-function archiveRoot() {
+function archiveRoot(tag) {
+  // Release archives are rooted at lex-<version>/ for the tag they were cut
+  // from. When the launcher resolves a newer release than its own version,
+  // extract from that tag's root instead of the launcher's.
+  if (tag && /^v\d+\.\d+\.\d+$/.test(tag)) return `lex-${tag.slice(1)}`;
   return `lex-${metadata.version}`;
 }
 
@@ -187,7 +192,7 @@ async function downloadRelease(tag) {
     const extraction = path.join(temporary, "extracted");
     await fsp.mkdir(extraction);
     checked("tar", ["-xzf", archive, "-C", extraction]);
-    const source = path.join(extraction, archiveRoot());
+    const source = path.join(extraction, archiveRoot(tag));
     if (!validLexHome(source)) throw new Error("release archive does not contain a valid Lex distribution");
     await fsp.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
     try {
@@ -219,9 +224,33 @@ async function main(args) {
     console.log(metadata.version);
     return;
   }
+  const env = { ...process.env, LEX_CLI_PACKAGE_VERSION: metadata.version };
+  if (process.env.LEX_CLI_UPDATED_FROM) {
+    // Re-run by an older launcher right after it upgraded this one.
+    env.LEX_CLI_UPDATE_STATUS = "updated";
+    env.LEX_CLI_LATEST_VERSION = metadata.version;
+  } else if (isUpdateCommand(args) && !process.env.LEX_CLI_SKIP_SELF_UPDATE) {
+    // `lex --update` keeps the CLI current as well as the data (#19).
+    const packageDir = path.resolve(__dirname, "..");
+    const cli = await selfUpdate({ currentVersion: metadata.version, packageDir });
+    if (cli.status === "updated") {
+      // Hand off to the freshly installed launcher so the data update and the
+      // version report come from the new CLI, not this stale process.
+      const handoff = spawnSync(process.execPath, [path.join(packageDir, "bin", "lex.js"), ...args], {
+        stdio: "inherit",
+        env: { ...process.env, LEX_CLI_SKIP_SELF_UPDATE: "1", LEX_CLI_UPDATED_FROM: metadata.version },
+      });
+      if (handoff.error) throw handoff.error;
+      process.exitCode = handoff.status === null ? 1 : handoff.status;
+      return;
+    }
+    env.LEX_CLI_UPDATE_STATUS = cli.status;
+    if (cli.latestVersion) env.LEX_CLI_LATEST_VERSION = cli.latestVersion;
+    if (cli.command) env.LEX_CLI_UPGRADE_COMMAND = cli.command;
+  }
   const home = await resolveLexHome();
   bootstrap(home);
-  const result = spawnSync(pythonPath(home), [path.join(home, "lex.py"), ...args], { stdio: "inherit" });
+  const result = spawnSync(pythonPath(home), [path.join(home, "lex.py"), ...args], { stdio: "inherit", env });
   if (result.error) throw result.error;
   process.exitCode = result.status || 0;
 }

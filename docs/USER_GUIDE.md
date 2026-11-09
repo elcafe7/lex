@@ -294,12 +294,16 @@ To print the Lex application version for scripts or package checks:
 lex --version
 ```
 
-### 1. Interactive Menu
-To see all versions and select a new default through a simple menu:
+### 1. See The Versions
+To see what `-v` does and list all versions, with your current default marked:
 
 ```bash
 lex -v
 ```
+
+Running `lex -B` on its own works the same way for one-time selection. Any
+command or flag that needs an argument, such as `lex study` or `lex --page`,
+prints a short explainer when you run it without one.
 
 ### 2. Direct Switch (Permanent)
 To change your default version instantly:
@@ -316,6 +320,9 @@ To use a different version for just one command without changing your default:
 lex -B lxx Genesis 1:1  # Read the Septuagint once
 ```
 
+`-B` never changes your saved default. `lex -B kjv` with nothing after it just
+explains `-B` and leaves your default alone.
+
 By default, Lex uses the **ESV (English Standard Version)**.
 
 ## Keeping Lex Updated
@@ -329,8 +336,13 @@ lex update
 ```
 
 This verifies file integrity using hashes and downloads only changed data files.
-The updater is intentionally restricted to `runtime-data/`; it does not overwrite
-the CLI code. Code updates should be handled with Git from the Lex checkout:
+With the npm launcher (`npm install -g @n8te_/lex-cli`), `lex update` also
+upgrades the CLI package when a newer version is published, then prints both
+the CLI version and the data version. If it can't upgrade the CLI (for example,
+no write permission), it prints the exact `npm install -g ...` command to run.
+
+In a git checkout, the data updater only writes to `runtime-data/` and does
+not overwrite the CLI code. Update the code with Git from the Lex checkout:
 
 ```bash
 cd /path/to/lex
