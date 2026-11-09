@@ -159,7 +159,7 @@ def check_relative_part(part):
     return part
 
 
-def confine_path(path, roots, allow_root=False):
+def confine_path(path, roots):
     """Resolve ``path`` (following symlinks) and return it if it is inside one
     of ``roots``; raise UnsafePathError otherwise.
 
@@ -174,8 +174,6 @@ def confine_path(path, roots, allow_root=False):
         if not root:
             continue
         root_real = os.path.realpath(root)
-        if allow_root and resolved == root_real:
-            return root_real
         prefix = root_real if root_real.endswith(os.sep) else root_real + os.sep
         if resolved.startswith(prefix):
             return resolved
@@ -456,8 +454,19 @@ MANUSCRIPT_CACHE_DIR = os.path.expanduser("~/.cache/lex/manuscripts")
 MANUSCRIPT_WEB_BASE = "https://poeta.icu/lex-web/"
 # Shape of a manuscript asset path (bundled, cached, or listed in the fetched
 # profiles manifest): slash-separated [A-Za-z0-9._-] segments that never start
-# with a dot, ending in .json.
-MANUSCRIPT_ASSET_PATH = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*(?:/[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*)*\.json")
+# with a dot, ending in .json. Checked without a regex (no backtracking).
+_MANUSCRIPT_SEGMENT_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+
+
+def is_manuscript_asset_path(value):
+    if not isinstance(value, str) or not value.endswith(".json") or len(value) > 512:
+        return False
+    for segment in value.split("/"):
+        if not segment or not segment[0].isascii() or not segment[0].isalnum():
+            return False
+        if not set(segment) <= _MANUSCRIPT_SEGMENT_CHARS:
+            return False
+    return True
 
 # Local-first path resolution. Clones ship the compact runtime data bundle
 # (SQLite DBs and JSON) under runtime-data/, while local developer worktrees
@@ -1852,7 +1861,7 @@ class LexAgent:
         """Load a bundled/cached manuscript shard, fetching it only if absent."""
         # Profile paths come from a fetched manifest: allowlist their shape,
         # then confine both the bundled and the cache location.
-        if not isinstance(relative_path, str) or not MANUSCRIPT_ASSET_PATH.fullmatch(relative_path):
+        if not is_manuscript_asset_path(relative_path):
             return None
         try:
             local_path = safe_join(DATA_DIR, *relative_path.split('/'))
@@ -4840,8 +4849,12 @@ text from the active Bible version when available.
     def open_export(self, path):
         if not path:
             return
+        exports_root = os.path.realpath(self.search_export_dir())
         try:
-            path = confine_path(path, (self.search_export_dir(),), allow_root=True)
+            if isinstance(path, str) and "\x00" not in path and os.path.realpath(path) == exports_root:
+                path = exports_root
+            else:
+                path = confine_path(path, (exports_root,))
         except (UnsafePathError, OSError, ValueError):
             console.print("[error]Refusing to open a path outside Lex exports.[/]")
             return

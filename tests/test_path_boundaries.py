@@ -106,10 +106,17 @@ class SafeJoinTest(TempDirs):
         with self.assertRaises(LEXMOD.UnsafePathError):
             LEXMOD.confine_path(os.path.join(self.base + "-evil", "x.json"), (self.base,))
 
-    def test_confine_path_root_only_when_allowed(self):
+    def test_confine_path_excludes_the_root_itself(self):
         with self.assertRaises(LEXMOD.UnsafePathError):
             LEXMOD.confine_path(self.base, (self.base,))
-        self.assertEqual(LEXMOD.confine_path(self.base, (self.base,), allow_root=True), self.base)
+
+    def test_manuscript_asset_shape(self):
+        self.assertTrue(LEXMOD.is_manuscript_asset_path("witnesses/manuscripts/10066.json"))
+        self.assertTrue(LEXMOD.is_manuscript_asset_path("witnesses-profiles-manifest.json"))
+        for bad in ("../x.json", "witnesses/../x.json", "/x.json", "witnesses//x.json", ".x.json",
+                    "witnesses/x.txt", "witnesses/x y.json", "witnesses/\u00e9.json", "0" + ".0" * 5000 + ".json"):
+            with self.subTest(bad=bad[:40]):
+                self.assertFalse(LEXMOD.is_manuscript_asset_path(bad))
 
     def test_confine_path_rejects_nul(self):
         with self.assertRaises(LEXMOD.UnsafePathError):
