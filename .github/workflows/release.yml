@@ -422,10 +422,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          REF_NAME: ${{ github.ref_name }}
+          # Prefer the validated build-scan tag; fall back to ref_name (script allowlists).
+          TAG: ${{ needs.build-scan.outputs.tag || github.ref_name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           FAILED_JOBS: "build-scan: ${{ needs.build-scan.result }} (scan ${{ needs.build-scan.outputs.gate || 'not run' }}), virustotal: ${{ needs.virustotal.result }}, release: ${{ needs.release.result }}"
         run: |
           mkdir -p reports
           rm -f reports/*.json
-          bash scripts/release_blocked_issue.sh "$REF_NAME" reports
+          bash scripts/release_blocked_issue.sh "$TAG" reports

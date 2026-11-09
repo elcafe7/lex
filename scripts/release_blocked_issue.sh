@@ -8,11 +8,26 @@
 # scan/VirusTotal reports. Nothing is published when this runs.
 set -euo pipefail
 
-tag="$1"
-dir="$2"
+tag="${1:-}"
+dir="${2:-}"
+
+# Tags enter this script from github.ref_name / workflow outputs. Git allows
+# quotes and other shell metacharacters in ref names; reject anything outside
+# a strict allowlist before the tag is used in titles or gh/jq arguments.
+if [[ ! "$tag" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "error: invalid tag ${tag@Q} (must match ^[A-Za-z0-9._-]+$)" >&2
+  exit 1
+fi
+
+if [ -z "$dir" ] || [ ! -d "$dir" ]; then
+  echo "error: reports directory required and must exist: ${dir@Q}" >&2
+  exit 1
+fi
+
 assignee="${ASSIGNEE:-elcafe7}"
 title="Release blocked: ${tag} security check failed"
 body="$(mktemp)"
+trap 'rm -f "$body"' EXIT
 
 {
   echo "The release workflow for \`${tag}\` stopped before publishing. **Nothing was published**:"
@@ -50,7 +65,9 @@ fi
 
 cat "$body" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
-number="$(gh issue list --state open --search "in:title \"${title}\"" --json number,title --limit 50 \
+# List open issues and filter by exact title with jq. Do not pass the title
+# through gh --search (quoting breakout if a tag ever contained ").
+number="$(gh issue list --state open --json number,title --limit 200 \
   | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty')"
 if [ -n "$number" ]; then
   gh issue comment "$number" --body-file "$body"
