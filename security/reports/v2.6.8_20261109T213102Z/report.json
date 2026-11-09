@@ -1,0 +1,11 @@
+{
+  "tag": "v2.6.8",
+  "timestamp": "20261109T213102Z",
+  "date_utc": "2026-11-09T21:31:02Z",
+  "status": "published",
+  "result": "pass",
+  "folder": "reports/v2.6.8_20261109T213102Z",
+  "summary": "reports/v2.6.8_20261109T213102Z/summary.md",
+  "release_url": "https://github.com/elcafe7/lex/releases/tag/v2.6.8",
+  "run_url": "https://github.com/elcafe7/lex/actions/runs/42702865665"
+}

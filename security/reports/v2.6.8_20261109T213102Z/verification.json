@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "tool": "OSV-Scanner",
+  "tool_version": "2.7.0",
+  "date": "2026-11-09",
+  "scanned_at": "2026-11-09T21:29:56Z",
+  "result": "pass",
+  "known_vulnerabilities": 0,
+  "unscored": 0,
+  "threshold_cvss": 7.0,
+  "report_url": "https://github.com/elcafe7/lex/releases/download/v2.6.8/lex-v2.6.8-osv-scan.md",
+  "release": "v2.6.8",
+  "repository": "elcafe7/lex",
+  "stale_after_days": 30
+}

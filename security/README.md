@@ -8,7 +8,9 @@ VirusTotal links (when enabled) and the OpenSSF Scorecard JSON.
 Only runs that published are committed here. A blocked run publishes nothing;
 its report stays a workflow artifact and the "Release blocked" issue has the findings.
 
-_No reports yet. The first verified release will add one here._
+| Date (UTC) | Release | Result | Report |
+|---|---|---|---|
+| 2026-11-09 21:31:02 UTC | `v2.6.8` | pass | [summary](reports/v2.6.8_20261109T213102Z/summary.md) |
 
 Setup the maintainer does by hand (OpenSSF Best Practices, Socket.dev):
 [MANUAL-STEPS.md](MANUAL-STEPS.md).
