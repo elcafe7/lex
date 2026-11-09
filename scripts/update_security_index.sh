@@ -48,8 +48,8 @@ iso() { local t="$1"; printf '%s-%s-%sT%s:%s:%sZ' "${t:0:4}" "${t:4:2}" "${t:6:2
   echo
   echo "One folder per release run of \`.github/workflows/release.yml\`, newest first."
   echo "Each folder has a \`summary.md\` (every check, its result, date and time in UTC)"
-  echo "and one file per check: OSV-Scanner report, SBOM, SHA256SUMS, attestation link,"
-  echo "VirusTotal links (when enabled) and the OpenSSF Scorecard JSON."
+  echo "and one file per check: OSV-Scanner report, Bandit report, SBOM, SHA256SUMS,"
+  echo "attestation link, VirusTotal links (when enabled) and the OpenSSF Scorecard JSON."
   echo
   echo "Only runs that published are committed here. A blocked run publishes nothing;"
   echo "its report stays a workflow artifact and the \"Release blocked\" issue has the findings."

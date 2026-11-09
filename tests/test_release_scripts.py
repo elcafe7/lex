@@ -23,6 +23,14 @@ MALICIOUS_TAGS = (
 
 VALID_TAG = "v1.2.3"
 
+# Private HOME for the scripts instead of the shared /tmp (bandit B108).
+_SCRIPT_HOME_DIR = tempfile.TemporaryDirectory(prefix="lex-release-scripts-home-")
+SCRIPT_HOME = _SCRIPT_HOME_DIR.name
+
+
+def tearDownModule():
+    _SCRIPT_HOME_DIR.cleanup()
+
 
 def run_script(script, *args):
     return subprocess.run(
@@ -32,7 +40,7 @@ def run_script(script, *args):
         check=False,
         env={
             "PATH": "/usr/bin:/bin",
-            "HOME": "/tmp",
+            "HOME": SCRIPT_HOME,
             # Force failure if validation is skipped and gh is reached.
             "GH_TOKEN": "test-token-should-not-be-used",
             "GH_REPO": "elcafe7/test",
@@ -65,7 +73,8 @@ class ReleaseScriptTagTests(unittest.TestCase):
     def test_blocked_rejects_missing_reports_dir_after_valid_tag(self):
         # Valid tag must pass the allowlist, then fail on a missing reports dir
         # (still before any gh call that would open/update an issue).
-        proc = run_script(BLOCKED, VALID_TAG, "/tmp/does-not-exist-release-verify")
+        with tempfile.TemporaryDirectory() as t:
+            proc = run_script(BLOCKED, VALID_TAG, str(Path(t) / "does-not-exist-release-verify"))
         self.assertNotEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("reports directory", proc.stderr)
 

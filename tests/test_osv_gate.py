@@ -165,7 +165,7 @@ class OsvGatePathTests(unittest.TestCase):
 
     def test_absolute_path_outside(self):
         self.assert_rejected(str(self.outside / "scan.json"), "r.md")
-        self.assert_rejected("scan.json", "r.md", "--badge-json", "/tmp/verification.json")
+        self.assert_rejected("scan.json", "r.md", "--badge-json", os.path.join(tempfile.gettempdir(), "verification.json"))
         self.assert_rejected("/etc/passwd", "r.md")
 
     def test_symlink_escape(self):

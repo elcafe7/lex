@@ -11,6 +11,8 @@
 #   REPO, SERVER_URL, RUN_URL repository (owner/name), https://github.com, run link
 #   DIST_DIR                  release files (SBOM, SHA256SUMS, OSV report, verification.json)
 #   SCAN_DIR                  scan-report artifact (OSV report) for blocked runs
+#   BANDIT_DIR                bandit-report artifact: bandit.json, bandit.txt,
+#                             bandit.md (from scripts/bandit_check.sh)
 #   VT_DIR                    virustotal-report artifact: virustotal.md (scan
 #                             results) and/or virustotal-not-run.md (VT on but
 #                             no scan, e.g. missing VT_API_KEY)
@@ -103,6 +105,47 @@ if [ -n "$osv_md" ]; then
   osv_files="${osv_files}, $(link osv-scan.md)"
 fi
 add_row "OSV-Scanner" "$osv_result" "$osv_files"
+
+# --- Bandit (Python static analysis) ---------------------------------------
+# Counts come from Bandit's own JSON, not from the gate's summary. No valid
+# JSON means "not run" (nothing at all) or "FAIL (scan incomplete)" (the job
+# ran but left no usable report); it is never reported as clean.
+bandit_dir="${BANDIT_DIR:-}"
+b_json="$(first_match 'bandit.json' "$bandit_dir")"
+b_txt="$(first_match 'bandit.txt' "$bandit_dir")"
+b_md="$(first_match 'bandit.md' "$bandit_dir")"
+bandit_files="-"
+if [ -n "$b_json" ] && jq -e '(.results | type) == "array" and (.metrics | type) == "object"' "$b_json" >/dev/null 2>&1; then
+  cp "$b_json" "$dir/bandit.json"
+  bandit_files="$(link bandit.json)"
+  b_mh="$(jq '[.results[] | select(.issue_severity == "MEDIUM" or .issue_severity == "HIGH")] | length' "$b_json")"
+  b_low="$(jq '[.results[] | select(.issue_severity != "MEDIUM" and .issue_severity != "HIGH")] | length' "$b_json")"
+  b_err="$(jq '[.errors[]?] | length' "$b_json")"
+  b_nosec="$(jq '.metrics._totals.skipped_tests // 0' "$b_json")"
+  for v in b_mh b_low b_err b_nosec; do [[ "${!v}" =~ ^[0-9]+$ ]] || printf -v "$v" '%s' "?"; done
+  if [ "$b_mh" = "0" ] && [ "$b_err" = "0" ]; then
+    bandit_result="pass (0 medium/high findings; ${b_low} low, information only; ${b_nosec} inline nosec)"
+  elif [ "$b_err" != "0" ]; then
+    bandit_result="FAIL (${b_mh} medium/high findings; ${b_err} files not scanned)"
+  else
+    bandit_result="FAIL (${b_mh} medium/high findings)"
+  fi
+elif [ -n "$b_json" ] || [ -n "$b_md" ] || [ -n "$b_txt" ]; then
+  bandit_result="FAIL (scan incomplete: no valid Bandit JSON)"
+else
+  bandit_result="not run"
+fi
+if [ "$bandit_result" != "not run" ]; then
+  b_links=()
+  [ "$bandit_files" = "-" ] || b_links+=("$bandit_files")
+  if [ -n "$b_txt" ]; then cp "$b_txt" "$dir/bandit.txt"; b_links+=("$(link bandit.txt)"); fi
+  if [ -n "$b_md" ]; then cp "$b_md" "$dir/bandit.md"; b_links+=("$(link bandit.md)"); fi
+  if [ "${#b_links[@]}" -gt 0 ]; then
+    bandit_files="$(IFS=,; echo "${b_links[*]}")"
+    bandit_files="${bandit_files//,/, }"
+  fi
+fi
+add_row "Bandit (Python static analysis)" "$bandit_result" "$bandit_files"
 
 # --- SBOM ----------------------------------------------------------------
 sbom="$(first_match '*.cdx.json' "$dist")"

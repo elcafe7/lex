@@ -57,8 +57,16 @@ def make_inputs(tmp: Path):
     return dist, vt, sc
 
 
+# Private HOME for the scripts instead of the shared /tmp (bandit B108).
+_SCRIPT_HOME_DIR = tempfile.TemporaryDirectory(prefix="lex-security-report-home-")
+
+
+def tearDownModule():
+    _SCRIPT_HOME_DIR.cleanup()
+
+
 def run(script, *args, env=None, cwd=None):
-    base = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": "/tmp"}
+    base = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": _SCRIPT_HOME_DIR.name}
     base.update(env or {})
     return subprocess.run(["bash", str(script), *args], capture_output=True, text=True,
                           check=False, env=base, cwd=cwd)
@@ -137,6 +145,77 @@ class WriterTests(unittest.TestCase):
             self.assertIn("| VirusTotal | not enabled", s)
             self.assertIn("| OpenSSF Scorecard | not available", s)
             self.assertIn("not run (blocked)", s)
+            self.assertIn("| Bandit (Python static analysis) | not run | - |", s)
+
+
+def bandit_json(results=(), errors=(), skipped=0):
+    return json.dumps({"errors": list(errors), "metrics": {"_totals": {"skipped_tests": skipped}},
+                       "results": list(results)})
+
+
+def bandit_result(severity, test_id="B608"):
+    return {"test_id": test_id, "issue_severity": severity, "issue_confidence": "LOW",
+            "filename": "./lex.py", "line_number": 1, "issue_text": "x"}
+
+
+class BanditReportTests(unittest.TestCase):
+    """The Bandit row reflects Bandit's own JSON; no JSON is never 'pass'."""
+
+    def _summary(self, tmp: Path, files: dict, status="published"):
+        dist, vt, sc = make_inputs(tmp)
+        bdir = tmp / "bandit-report"
+        bdir.mkdir()
+        for name, text in files.items():
+            (bdir / name).write_text(text)
+        env = writer_env("v1.2.3", dist, vt, sc, status=status)
+        env["BANDIT_DIR"] = str(bdir)
+        p = run(WRITER, str(tmp / "out"), env=env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        d = tmp / "out" / "v1.2.3_20261109T205501Z"
+        rows = [l for l in (d / "summary.md").read_text().splitlines()
+                if l.startswith("| Bandit (Python static analysis) |")]
+        self.assertEqual(len(rows), 1)
+        return d, rows[0]
+
+    def test_clean_scan_passes_and_copies_reports(self):
+        with tempfile.TemporaryDirectory() as t:
+            d, row = self._summary(Path(t), {
+                "bandit.json": bandit_json([bandit_result("LOW", "B404")] * 3, skipped=7),
+                "bandit.txt": "Run metrics\n", "bandit.md": "# Bandit\n"})
+            self.assertIn("| pass (0 medium/high findings; 3 low, information only; 7 inline nosec) |", row)
+            self.assertIn("[bandit.json](bandit.json), [bandit.txt](bandit.txt), [bandit.md](bandit.md)", row)
+            for f in ("bandit.json", "bandit.txt", "bandit.md"):
+                self.assertTrue((d / f).is_file(), f)
+
+    def test_findings_fail(self):
+        with tempfile.TemporaryDirectory() as t:
+            _, row = self._summary(Path(t), {"bandit.json": bandit_json(
+                [bandit_result("MEDIUM"), bandit_result("HIGH"), bandit_result("LOW")])}, status="blocked")
+            self.assertIn("| FAIL (2 medium/high findings) |", row)
+
+    def test_unscanned_files_fail(self):
+        with tempfile.TemporaryDirectory() as t:
+            _, row = self._summary(Path(t), {"bandit.json": bandit_json(
+                errors=[{"filename": "./x.py", "reason": "syntax error"}])}, status="blocked")
+            self.assertIn("FAIL (0 medium/high findings; 1 files not scanned)", row)
+
+    def test_broken_or_missing_json_is_never_pass(self):
+        for files in ({"bandit.json": "{not json"}, {"bandit.md": "# Bandit\n"},
+                      {"bandit.json": json.dumps({"results": []})}):
+            with self.subTest(files=list(files)), tempfile.TemporaryDirectory() as t:
+                d, row = self._summary(Path(t), files, status="blocked")
+                self.assertIn("FAIL (scan incomplete: no valid Bandit JSON)", row)
+                self.assertNotIn("pass", row)
+                self.assertFalse((d / "bandit.json").exists())
+
+    def test_no_bandit_dir_says_not_run(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            dist, vt, sc = make_inputs(tmp)
+            p = run(WRITER, str(tmp / "out"), env=writer_env("v1.2.3", dist, vt, sc))
+            self.assertEqual(p.returncode, 0, p.stderr)
+            s = (tmp / "out" / "v1.2.3_20261109T205501Z" / "summary.md").read_text()
+            self.assertIn("| Bandit (Python static analysis) | not run | - |", s)
 
 
 VT_HEADER = "| File | Malicious | Suspicious | Undetected | Result | Link |\n|---|---|---|---|---|---|\n"
@@ -284,6 +363,101 @@ class WorkflowVirusTotalGuardTests(unittest.TestCase):
         cond = " ".join(self.jobs["blocked"]["if"].split())
         self.assertIn("contains(needs.*.result, 'failure')", cond)
         self.assertIn("virustotal", self.jobs["blocked"]["needs"])
+
+
+class WorkflowBanditTests(unittest.TestCase):
+    """release.yml: Bandit runs on tag push and dry run, and gates the publish."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import yaml
+        except ImportError:  # pragma: no cover
+            raise unittest.SkipTest("PyYAML not installed")
+        wf_dir = ROOT / ".github" / "workflows"
+        cls.wf = yaml.safe_load((wf_dir / "release.yml").read_text())
+        cls.jobs = cls.wf["jobs"]
+        cls.bandit_wf = yaml.safe_load((wf_dir / "bandit.yml").read_text())
+
+    @staticmethod
+    def _cond(job):
+        return " ".join(job["if"].split())
+
+    def _install_and_scan(self, job):
+        runs = "\n".join(s.get("run", "") for s in job["steps"])
+        self.assertIn("--require-hashes", runs)
+        self.assertIn("-r .github/requirements/bandit-requirements.txt", runs)
+        self.assertIn("bash scripts/bandit_check.sh bandit-report", runs)
+        self.assertIn("python3 -m unittest -v tests.test_bandit_gate", runs)
+        self.assertNotIn("--baseline", runs)
+        self.assertNotIn(" -b ", runs)
+        self.assertNotIn(" -s ", runs)
+        self.assertNotIn("--skip", runs)
+        self.assertNotIn("${{", runs, "values reach run: only through env")
+        checkout = job["steps"][0]
+        self.assertTrue(checkout["uses"].startswith("actions/checkout@"))
+        self.assertIs(checkout["with"]["persist-credentials"], False)
+
+    def test_bandit_job_runs_on_push_and_dry_run(self):
+        job = self.jobs["bandit"]
+        self.assertNotIn("if", job, "Bandit must run on tag push and workflow_dispatch")
+        self.assertNotIn("needs", job)
+        self.assertEqual(job["permissions"], {"contents": "read"})
+        self._install_and_scan(job)
+        upload = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/upload-artifact@"))
+        self.assertEqual(upload["with"]["name"], "bandit-report")
+        self.assertEqual(upload["if"], "always()")
+        self.assertIn("workflow_dispatch", self.wf[True])
+        self.assertIn("push", self.wf[True])
+
+    def test_bandit_gate_output(self):
+        step = next(s for s in self.jobs["bandit"]["steps"] if s.get("id") == "bandit")
+        self.assertIn('echo "gate=pass"', step["run"])
+        self.assertIn('echo "gate=fail"', step["run"])
+        self.assertIn('exit "$rc"', step["run"])
+
+    def test_release_and_report_commit_need_clean_bandit(self):
+        for name in ("release", "security-report-commit"):
+            with self.subTest(job=name):
+                self.assertIn("bandit", self.jobs[name]["needs"])
+                cond = self._cond(self.jobs[name])
+                self.assertIn("needs.bandit.result == 'success' && needs.bandit.outputs.gate == 'pass'", cond)
+
+    def test_blocked_job_reports_bandit(self):
+        job = self.jobs["blocked"]
+        self.assertIn("bandit", job["needs"])
+        self.assertIn("needs.bandit.outputs.gate == 'fail'", self._cond(job))
+        issue = next(s for s in job["steps"] if s.get("name", "").startswith("Open or update"))
+        self.assertIn("bandit: ${{ needs.bandit.result }}", issue["env"]["FAILED_JOBS"])
+        dl = next(s for s in job["steps"] if s.get("name") == "Download scan reports")
+        self.assertEqual(dl["with"]["pattern"], "*-report")  # picks up bandit-report (bandit.md)
+        report = next(s for s in job["steps"] if s.get("id") == "report")
+        self.assertEqual(report["env"]["BANDIT_DIR"], "report-inputs")
+        self.assertNotIn("contents: write", str(job["permissions"]))
+
+    def test_published_report_gets_bandit_dir(self):
+        report = next(s for s in self.jobs["release"]["steps"] if s.get("id") == "report")
+        self.assertEqual(report["env"]["BANDIT_DIR"], "bandit-report")
+        dl = next(s for s in self.jobs["release"]["steps"] if s.get("name") == "Download the Bandit report")
+        self.assertEqual(dl["with"]["name"], "bandit-report")
+
+    def test_standalone_workflow_triggers(self):
+        on = self.bandit_wf[True]
+        for trigger in ("pull_request", "push", "schedule", "workflow_dispatch"):
+            self.assertIn(trigger, on)
+        self.assertEqual(on["push"]["branches"], ["main"])
+        self.assertEqual(self.bandit_wf["permissions"], {"contents": "read"})
+        job = self.bandit_wf["jobs"]["bandit"]
+        self.assertEqual(job["permissions"], {"contents": "read"})
+        self._install_and_scan(job)
+
+    def test_requirements_are_hash_pinned(self):
+        req = (ROOT / ".github" / "requirements" / "bandit-requirements.txt").read_text()
+        pkgs = [l for l in req.splitlines() if l and not l.startswith((" ", "#"))]
+        self.assertTrue(any(l.startswith("bandit==") for l in pkgs))
+        for line in pkgs:
+            self.assertIn("==", line)
+        self.assertGreaterEqual(req.count("--hash=sha256:"), len(pkgs))
 
 
 class IndexAndCommitTests(unittest.TestCase):
