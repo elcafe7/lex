@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Filesystem boundaries for untrusted paths (CodeQL `py/path-injection`,
+  #6, #8, #9).** Paths built from downloaded or updated data (the `lex
+  --update` manifest, the manuscript profiles manifest, files inside
+  downloaded import checkouts) or from the environment must now resolve inside
+  a known Lex directory; `..`, encoded `..%2f`, absolute paths, NUL bytes and
+  symlinks that escape are refused. `LEX_PDF_FONT` / `LEX_PDF_HEBREW_FONT`
+  must name a `.ttf`, `.otf` or `.ttc` file in the bundled, system or user
+  font folders. The npm launcher checks every release-archive entry before
+  and after extraction (no absolute, `..`, out-of-root, symlink or hard-link
+  entries) and only accepts `vX.Y.Z` release tags.
+
 ## 2.6.7 — 2026-11-06
 
 - **`lex --update` now updates the CLI too, not only the data (#19).** Before,

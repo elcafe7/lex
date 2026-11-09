@@ -12,6 +12,7 @@ the verification performed. It is not a claim that Lex is free of defects.
 | 2026-10-24 | `1f909b5` | CodeQL `py/path-injection` | Restricted JSON reads to Lex data/cache roots and export opening to the Lex export directory. | `py_compile`; out-of-root read rejection check. |
 | 2026-10-24 | `7a13c16` | CodeQL `py/polynomial-redos` | Rejected non-reference characters before applying reference parsing patterns. | `py_compile`; hostile-tab and valid-reference smoke checks. |
 | 2026-10-24 | `b00f09e` | CodeQL `py/polynomial-redos` | Replaced reference and import-script backtracking regex parsing with bounded linear parsers. | `py_compile`; normal/compact reference, hostile-tab, markup, and word-list parsing assertions. GitHub CodeQL result pending. |
+| 2026-11-09 | PR (fix/codeql-path-injection) | CodeQL `py/path-injection` (#6, #8, #9) | Shared realpath + trailing-separator boundary helpers (`confine_path`, `safe_join`, `scripts/safe_paths.py`) for runtime JSON/manuscript/export/font paths, update-manifest assets, and files inside downloaded import checkouts; zip-slip guard and `vX.Y.Z` tag check in the npm launcher. 13 alerts fixed; 15 developer-script alerts on operator-typed CLI paths dismissed as trusted local input. | `tests/test_path_boundaries.py` and `npm/lex-cli/test/archive-guard.test.js` (`../`, `..%2f`, absolute, NUL, symlink escape, malicious update manifest, malicious archive entries); full suites pass. GitHub CodeQL result on the PR recorded in the PR. |
 
 ## Evidence rules
 
