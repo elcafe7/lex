@@ -220,9 +220,14 @@ to every such release on the
 
 The scan report is a dated record of the release's dependencies checked
 against the [OSV database](https://osv.dev) on the day it was built. The
-release workflow only publishes when no dependency matches an advisory rated
-CVSS 7.0 or above. The OSV database keeps growing, so to check a release
-against today's data, scan its SBOM yourself:
+release workflow only publishes when the scan is clean: an advisory rated
+CVSS 7.0 or above fails the release, and lower-rated ones hold it too, so a
+published report always says 0 known vulnerabilities (advisories with no CVSS
+score are listed as warnings). If any check fails, nothing is published; the
+findings and a suggested fix go to a "Release blocked" issue instead (details in
+[docs/RELEASE_VERIFICATION.md](docs/RELEASE_VERIFICATION.md)). The OSV database
+keeps growing, so to check a release against today's data, scan its SBOM
+yourself:
 
 ```bash
 osv-scanner scan source -L lex-v<VERSION>.cdx.json

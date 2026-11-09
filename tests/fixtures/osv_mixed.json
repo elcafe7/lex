@@ -5,6 +5,14 @@
       "packages": [
         {
           "package": {"name": "pillow", "version": "9.0.0", "ecosystem": "PyPI"},
+          "vulnerabilities": [
+            {"id": "GHSA-test-crit", "aliases": ["CVE-0000-0001"],
+             "affected": [{"package": {"name": "pillow", "ecosystem": "PyPI"},
+                           "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "9.0.1"}]}]}]},
+            {"id": "GHSA-test-med",
+             "affected": [{"package": {"name": "pillow", "ecosystem": "PyPI"},
+                           "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "10.3.0"}]}]}]}
+          ],
           "groups": [
             {"ids": ["GHSA-test-crit"], "aliases": ["GHSA-test-crit", "CVE-0000-0001"], "max_severity": "9.8"},
             {"ids": ["GHSA-test-med"], "aliases": ["GHSA-test-med"], "max_severity": "5.3"}
