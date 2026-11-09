@@ -51,4 +51,5 @@ written into the report.
 ## Other repo variables (already documented)
 
 - `ENABLE_VIRUSTOTAL` = `true` plus the `VT_API_KEY` secret turns on the
-  VirusTotal check and its links in the report.
+  VirusTotal check and its links in the report. Add the secret first:
+  `ENABLE_VIRUSTOTAL` = `true` without `VT_API_KEY` blocks every release.

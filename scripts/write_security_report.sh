@@ -11,7 +11,9 @@
 #   REPO, SERVER_URL, RUN_URL repository (owner/name), https://github.com, run link
 #   DIST_DIR                  release files (SBOM, SHA256SUMS, OSV report, verification.json)
 #   SCAN_DIR                  scan-report artifact (OSV report) for blocked runs
-#   VT_DIR                    virustotal-report artifact (virustotal.md), if VT ran
+#   VT_DIR                    virustotal-report artifact: virustotal.md (scan
+#                             results) and/or virustotal-not-run.md (VT on but
+#                             no scan, e.g. missing VT_API_KEY)
 #   ATTESTED                  "true" if provenance was attested
 #   ATTESTATION_URL           attest-build-provenance attestation-url output
 #   SCORECARD_FILE            JSON from api.scorecard.dev, if it was fetched
@@ -146,14 +148,36 @@ else
 fi
 
 # --- VirusTotal ----------------------------------------------------------
+# VirusTotal only counts as scanned when virustotal.md has at least one
+# result row in the exact format virustotal_check.sh writes. Anything else
+# (no file, header only, a "not run" note) never says clean or scanned.
 vt_md="$(first_match 'virustotal.md' "$vt")"
+vt_notrun="$(first_match 'virustotal-not-run.md' "$vt")"
+vt_row_re='^[|] [A-Za-z0-9._+-]+ [|] ([0-9]+|[?]) [|] ([0-9]+|[?]) [|] ([0-9]+|[?]) [|] (clean|suspicious [(]non-blocking[)]|FLAGGED|NOT FINISHED) [|] \[report\]\(https://www[.]virustotal[.]com/gui/file/[0-9a-f]{64}\) [|]$'
+vt_rows=0; vt_bad=0; vt_sus=0
 if [ -n "$vt_md" ]; then
+  while IFS= read -r line; do
+    if [[ "$line" =~ $vt_row_re ]]; then
+      vt_rows=$((vt_rows + 1))
+      case "${BASH_REMATCH[4]}" in
+        FLAGGED|"NOT FINISHED") vt_bad=$((vt_bad + 1)) ;;
+        suspicious*) vt_sus=$((vt_sus + 1)) ;;
+      esac
+    fi
+  done < "$vt_md"
+fi
+if [ "$vt_rows" -gt 0 ]; then
   cp "$vt_md" "$dir/virustotal.md"
   grep -oE 'https://www\.virustotal\.com/gui/file/[0-9a-f]{64}' "$vt_md" | sort -u > "$dir/virustotal-links.txt" || true
-  if grep -qE 'FLAGGED|NOT FINISHED' "$vt_md"; then vt_result="FLAGGED / not finished"
-  elif grep -q 'suspicious (non-blocking)' "$vt_md"; then vt_result="clean (suspicious ratings listed, non-blocking)"
-  else vt_result="clean"; fi
+  files_word="files"; [ "$vt_rows" -eq 1 ] && files_word="file"
+  if [ "$vt_bad" -gt 0 ]; then vt_result="FLAGGED / not finished (${vt_bad} of ${vt_rows} ${files_word})"
+  elif [ "$vt_sus" -gt 0 ]; then vt_result="clean, ${vt_rows} ${files_word} scanned (suspicious ratings listed, non-blocking)"
+  else vt_result="clean, ${vt_rows} ${files_word} scanned"; fi
   add_row "VirusTotal" "$vt_result" "$(link virustotal.md), $(link virustotal-links.txt)"
+elif [ -n "$vt_notrun" ] && grep -q 'VT_API_KEY' "$vt_notrun"; then
+  add_row "VirusTotal" "enabled but not run: VT_API_KEY secret missing (nothing scanned)" "-"
+elif [ -n "$vt_md" ] || [ -n "$vt_notrun" ]; then
+  add_row "VirusTotal" "enabled but no results (nothing scanned)" "-"
 else
   add_row "VirusTotal" "not enabled" "-"
 fi

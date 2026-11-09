@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# VirusTotal pre-publish check (optional; only runs when the repo variable
-# ENABLE_VIRUSTOTAL is 'true' AND the VT_API_KEY secret is set).
+# VirusTotal pre-publish check (optional; runs when the repo variable
+# ENABLE_VIRUSTOTAL is 'true'. If VT_API_KEY is then missing the workflow
+# fails closed before calling this script, see virustotal_not_run.sh).
 #
 # Usage: virustotal_check.sh <report.md> <file>...
 #
@@ -11,8 +12,16 @@
 # Free public API: 4 requests/minute, 500/day; polling every 20 s stays under it.
 set -euo pipefail
 
-report="$1"
+report="${1:-}"
+[ -n "$report" ] || { echo "usage: virustotal_check.sh <report.md> <file>..." >&2; exit 1; }
 shift
+if [ "$#" -eq 0 ]; then
+  echo "::error title=VirusTotal::no files to scan"
+  exit 1
+fi
+for f in "$@"; do
+  [ -f "$f" ] || { echo "::error title=VirusTotal::file not found: ${f@Q}"; exit 1; }
+done
 api="https://www.virustotal.com/api/v3"
 key="${VT_API_KEY:?VT_API_KEY is not set}"
 status=0

@@ -60,15 +60,24 @@ release and no `verification.json`. Instead:
 
 ## VirusTotal (off by default)
 
-The VirusTotal check runs before anything is published, only when **both**
-are set, and only on a public repo, on the files the release would publish
-(VirusTotal shares uploads with its partners, so it never sees anything that
-isn't about to be public anyway). Any engine rating a file malicious, or an
-analysis that doesn't finish in 15 minutes, blocks the release; "suspicious"
-ratings are warnings:
+The VirusTotal check runs before anything is published, only on a public
+repo, on the files the release would publish (VirusTotal shares uploads with
+its partners, so it never sees anything that isn't about to be public
+anyway). It needs **both**:
 
-- repository variable `ENABLE_VIRUSTOTAL` = `true`
+- repository variable `ENABLE_VIRUSTOTAL` = `true` (turns it on)
 - repository secret `VT_API_KEY` (Nate adds this himself)
+
+| VirusTotal | `virustotal` job | Publish | Report says |
+|---|---|---|---|
+| Off (`ENABLE_VIRUSTOTAL` not `true`, or repo not public) | skipped | yes | "not enabled" |
+| On, `VT_API_KEY` missing | **fails** (`::error::`, no secret printed) | **no**, "Release blocked" issue | "enabled but not run: VT_API_KEY secret missing (nothing scanned)" |
+| On, every file clean (suspicious = warning) | success | yes | "clean, N files scanned" + permalinks |
+| On, any engine says malicious, or an analysis doesn't finish in 15 min | fails | **no**, "Release blocked" issue | "FLAGGED / not finished" |
+
+The report, release notes and job summary only call VirusTotal clean or
+scanned when `virustotal.md` has real result rows; `verification.json` and
+the README badge are OSV-only and never mention VirusTotal.
 
 Free public API limits: 4 requests/minute, 500/day.
 
