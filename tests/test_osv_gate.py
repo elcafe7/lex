@@ -1,5 +1,6 @@
 """Tests for scripts/osv_gate.py (stdlib unittest; run: python3 -m unittest tests.test_osv_gate)."""
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -50,6 +51,41 @@ class OsvGateTests(unittest.TestCase):
         warnings = [l for l in proc.stdout.splitlines() if l.startswith("::warning ")]
         self.assertEqual(len(warnings), 1)
         self.assertIn("examplepkg 1.0.0", warnings[0])
+
+    def test_badge_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "report.md"
+            badge = Path(tmp) / "verification.json"
+            proc = subprocess.run(
+                [sys.executable, str(GATE), str(FIXTURES / "osv_clean.json"), str(report),
+                 "--badge-json", str(badge), "--report-url", "https://example.test/r.md",
+                 "--tool-version", "2.7.0", "--release", "v9.9.9", "--repository", "o/r"],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(proc.returncode, 0)
+            data = json.loads(badge.read_text(encoding="utf-8"))
+        self.assertEqual(data["tool"], "OSV-Scanner")
+        self.assertEqual(data["result"], "pass")
+        self.assertEqual(data["known_vulnerabilities"], 0)
+        self.assertEqual(data["report_url"], "https://example.test/r.md")
+        self.assertEqual(data["release"], "v9.9.9")
+        self.assertRegex(data["date"], r"^\d{4}-\d{2}-\d{2}$")
+        self.assertEqual(data["stale_after_days"], 30)
+
+    def test_badge_json_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            badge = Path(tmp) / "verification.json"
+            proc = subprocess.run(
+                [sys.executable, str(GATE), str(FIXTURES / "osv_mixed.json"), str(Path(tmp) / "r.md"),
+                 "--badge-json", str(badge)],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(proc.returncode, 1)
+            data = json.loads(badge.read_text(encoding="utf-8"))
+        self.assertEqual(data["result"], "fail")
+        self.assertEqual(data["known_vulnerabilities"], 4)
+        self.assertEqual(data["blocking"], 1)
+        self.assertEqual(data["unscored"], 2)
 
 
 if __name__ == "__main__":

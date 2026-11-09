@@ -133,6 +133,9 @@ jobs:
         id: scan
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
         run: |
           set +e
           "$RUNNER_TEMP/osv-scanner" scan source \
@@ -150,7 +153,13 @@ jobs:
             "dist/lex-v${VERSION}-osv-scan.json" \
             "dist/lex-v${VERSION}-osv-scan.md" \
             --threshold "$SEVERITY_THRESHOLD" \
-            --title "Lex v${VERSION} OSV-Scanner report" && gate=pass || gate=fail
+            --title "Lex v${VERSION} OSV-Scanner report" \
+            --badge-json dist/verification.json \
+            --report-url "${SERVER_URL}/${REPO}/releases/download/${TAG}/lex-v${VERSION}-osv-scan.md" \
+            --tool-version "${OSV_SCANNER_VERSION#v}" \
+            --release "$TAG" \
+            --repository "$REPO" && gate=pass || gate=fail
+          cat dist/verification.json
           cat "dist/lex-v${VERSION}-osv-scan.md" >> "$GITHUB_STEP_SUMMARY"
           echo "gate=$gate" >> "$GITHUB_OUTPUT"
 
@@ -214,6 +223,7 @@ jobs:
             dist/lex-v${{ env.VERSION }}-requirements.lock.txt
             dist/lex-v${{ env.VERSION }}-osv-scan.json
             dist/lex-v${{ env.VERSION }}-osv-scan.md
+            dist/verification.json
             dist/SHA256SUMS
 
       - name: Attest SBOM
@@ -223,12 +233,14 @@ jobs:
           subject-path: dist/lex-v${{ env.VERSION }}.tar.gz
           sbom-path: dist/lex-v${{ env.VERSION }}.cdx.json
 
-      # Optional and OFF by default. VirusTotal shares uploaded files with
-      # its security partners; only enable for files that are already public.
-      # Free public API: 4 requests/min, 500/day.
+      # Optional and OFF by default: runs only when the repo variable
+      # ENABLE_VIRUSTOTAL is 'true' AND the VT_API_KEY secret is set (Nate
+      # adds the key himself). VirusTotal shares uploaded files with its
+      # security partners, so it only ever runs on a public repo, for files
+      # that are published anyway. Free public API: 4 requests/min, 500/day.
       - name: Upload archive to VirusTotal (optional)
         id: vt
-        if: vars.ENABLE_VIRUSTOTAL == 'true' && env.HAS_VT_KEY == 'true'
+        if: vars.ENABLE_VIRUSTOTAL == 'true' && env.HAS_VT_KEY == 'true' && github.event.repository.visibility == 'public'
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
@@ -256,6 +268,7 @@ jobs:
             echo "- \`lex-v${VERSION}.cdx.json\`: CycloneDX SBOM"
             echo "- \`lex-v${VERSION}-requirements.lock.txt\`: Python packages resolved at build time"
             echo "- \`lex-v${VERSION}-osv-scan.json\` / \`.md\`: OSV-Scanner report for the date above"
+            echo "- \`verification.json\`: scan result summary (tool, date, result, report URL) for download pages"
             if [ "$ATTESTED" = "true" ]; then
               echo "- Provenance: \`gh attestation verify lex-v${VERSION}.tar.gz -R ${REPO}\`"
             fi

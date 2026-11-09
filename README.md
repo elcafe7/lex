@@ -1,5 +1,7 @@
 # Lex | The Elegant Bible Terminal 📖
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/elcafe7/lex/badge)](https://scorecard.dev/viewer/?uri=github.com/elcafe7/lex)
+
 ![Lex Banner](docs/images/banner.png)
 
 **A local-first Bible study terminal for reading, searching, studying, and exporting Scripture work.**
@@ -214,6 +216,7 @@ to every such release on the
 | `lex-v<VERSION>.cdx.json` | CycloneDX SBOM (software bill of materials) |
 | `lex-v<VERSION>-requirements.lock.txt` | Python packages resolved at build time |
 | `lex-v<VERSION>-osv-scan.json` / `.md` | Dated OSV-Scanner dependency report |
+| `verification.json` | Scan summary (tool, date, result, report link) for download pages |
 
 The scan report is a dated record of the release's dependencies checked
 against the [OSV database](https://osv.dev) on the day it was built. The
@@ -249,6 +252,9 @@ gh attestation verify lex-v<VERSION>.tar.gz -R elcafe7/lex \
 
 Releases published before the workflow existed have only the `.sha256`
 sidecar.
+
+Maintainer notes (repo settings, VirusTotal, badge data):
+[docs/RELEASE_VERIFICATION.md](docs/RELEASE_VERIFICATION.md).
 
 ---
 
