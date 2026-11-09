@@ -299,10 +299,16 @@ jobs:
   release:
     name: Attest and publish
     needs: [build-scan, virustotal]
+    # VirusTotal guard: publish only if the VT job passed, or was skipped
+    # because VT is off (ENABLE_VIRUSTOTAL unset or repo not public). An
+    # enabled VT job that fails, is cancelled or is skipped for any other
+    # reason never publishes.
     if: >-
       !cancelled() && github.event_name == 'push' &&
       needs.build-scan.result == 'success' && needs.build-scan.outputs.gate == 'pass' &&
-      (needs.virustotal.result == 'success' || needs.virustotal.result == 'skipped')
+      (needs.virustotal.result == 'success' ||
+       (needs.virustotal.result == 'skipped' &&
+        !(vars.ENABLE_VIRUSTOTAL == 'true' && github.event.repository.visibility == 'public')))
     runs-on: ubuntu-24.04
     permissions:
       contents: write      # create the release and upload assets
@@ -451,14 +457,19 @@ jobs:
 
   security-report-commit:
     name: Commit security report
-    needs: [build-scan, release]
+    needs: [build-scan, virustotal, release]
     # Clean publish only (needs: release succeeded). Nothing else runs here.
     # !cancelled() is needed: without a status function GitHub skips this job
     # whenever a transitive dependency (the optional virustotal job) is skipped,
     # even though release itself succeeded (seen on v2.6.8, run 42702865665).
+    # The VirusTotal guard repeats the release job's, so this job can never
+    # run after a failed VT check even if the release condition changes.
     if: >-
       !cancelled() && github.event_name == 'push' &&
-      needs.build-scan.result == 'success' && needs.release.result == 'success'
+      needs.build-scan.result == 'success' && needs.release.result == 'success' &&
+      (needs.virustotal.result == 'success' ||
+       (needs.virustotal.result == 'skipped' &&
+        !(vars.ENABLE_VIRUSTOTAL == 'true' && github.event.repository.visibility == 'public')))
     runs-on: ubuntu-24.04
     permissions:
       contents: write       # push the reports/<tag>_<ts> branch (never the default branch)
