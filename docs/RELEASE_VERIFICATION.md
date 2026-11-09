@@ -2,6 +2,7 @@
 
 How releases of Lex are verified, and the repository settings the
 release workflow assumes. Workflows: [`release.yml`](../.github/workflows/release.yml),
+[`bandit.yml`](../.github/workflows/bandit.yml),
 [`scorecard.yml`](../.github/workflows/scorecard.yml); Dependabot:
 [`dependabot.yml`](../.github/dependabot.yml).
 
@@ -17,16 +18,20 @@ version, a fix after a blocked release means a new patch version.
   1. **build-scan**: build, SBOM (syft, CycloneDX JSON), OSV-Scanner (pinned
      version, binary checked against a pinned SHA-256) and the severity gate
      (`scripts/osv_gate.py`), then `SHA256SUMS` written and verified.
-  2. **virustotal** (optional, see below).
-  3. **release**: re-checks `SHA256SUMS`, checks `verification.json` says
-     pass / 0 known vulnerabilities, attests (actions/attest-build-provenance,
-     plus an SBOM attestation) and publishes the release. The two Sigstore
+  2. **bandit** (in parallel with build-scan): Bandit Python static
+     analysis, see "Bandit" below.
+  3. **virustotal** (optional, see below).
+  4. **release**: needs build-scan, bandit and virustotal; re-checks
+     `SHA256SUMS`, checks `verification.json` says pass / 0 known
+     vulnerabilities, attests (actions/attest-build-provenance, plus an SBOM
+     attestation) and publishes the release. The two Sigstore
      bundles are attached as `lex-v<VERSION>.intoto.jsonl` (provenance for
      every release file) and `lex-v<VERSION>.sbom.sigstore.json` (SBOM
      attestation for the archive). They are made after `SHA256SUMS` is
      attested, so they are not in it; each bundle is signed on its own.
-- **workflow_dispatch**: dry run of step 1. Files are kept as a 14-day
-  workflow artifact. It never attests, publishes or opens issues.
+- **workflow_dispatch**: dry run of steps 1 and 2 (build-scan and bandit).
+  Files are kept as a 14-day workflow artifact. It never attests, publishes
+  or opens issues.
 - **Gate**: any advisory with CVSS 7.0 or higher fails the release. Scored
   advisories below 7.0 also hold it, so a published report and badge always
   say 0 known vulnerabilities. Advisories with no CVSS score don't block;
@@ -41,14 +46,52 @@ version, a fix after a blocked release means a new patch version.
 - **Actions** are pinned to full commit SHAs with a `# vX.Y.Z` comment;
   Dependabot (`github-actions`, weekly) bumps both together.
 
+## Bandit (Python static analysis)
+
+[Bandit](https://bandit.readthedocs.io/) scans every Python file in the repo
+(`lex.py`, `indexer.py`, `scripts/`, `tests/`) through
+`scripts/bandit_check.sh`, and `scripts/bandit_gate.py` decides:
+
+- **Blocks** on any finding of **medium or high severity, at any
+  confidence**, and on a scan that could not finish (a file Bandit could not
+  parse, or no valid JSON report). Low-confidence findings are not filtered
+  out on purpose: string-built SQL (B608) is usually reported at low
+  confidence and is exactly what must be read rather than hidden.
+- **Low severity** never blocks; the report counts it by test id.
+- **No baseline file and no skipped tests.** A proven false positive is
+  silenced only by an inline `# nosec BXXX  # reason: ...` on that line,
+  reviewed in its PR. The report shows how many inline suppressions there are.
+- Bandit is installed from the hash-pinned
+  [`.github/requirements/bandit-requirements.txt`](../.github/requirements/bandit-requirements.txt)
+  (`pip install --require-hashes --no-deps`, generated from
+  `bandit-requirements.in` with `uv pip compile --generate-hashes`).
+  Dependabot (`pip`, weekly) proposes updates to it.
+- Where it runs: `release.yml` (tag push and the workflow_dispatch dry run;
+  the release job needs it), and `bandit.yml` on every pull request, every
+  push to `main`, weekly (Mondays 08:41 UTC) and on demand.
+- Reports: `bandit.json` and `bandit.txt` (full, every severity; the text
+  report includes the flagged source lines), `bandit.md` (summary with test
+  id, severity, confidence, file:line and Bandit's one-line description, no
+  source lines; this is what a "Release blocked" issue shows) and
+  `bandit-gate.json`. They are kept as the `bandit-report` workflow artifact
+  and copied into the security report folder.
+
+Run it locally the same way:
+
+```bash
+python3 -m venv .venv-bandit
+.venv-bandit/bin/pip install --require-hashes --no-deps -r .github/requirements/bandit-requirements.txt
+PATH="$PWD/.venv-bandit/bin:$PATH" bash scripts/bandit_check.sh bandit-report
+```
+
 ## When a check fails: nothing is published
 
-If the OSV gate, a checksum check or VirusTotal (when on) fails, the run
+If the OSV gate, Bandit, a checksum check or VirusTotal (when on) fails, the run
 publishes **nothing**: no release, no release assets, no scan report on a
 release and no `verification.json`. Instead:
 
 - The findings stay in the run as workflow artifacts (`scan-report`,
-  `virustotal-report`). Release files are not even uploaded as an artifact
+  `bandit-report`, `virustotal-report`). Release files are not even uploaded as an artifact
   when the OSV scan fails.
 - The job summary shows the findings, a **Suggested fix** (fixed versions
   from OSV where known) and a **Fix prompt** to paste into a PR or a coding
@@ -154,6 +197,7 @@ publishes the report in the index.
 |---|---|
 | `summary.md` | Every check, its result, the date and time (UTC), links to the files below |
 | `osv-scan.json` / `osv-scan.md` | OSV-Scanner report (the release gate) |
+| `bandit.json`, `bandit.txt`, `bandit.md` | Bandit Python static analysis (a release gate); "not run" in `summary.md` when it did not run |
 | `sbom.cdx.json` | CycloneDX SBOM |
 | `SHA256SUMS` | Checksums, re-verified when the report is written |
 | `attestation.md` | Build-provenance attestation link and `gh attestation verify` command |

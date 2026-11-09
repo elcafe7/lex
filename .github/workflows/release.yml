@@ -10,13 +10,20 @@
 #      (fails on CVSS >= 7.0; lower scored findings also hold the release;
 #      unscored advisories are ::warning:: only), SHA256SUMS written and
 #      verified.
-#   2. virustotal: optional, only if vars.ENABLE_VIRUSTOTAL == 'true' AND the
+#   2. bandit: Bandit (Python static analysis) over the repo's Python code,
+#      installed from the hash-pinned .github/requirements/bandit-requirements.txt.
+#      Any medium or high severity finding (any confidence), or a scan that
+#      could not finish, fails the job and blocks the release. No baseline;
+#      proven false positives carry an inline "# nosec BXXX  # reason: ...".
+#      Runs in parallel with build-scan; also runs on PRs, pushes to main
+#      and weekly via bandit.yml.
+#   3. virustotal: optional, only if vars.ENABLE_VIRUSTOTAL == 'true' AND the
 #      VT_API_KEY secret is set, and only on a public repo.
-#   3. release: re-verifies SHA256SUMS, attests, publishes the release with
+#   4. release: re-verifies SHA256SUMS, attests, publishes the release with
 #      the scan report and verification.json (badge data).
-#   4. security-report-commit: after a clean publish only, commits the
+#   5. security-report-commit: after a clean publish only, commits the
 #      run's report folder security/reports/<tag>_<UTC timestamp>/ (OSV,
-#      SBOM, SHA256SUMS, attestation link, VirusTotal links, Scorecard JSON,
+#      Bandit, SBOM, SHA256SUMS, attestation link, VirusTotal links, Scorecard JSON,
 #      summary.md) plus security/README.md, security/latest.json and the
 #      README "Security reports" block, with [skip ci], on a reports/<tag>_<ts>
 #      branch and opens a PR to the default branch (never pushes to it).
@@ -26,7 +33,7 @@
 # issue "Release blocked: <tag> security check failed" (assigned to elcafe7)
 # with the findings and a fix prompt. A later clean run publishes and closes it.
 #
-# workflow_dispatch: dry run of step 1 only. Never attests, publishes or
+# workflow_dispatch: dry run of steps 1 and 2 only. Never attests, publishes or
 # opens issues.
 #
 # Free tools only. Every action is pinned to a full commit SHA.
@@ -241,6 +248,62 @@ jobs:
           echo "::error::OSV-Scanner found vulnerabilities. Nothing will be published. See the job summary (Suggested fix) and the scan-report artifact."
           exit 1
 
+
+  bandit:
+    name: Bandit (Python static analysis)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      gate: ${{ steps.bandit.outputs.gate }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Bandit (hash-pinned)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/bandit-venv"
+          "$RUNNER_TEMP/bandit-venv/bin/python" -m pip install --quiet --require-hashes --no-deps \
+            -r .github/requirements/bandit-requirements.txt
+          "$RUNNER_TEMP/bandit-venv/bin/bandit" --version
+
+      - name: Self-test the Bandit gate
+        run: python3 -m unittest -v tests.test_bandit_gate
+
+      # Any medium/high finding or an incomplete scan fails this job, so the
+      # release job below never runs and the blocked job opens the issue with
+      # bandit.md (no source lines). bandit.json/.txt stay in the artifact.
+      - name: Scan with Bandit and gate on the result
+        id: bandit
+        env:
+          TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          PATH="$RUNNER_TEMP/bandit-venv/bin:$PATH" bash scripts/bandit_check.sh bandit-report
+          rc=$?
+          set -e
+          if [ -f bandit-report/bandit.md ]; then cat bandit-report/bandit.md >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ "$rc" -eq 0 ]; then echo "gate=pass" >> "$GITHUB_OUTPUT"; else echo "gate=fail" >> "$GITHUB_OUTPUT"; fi
+          exit "$rc"
+
+      - name: Keep the Bandit report as a workflow artifact
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bandit-report
+          path: bandit-report/
+          if-no-files-found: ignore
+          retention-days: 30
+
   virustotal:
     name: VirusTotal (optional)
     needs: build-scan
@@ -304,7 +367,8 @@ jobs:
 
   release:
     name: Attest and publish
-    needs: [build-scan, virustotal]
+    needs: [build-scan, bandit, virustotal]
+    # Bandit guard: publish only if the Bandit job passed (gate == pass).
     # VirusTotal guard: publish only if the VT job passed, or was skipped
     # because VT is off (ENABLE_VIRUSTOTAL unset or repo not public). An
     # enabled VT job that fails, is cancelled or is skipped for any other
@@ -312,6 +376,7 @@ jobs:
     if: >-
       !cancelled() && github.event_name == 'push' &&
       needs.build-scan.result == 'success' && needs.build-scan.outputs.gate == 'pass' &&
+      needs.bandit.result == 'success' && needs.bandit.outputs.gate == 'pass' &&
       (needs.virustotal.result == 'success' ||
        (needs.virustotal.result == 'skipped' &&
         !(vars.ENABLE_VIRUSTOTAL == 'true' && github.event.repository.visibility == 'public')))
@@ -411,6 +476,7 @@ jobs:
             echo "- \`${PREFIX}.cdx.json\`: CycloneDX SBOM"
             echo "- \`${PREFIX}-osv-scan.json\` / \`.md\`: OSV-Scanner report for the date above"
             echo "- \`verification.json\`: scan summary (tool, date, result, report link) for download pages"
+            echo "- Bandit: 0 medium or high severity findings in the Python source (report in the security report for this release)"
             if [ "$ATTESTED" = "true" ]; then
               echo "- Provenance: \`gh attestation verify <file> -R ${REPO}\`"
             fi
@@ -457,6 +523,13 @@ jobs:
             "https://api.scorecard.dev/projects/github.com/${REPO}" \
             || { rm -f "$RUNNER_TEMP/scorecard.json"; echo "::warning::Scorecard result not available"; }
 
+      - name: Download the Bandit report
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bandit-report
+          path: bandit-report
+
       - name: Download the VirusTotal report
         if: needs.virustotal.outputs.ran == 'true'
         continue-on-error: true
@@ -474,6 +547,7 @@ jobs:
           SERVER_URL: ${{ github.server_url }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           DIST_DIR: dist
+          BANDIT_DIR: bandit-report
           VT_DIR: vt-report
           ATTESTED: ${{ github.event.repository.visibility == 'public' || vars.ATTESTATIONS_AVAILABLE == 'true' }}
           ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
@@ -495,7 +569,7 @@ jobs:
 
   security-report-commit:
     name: Commit security report
-    needs: [build-scan, virustotal, release]
+    needs: [build-scan, bandit, virustotal, release]
     # Clean publish only (needs: release succeeded). Nothing else runs here.
     # !cancelled() is needed: without a status function GitHub skips this job
     # whenever a transitive dependency (the optional virustotal job) is skipped,
@@ -505,6 +579,7 @@ jobs:
     if: >-
       !cancelled() && github.event_name == 'push' &&
       needs.build-scan.result == 'success' && needs.release.result == 'success' &&
+      needs.bandit.result == 'success' && needs.bandit.outputs.gate == 'pass' &&
       (needs.virustotal.result == 'success' ||
        (needs.virustotal.result == 'skipped' &&
         !(vars.ENABLE_VIRUSTOTAL == 'true' && github.event.repository.visibility == 'public')))
@@ -539,10 +614,11 @@ jobs:
 
   blocked:
     name: Report blocked release
-    needs: [build-scan, virustotal, release]
+    needs: [build-scan, bandit, virustotal, release]
     if: >-
       always() && github.event_name == 'push' &&
-      (contains(needs.*.result, 'failure') || needs.build-scan.outputs.gate == 'fail')
+      (contains(needs.*.result, 'failure') || needs.build-scan.outputs.gate == 'fail' ||
+       needs.bandit.outputs.gate == 'fail')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -568,7 +644,7 @@ jobs:
           # Prefer the validated build-scan tag; fall back to ref_name (script allowlists).
           TAG: ${{ needs.build-scan.outputs.tag || github.ref_name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          FAILED_JOBS: "build-scan: ${{ needs.build-scan.result }} (scan ${{ needs.build-scan.outputs.gate || 'not run' }}), virustotal: ${{ needs.virustotal.result }}, release: ${{ needs.release.result }}"
+          FAILED_JOBS: "build-scan: ${{ needs.build-scan.result }} (scan ${{ needs.build-scan.outputs.gate || 'not run' }}), bandit: ${{ needs.bandit.result }} (gate ${{ needs.bandit.outputs.gate || 'not run' }}), virustotal: ${{ needs.virustotal.result }}, release: ${{ needs.release.result }}"
         run: |
           mkdir -p reports
           rm -f reports/*.json
@@ -593,6 +669,7 @@ jobs:
           SERVER_URL: ${{ github.server_url }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SCAN_DIR: report-inputs
+          BANDIT_DIR: report-inputs
           VT_DIR: report-inputs
         run: |
           bash scripts/write_security_report.sh "$RUNNER_TEMP/security-report"

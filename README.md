@@ -229,7 +229,9 @@ against the [OSV database](https://osv.dev) on the day it was built. The
 release workflow only publishes when the scan is clean: an advisory rated
 CVSS 7.0 or above fails the release, and lower-rated ones hold it too, so a
 published report always says 0 known vulnerabilities (advisories with no CVSS
-score are listed as warnings). If any check fails, nothing is published; the
+score are listed as warnings). Bandit, a Python static analyzer, also checks
+the source before publishing: any medium or high severity finding blocks the
+release. If any check fails, nothing is published; the
 findings and a suggested fix go to a "Release blocked" issue instead (details in
 [docs/RELEASE_VERIFICATION.md](docs/RELEASE_VERIFICATION.md)). The OSV database
 keeps growing, so to check a release against today's data, scan its SBOM
@@ -274,8 +276,8 @@ Maintainer notes (repo settings, VirusTotal, badge data):
 Every clean release also opens a PR that adds a dated report folder,
 `security/reports/<tag>_<UTC timestamp>/`, with a `summary.md` (each check,
 its result, date and time in UTC) and one file per check: OSV-Scanner report,
-SBOM, SHA256SUMS, attestation link, VirusTotal links (when turned on) and the
-OpenSSF Scorecard JSON. Index of all runs, newest first:
+Bandit report, SBOM, SHA256SUMS, attestation link, VirusTotal links (when
+turned on) and the OpenSSF Scorecard JSON. Index of all runs, newest first:
 [security/README.md](security/README.md) (machine-readable:
 [security/latest.json](security/latest.json)).
 

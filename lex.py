@@ -128,7 +128,8 @@ def open_trusted_https(url_or_request, *, timeout=15):
     parsed = urlparse(url)
     if parsed.scheme != "https" or parsed.hostname not in TRUSTED_FETCH_HOSTS:
         raise ValueError("Lex refused an untrusted update URL")
-    return urllib.request.urlopen(url_or_request, timeout=timeout)
+    # Scheme is pinned to https and the host to TRUSTED_FETCH_HOSTS just above.
+    return urllib.request.urlopen(url_or_request, timeout=timeout)  # nosec B310  # reason: https-only, allowlisted hosts checked above
 
 # ---------------------------------------------------------------------------
 # Filesystem boundaries (CodeQL py/path-injection, issues #6/#8)
@@ -286,7 +287,7 @@ class LexUpdateManager:
         updates_needed = []
         for rel_path, info in assets.items():
             if not isinstance(info, dict) or not isinstance(info.get("hash"), str):
-                self.console.print(f"[error]Update manifest has malformed asset metadata: {rel_path}[/]")
+                self.console.print(f"[error]Update manifest has malformed asset metadata: {rel_path}[/]")  # nosec B608  # reason: console message, not SQL ("Update ... asset" matches the SQL pattern)
                 return None, None, None
             local_path = self.resolve_asset_path(rel_path)
             if not local_path:
@@ -4666,7 +4667,7 @@ text from the active Bible version when available.
             {scope_clause}
             ORDER BY rank
             LIMIT ? OFFSET ?
-            """,
+            """,  # nosec B608  # reason: scope_clause is only literal "reference GLOB ?" terms; every value is a bound parameter
             (self.text_fts_query(fts_query), *scope_params, limit, offset)
         )
 
@@ -4692,7 +4693,7 @@ text from the active Bible version when available.
             FROM ranked
             ORDER BY tier, score
             LIMIT ? OFFSET ?
-            """,
+            """,  # nosec B608  # reason: scope_clause is only literal "reference GLOB ?" terms; every value is a bound parameter
             (
                 self.text_fts_query(phrase_query), *scope_params,
                 self.text_fts_query(terms_query), *scope_params,
@@ -4703,7 +4704,7 @@ text from the active Bible version when available.
     def count_search_results(self, fts_query, scope=None):
         scope_clause, scope_params = self.search_scope_clause(scope)
         rows = self.bible_db.query(
-            f"SELECT COUNT(*) FROM bible_fts WHERE bible_fts MATCH ? AND reference NOT GLOB '*:0'{scope_clause}",
+            f"SELECT COUNT(*) FROM bible_fts WHERE bible_fts MATCH ? AND reference NOT GLOB '*:0'{scope_clause}",  # nosec B608  # reason: scope_clause is only literal "reference GLOB ?" terms; every value is a bound parameter
             (self.text_fts_query(fts_query), *scope_params)
         )
         return rows[0][0] if rows else 0
