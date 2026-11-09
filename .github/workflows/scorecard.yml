@@ -13,13 +13,17 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analysis:
     name: Scorecard analysis
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
-      actions: read
+      contents: read       # check out the repo
+      actions: read        # read workflow runs for the CI checks
       security-events: write  # upload SARIF to code scanning
       id-token: write         # publish results to api.scorecard.dev
     steps:
