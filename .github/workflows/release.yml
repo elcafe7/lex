@@ -274,17 +274,23 @@ jobs:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
           mkdir -p vt-report
+          echo "ran=false" >> "$GITHUB_OUTPUT"
+          # ENABLE_VIRUSTOTAL is 'true' (this job's if:), so a missing key is
+          # a failed check, not "VT off": fail closed, publish nothing, and let
+          # the blocked job open or update the "Release blocked" issue.
           if [ -z "$VT_API_KEY" ]; then
-            echo "VT_API_KEY is not set; VirusTotal stays off." | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "ran=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error title=VirusTotal::ENABLE_VIRUSTOTAL is 'true' but the VT_API_KEY secret is not set. No file was scanned and nothing will be published."
+            bash scripts/virustotal_not_run.sh vt-report/virustotal-not-run.md missing-key
+            cat vt-report/virustotal-not-run.md >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
-          echo "ran=true" >> "$GITHUB_OUTPUT"
           set +e
           bash scripts/virustotal_check.sh vt-report/virustotal.md dist/lex-v*.tar.gz
           rc=$?
           set -e
-          cat vt-report/virustotal.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -f vt-report/virustotal.md ]; then cat vt-report/virustotal.md >> "$GITHUB_STEP_SUMMARY"; fi
+          # ran=true only after a scan that finished with results and passed.
+          if [ "$rc" -eq 0 ]; then echo "ran=true" >> "$GITHUB_OUTPUT"; fi
           exit "$rc"
 
       - name: Keep the VirusTotal report as a workflow artifact
