@@ -20,7 +20,7 @@ lex naves grace
 lex web Romans 1:1
 ```
 
-Current version: `2.6.7`
+Current version: `2.6.8`
 
 ## 📚 Documentation
 - **Lex CLI Docs (web):** [apocalypse.press/lex/docs](https://apocalypse.press/lex/docs/) - the full user and developer reference for 2.6.5.
@@ -134,9 +134,9 @@ If you are installing from a GitHub release archive instead of `git clone`, use
 the release checksum sidecar before unpacking:
 
 ```bash
-curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.7/lex-v2.6.7.tar.gz
-curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.7/lex-v2.6.7.tar.gz.sha256
-shasum -a 256 -c lex-v2.6.7.tar.gz.sha256
+curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.8/lex-v2.6.8.tar.gz
+curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.8/lex-v2.6.8.tar.gz.sha256
+shasum -a 256 -c lex-v2.6.8.tar.gz.sha256
 ```
 
 ### Alternative: npm launcher

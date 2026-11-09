@@ -12,7 +12,7 @@ const test = require("node:test");
 const { spawnSync } = require("node:child_process");
 const launcher = require("../lib/launcher");
 
-const ROOT = "lex-2.6.7";
+const ROOT = "lex-2.6.8";
 
 const MAKE_ARCHIVE = `
 import io, json, sys, tarfile
@@ -130,8 +130,8 @@ test("verifyExtractedTree rejects a symlink that escapes the extraction", () => 
 });
 
 test("release tags must be plain vX.Y.Z", () => {
-  assert.ok(launcher.validReleaseTag("v2.6.7"));
-  for (const bad of ["", "2.6.7", "v2.6.7/../../evil", "../v2.6.7", "v2.6.7%2f..", "v2.6.7\0", null, 7]) {
+  assert.ok(launcher.validReleaseTag("v2.6.8"));
+  for (const bad of ["", "2.6.8", "v2.6.8/../../evil", "../v2.6.8", "v2.6.8%2f..", "v2.6.8\0", null, 7]) {
     assert.equal(launcher.validReleaseTag(bad), false, String(bad));
   }
 });
@@ -141,7 +141,7 @@ test("resolveReleaseTag ignores an unsafe LEX_CLI_RELEASE_TAG", async () => {
   const originalError = console.error;
   console.error = () => {};
   try {
-    assert.equal(await launcher.resolveReleaseTag(), "v2.6.7");
+    assert.equal(await launcher.resolveReleaseTag(), "v2.6.8");
   } finally {
     console.error = originalError;
     delete process.env.LEX_CLI_RELEASE_TAG;
