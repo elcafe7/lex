@@ -18,7 +18,8 @@
 #      run's report folder security/reports/<tag>_<UTC timestamp>/ (OSV,
 #      SBOM, SHA256SUMS, attestation link, VirusTotal links, Scorecard JSON,
 #      summary.md) plus security/README.md, security/latest.json and the
-#      README "Security reports" block, with [skip ci], to the default branch.
+#      README "Security reports" block, with [skip ci], on a reports/<tag>_<ts>
+#      branch and opens a PR to the default branch (never pushes to it).
 #      Blocked runs keep their report as a workflow artifact only.
 # If any check fails: nothing is published. Findings go to a workflow
 # artifact and the job summary, and the "blocked" job opens or updates the
@@ -455,7 +456,8 @@ jobs:
     if: github.event_name == 'push' && needs.release.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
-      contents: write  # commit security/ to the default branch
+      contents: write       # push the reports/<tag>_<ts> branch (never the default branch)
+      pull-requests: write  # open the PR to the default branch
     concurrency:
       group: security-reports-${{ github.repository }}
       cancel-in-progress: false
@@ -472,7 +474,7 @@ jobs:
           name: security-report
           path: ${{ runner.temp }}/security-report
 
-      - name: Commit the report ([skip ci])
+      - name: Open a PR with the report ([skip ci])
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.build-scan.outputs.tag }}

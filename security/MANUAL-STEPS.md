@@ -32,6 +32,15 @@ for both, and the README badges stay commented out.
 5. In the main README, uncomment the "Socket" badge line and set its link to
    the same page.
 
+## 3. Let the release workflow open report PRs (optional)
+
+`main` is protected (PR required), so each clean release pushes a
+`reports/<tag>_<timestamp>` branch and opens a PR with the report. GitHub only
+lets the workflow open that PR when **Settings > Actions > General > Workflow
+permissions > Allow GitHub Actions to create and approve pull requests** is
+on. It is off now. If you leave it off, the run prints a notice with a link to
+open the PR yourself, and the report stays a workflow artifact too.
+
 ## Checking it worked
 
 The next clean release's `security/reports/<tag>_<timestamp>/summary.md`

@@ -7,11 +7,15 @@
 # Env: TAG (validated release tag), DEFAULT_BRANCH, GH_TOKEN (GITHUB_TOKEN),
 #      REPO (owner/name), SERVER_URL
 #
-# Runs from a checkout of the default branch. Copies the folder into
-# security/reports/, rebuilds the index (update_security_index.sh), commits
-# with [skip ci] and pushes. If the push is rejected three times (for example
-# by branch protection), pushes a reports/<TAG>_<ts> branch instead and tries
-# to open a PR from it; if the token cannot open PRs, prints the compare link.
+# Runs from a checkout of the default branch. Never pushes to the default
+# branch (it is protected by the "Protect main" ruleset: PR required). It
+# copies the folder into security/reports/, rebuilds the index
+# (update_security_index.sh), commits with [skip ci] on a new branch
+# reports/<TAG>_<ts>, pushes that branch and opens a PR to the default branch
+# with `gh pr create`. If the token cannot open PRs (repo setting "Allow GitHub
+# Actions to create and approve pull requests" is off), it fails soft: the
+# branch stays pushed, the workflow artifact is kept, and a notice gives the
+# compare link to open the PR by hand.
 set -euo pipefail
 
 src_root="${1:-}"
@@ -57,36 +61,28 @@ git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 if [ -n "${GH_TOKEN:-}" ]; then gh auth setup-git --hostname "${server#https://}"; fi
 
 msg="security: report for ${tag} (${ts}) [skip ci]"
-
-stage() {
-  mkdir -p security/reports
-  rm -rf "security/reports/${name}"
-  cp -R "$src_root/$name" "security/reports/${name}"
-  bash "$here/update_security_index.sh" security README.md
-  git add -- security README.md
-  git commit -q -m "$msg"
-}
-
-for attempt in 1 2 3; do
-  git fetch -q origin "$branch"
-  git reset -q --hard "origin/${branch}"
-  stage
-  if git push -q origin "HEAD:refs/heads/${branch}"; then
-    echo "Committed security/reports/${name} to ${branch}."
-    exit 0
-  fi
-  echo "::warning::push to ${branch} rejected (attempt ${attempt}); retrying"
-  sleep $((attempt * 5))
-done
-
-# Fallback: branch protection (or a persistent race). Push a side branch.
 side="reports/${name}"
-git push -q origin "HEAD:refs/heads/${side}"
 compare="${server}/${repo}/compare/${branch}...${side}?expand=1"
+
+if [ -n "$(git ls-remote --heads origin "refs/heads/${side}")" ]; then
+  echo "::notice::Branch ${side} already exists (re-run?). Nothing pushed. Open or check the PR: ${compare}"
+  exit 0
+fi
+
+git fetch -q origin "$branch"
+git checkout -q -B "$side" "origin/${branch}"
+mkdir -p security/reports
+cp -R "$src_root/$name" "security/reports/${name}"
+bash "$here/update_security_index.sh" security README.md
+git add -- security README.md
+git commit -q -m "$msg"
+git push -q origin "HEAD:refs/heads/${side}"
+echo "Pushed ${side}."
+
 if gh pr create --repo "$repo" --base "$branch" --head "$side" \
      --title "Security report for ${tag} (${ts})" \
-     --body "Adds security/reports/${name} from the verified release run. Push to ${branch} was rejected."; then
-  echo "Opened a PR from ${side}."
+     --body "Adds security/reports/${name} from the verified release run (written by .github/workflows/release.yml). Merge to publish it in security/README.md and the README."; then
+  echo "Opened a PR from ${side} to ${branch}."
 else
-  echo "::warning::Pushed ${side} but could not open a PR (the job needs pull-requests: write and the repo must allow GitHub Actions to create PRs). Open it here: ${compare}"
+  echo "::notice::Pushed ${side} but could not open a PR. GITHUB_TOKEN can only open PRs when the repo setting 'Allow GitHub Actions to create and approve pull requests' is on. The report is kept as the security-report workflow artifact. Open the PR by hand: ${compare}"
 fi

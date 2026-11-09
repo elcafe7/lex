@@ -166,40 +166,80 @@ class IndexAndCommitTests(unittest.TestCase):
             self.assertIn("2026-11-09 20:55:01 UTC", r)
             self.assertTrue(r.endswith("<!-- security-reports:end -->\n\nTail.\n"))
 
-    def test_commit_rejects_bad_tag_and_commits_clean_report(self):
+    def _repo_with_artifact(self, tmp: Path):
+        dist, vt, sc = make_inputs(tmp)
+        art = tmp / "artifact"
+        run(WRITER, str(art), env=writer_env("v1.2.3", dist, vt, sc))
+        origin = tmp / "origin.git"
+        work = tmp / "work"
+        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+        subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True, capture_output=True)
+        (work / "README.md").write_text(README)
+        (work / "scripts").mkdir()
+        for s in (WRITER, INDEX, COMMIT):
+            (work / "scripts" / s.name).write_text(s.read_text())
+        ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
+        for args in (["add", "."], ["commit", "-q", "-m", "init"], ["push", "-q", "origin", "HEAD:main"]):
+            subprocess.run(["git", *ident, *args], cwd=work, check=True, capture_output=True)
+        return art, origin, work
+
+    @staticmethod
+    def _fake_gh(tmp: Path, rc: int, name: str = "bin"):
+        """A stub gh on PATH: records its arguments, never touches the network."""
+        bindir = tmp / name
+        bindir.mkdir()
+        gh = bindir / "gh"
+        gh.write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > "{tmp}/gh-args"\nexit {rc}\n')
+        gh.chmod(0o755)
+        return f"{bindir}:{os.environ.get('PATH', '/usr/bin:/bin')}"
+
+    def _git_out(self, origin, *args):
+        return subprocess.run(["git", "--git-dir", str(origin), *args],
+                              capture_output=True, text=True, check=True).stdout
+
+    def test_commit_rejects_bad_tags(self):
         with tempfile.TemporaryDirectory() as t:
             tmp = Path(t)
-            dist, vt, sc = make_inputs(tmp)
-            art = tmp / "artifact"
-            run(WRITER, str(art), env=writer_env("v1.2.3", dist, vt, sc))
-            origin = tmp / "origin.git"
-            work = tmp / "work"
-            git = lambda *a, cwd=work: subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True)
-            subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
-            subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True, capture_output=True)
-            (work / "README.md").write_text(README)
-            (work / "scripts").mkdir()
-            for s in (WRITER, INDEX, COMMIT):
-                (work / "scripts" / s.name).write_text(s.read_text())
-            git("-c", "user.name=t", "-c", "user.email=t@t", "add", ".")
-            git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init")
-            git("push", "-q", "origin", "HEAD:main")
-            env = {"DEFAULT_BRANCH": "main", "REPO": "elcafe7/demo"}
+            art, origin, work = self._repo_with_artifact(tmp)
+            path = self._fake_gh(tmp, 0)
             for tag in ("v1;rm -rf /", "$(id)"):
                 p = run(work / "scripts" / "commit_security_report.sh", str(art),
-                        env={**env, "TAG": tag}, cwd=work)
+                        env={"PATH": path, "DEFAULT_BRANCH": "main", "REPO": "elcafe7/demo", "TAG": tag}, cwd=work)
                 self.assertNotEqual(p.returncode, 0)
                 self.assertIn("invalid tag", p.stderr)
-            p = run(work / "scripts" / "commit_security_report.sh", str(art),
-                    env={**env, "TAG": "v1.2.3"}, cwd=work)
-            self.assertEqual(p.returncode, 0, p.stderr)
-            log = subprocess.run(["git", "--git-dir", str(origin), "log", "-1", "--format=%s", "main"],
-                                 capture_output=True, text=True, check=True).stdout
-            self.assertIn("[skip ci]", log)
-            files = subprocess.run(["git", "--git-dir", str(origin), "ls-tree", "-r", "--name-only", "main"],
-                                   capture_output=True, text=True, check=True).stdout
-            self.assertIn("security/reports/v1.2.3_20261109T205501Z/summary.md", files)
-            self.assertIn("security/latest.json", files)
+            self.assertFalse((tmp / "gh-args").exists())
+
+    def test_commit_opens_pr_and_never_pushes_main(self):
+        for rc in (0, 1):
+            with self.subTest(gh_exit=rc), tempfile.TemporaryDirectory() as t:
+                tmp = Path(t)
+                art, origin, work = self._repo_with_artifact(tmp)
+                main_before = self._git_out(origin, "rev-parse", "main")
+                p = run(work / "scripts" / "commit_security_report.sh", str(art),
+                        env={"PATH": self._fake_gh(tmp, rc), "DEFAULT_BRANCH": "main",
+                             "REPO": "elcafe7/demo", "TAG": "v1.2.3"}, cwd=work)
+                self.assertEqual(p.returncode, 0, p.stderr)
+                self.assertEqual(self._git_out(origin, "rev-parse", "main"), main_before,
+                                 "the default branch must never be pushed")
+                side = "reports/v1.2.3_20261109T205501Z"
+                self.assertIn("[skip ci]", self._git_out(origin, "log", "-1", "--format=%s", side))
+                files = self._git_out(origin, "ls-tree", "-r", "--name-only", side)
+                self.assertIn("security/reports/v1.2.3_20261109T205501Z/summary.md", files)
+                self.assertIn("security/latest.json", files)
+                args = (tmp / "gh-args").read_text().split("\n")
+                self.assertEqual(args[:2], ["pr", "create"])
+                self.assertIn(side, args)
+                if rc == 0:
+                    self.assertIn("Opened a PR", p.stdout)
+                else:
+                    self.assertIn("::notice::", p.stdout)
+                    self.assertIn("compare/main...reports/v1.2.3_20261109T205501Z", p.stdout)
+                # Re-run: branch exists, nothing pushed, soft exit.
+                p2 = run(work / "scripts" / "commit_security_report.sh", str(art),
+                         env={"PATH": self._fake_gh(tmp, rc, "bin2"),
+                              "DEFAULT_BRANCH": "main", "REPO": "elcafe7/demo", "TAG": "v1.2.3"}, cwd=work)
+                self.assertEqual(p2.returncode, 0, p2.stderr)
+                self.assertIn("already exists", p2.stdout)
 
 
 if __name__ == "__main__":

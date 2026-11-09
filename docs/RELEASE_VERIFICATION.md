@@ -128,9 +128,12 @@ osv-scanner scan source -L <sbom>.cdx.json        # re-scan against today's OSV 
 ## Security reports (committed to `security/`)
 
 After a clean publish, the `security-report-commit` job commits
-`security/reports/<tag>_<YYYYMMDDTHHMMSSZ>/` (UTC) to the default branch with
-`[skip ci]`, and rebuilds `security/README.md` (all runs, newest first),
-`security/latest.json` and the README "Security reports" block.
+`security/reports/<tag>_<YYYYMMDDTHHMMSSZ>/` (UTC) with `[skip ci]` on a new
+branch `reports/<tag>_<YYYYMMDDTHHMMSSZ>`, rebuilds `security/README.md` (all
+runs, newest first), `security/latest.json` and the README "Security reports"
+block on that branch, and opens a PR to the default branch. It never pushes to
+the default branch (the "Protect main" ruleset requires a PR). Merging the PR
+publishes the report in the index.
 
 | File | From |
 |---|---|
@@ -149,18 +152,19 @@ How it is kept safe:
 - The report is written by `scripts/write_security_report.sh` in the release
   job and handed to the commit job as the `security-report` artifact.
 - `security-report-commit` needs `release`, runs only when it succeeded, and
-  has `permissions: contents: write` and nothing else. It checks out the
+  has `permissions: contents: write` (push the reports branch) and
+  `pull-requests: write` (open the PR), nothing else. It checks out the
   default branch without stored credentials; `scripts/commit_security_report.sh`
   pushes with `GITHUB_TOKEN` through `gh auth setup-git`.
 - Folder names come only from the allowlisted tag (`^[A-Za-z0-9._-]+$`, not
   starting with `.` or `-`) plus a generated UTC timestamp. No `${{ }}` value
   is expanded inside a `run:` script; everything is passed through `env:`.
   Release names and bodies are never read.
-- If the push to the default branch is rejected three times (for example
-  branch protection), the job pushes `reports/<tag>_<timestamp>` and tries to
-  open a PR. That needs `pull-requests: write` on the job and "Allow GitHub
-  Actions to create and approve pull requests" in the repo settings; without
-  them it prints the compare link instead.
+- `GITHUB_TOKEN` can only open the PR when **Settings > Actions > General >
+  Allow GitHub Actions to create and approve pull requests** is on. If it is
+  off, the job fails soft: the branch stays pushed, the `security-report`
+  artifact is kept, and a notice in the run gives the compare link to open the
+  PR by hand. (Turning the setting on is Nate's call; not changed here.)
 - Blocked runs publish nothing and commit nothing: the `blocked` job writes
   the report and keeps it only as the `security-report-blocked` artifact.
 
