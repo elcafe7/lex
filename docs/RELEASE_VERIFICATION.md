@@ -20,7 +20,11 @@ version, a fix after a blocked release means a new patch version.
   2. **virustotal** (optional, see below).
   3. **release**: re-checks `SHA256SUMS`, checks `verification.json` says
      pass / 0 known vulnerabilities, attests (actions/attest-build-provenance,
-     plus an SBOM attestation) and publishes the release.
+     plus an SBOM attestation) and publishes the release. The two Sigstore
+     bundles are attached as `lex-v<VERSION>.intoto.jsonl` (provenance for
+     every release file) and `lex-v<VERSION>.sbom.sigstore.json` (SBOM
+     attestation for the archive). They are made after `SHA256SUMS` is
+     attested, so they are not in it; each bundle is signed on its own.
 - **workflow_dispatch**: dry run of step 1. Files are kept as a 14-day
   workflow artifact. It never attests, publishes or opens issues.
 - **Gate**: any advisory with CVSS 7.0 or higher fails the release. Scored
@@ -131,6 +135,8 @@ Page wiring is deferred until the first verified release exists.
 ```bash
 sha256sum -c --ignore-missing SHA256SUMS          # Linux (macOS: shasum -a 256 -c --ignore-missing SHA256SUMS)
 gh attestation verify <file> -R elcafe7/lex
+# offline, with the signed bundle attached to the release:
+gh attestation verify lex-v<VERSION>.tar.gz -R elcafe7/lex --bundle lex-v<VERSION>.intoto.jsonl
 osv-scanner scan source -L <sbom>.cdx.json        # re-scan against today's OSV data
 ```
 
