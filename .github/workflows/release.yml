@@ -14,6 +14,12 @@
 #      VT_API_KEY secret is set, and only on a public repo.
 #   3. release: re-verifies SHA256SUMS, attests, publishes the release with
 #      the scan report and verification.json (badge data).
+#   4. security-report-commit: after a clean publish only, commits the
+#      run's report folder security/reports/<tag>_<UTC timestamp>/ (OSV,
+#      SBOM, SHA256SUMS, attestation link, VirusTotal links, Scorecard JSON,
+#      summary.md) plus security/README.md, security/latest.json and the
+#      README "Security reports" block, with [skip ci], to the default branch.
+#      Blocked runs keep their report as a workflow artifact only.
 # If any check fails: nothing is published. Findings go to a workflow
 # artifact and the job summary, and the "blocked" job opens or updates the
 # issue "Release blocked: <tag> security check failed" (assigned to elcafe7)
@@ -337,6 +343,7 @@ jobs:
       # they need GitHub Enterprise Cloud; set vars.ATTESTATIONS_AVAILABLE
       # to 'true' only if that applies.
       - name: Attest build provenance
+        id: attest
         if: github.event.repository.visibility == 'public' || vars.ATTESTATIONS_AVAILABLE == 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -394,6 +401,86 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: bash scripts/release_unblocked.sh "$TAG"
 
+      # Security report for this run (passed to security-report-commit as an
+      # artifact). The release is already out, so these steps never fail it.
+      - name: Fetch the published OpenSSF Scorecard result
+        continue-on-error: true
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          curl -fsS --max-time 30 -o "$RUNNER_TEMP/scorecard.json" \
+            "https://api.scorecard.dev/projects/github.com/${REPO}" \
+            || { rm -f "$RUNNER_TEMP/scorecard.json"; echo "::warning::Scorecard result not available"; }
+
+      - name: Download the VirusTotal report
+        if: needs.virustotal.outputs.ran == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: virustotal-report
+          path: vt-report
+
+      - name: Write the security report
+        id: report
+        continue-on-error: true
+        env:
+          STATUS: published
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DIST_DIR: dist
+          VT_DIR: vt-report
+          ATTESTED: ${{ github.event.repository.visibility == 'public' || vars.ATTESTATIONS_AVAILABLE == 'true' }}
+          ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
+          SOCKET_URL: ${{ vars.SOCKET_URL }}
+          BESTPRACTICES_PROJECT_ID: ${{ vars.BESTPRACTICES_PROJECT_ID }}
+        run: |
+          SCORECARD_FILE="$RUNNER_TEMP/scorecard.json" \
+            bash scripts/write_security_report.sh "$RUNNER_TEMP/security-report"
+          cat "$RUNNER_TEMP"/security-report/*/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the security report as a workflow artifact
+        if: steps.report.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: security-report
+          path: ${{ runner.temp }}/security-report/
+          if-no-files-found: error
+          retention-days: 90
+
+  security-report-commit:
+    name: Commit security report
+    needs: [build-scan, release]
+    # Clean publish only (needs: release succeeded). Nothing else runs here.
+    if: github.event_name == 'push' && needs.release.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write  # commit security/ to the default branch
+    concurrency:
+      group: security-reports-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Download the security report
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: security-report
+          path: ${{ runner.temp }}/security-report
+
+      - name: Commit the report ([skip ci])
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build-scan.outputs.tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        run: bash scripts/commit_security_report.sh "$RUNNER_TEMP/security-report"
+
   blocked:
     name: Report blocked release
     needs: [build-scan, virustotal, release]
@@ -430,3 +517,36 @@ jobs:
           mkdir -p reports
           rm -f reports/*.json
           bash scripts/release_blocked_issue.sh "$TAG" reports
+
+      # Blocked runs: the report is a workflow artifact only. Nothing is committed.
+      - name: Download reports for the security report
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "*-report"
+          path: report-inputs
+          merge-multiple: true
+
+      - name: Write the security report (artifact only)
+        id: report
+        continue-on-error: true
+        env:
+          STATUS: blocked
+          TAG: ${{ needs.build-scan.outputs.tag || github.ref_name }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SCAN_DIR: report-inputs
+          VT_DIR: report-inputs
+        run: |
+          bash scripts/write_security_report.sh "$RUNNER_TEMP/security-report"
+          cat "$RUNNER_TEMP"/security-report/*/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the security report as a workflow artifact
+        if: steps.report.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: security-report-blocked
+          path: ${{ runner.temp }}/security-report/
+          if-no-files-found: error
+          retention-days: 30

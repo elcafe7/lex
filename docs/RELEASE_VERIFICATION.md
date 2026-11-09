@@ -125,6 +125,48 @@ gh attestation verify <file> -R elcafe7/lex
 osv-scanner scan source -L <sbom>.cdx.json        # re-scan against today's OSV data
 ```
 
+## Security reports (committed to `security/`)
+
+After a clean publish, the `security-report-commit` job commits
+`security/reports/<tag>_<YYYYMMDDTHHMMSSZ>/` (UTC) to the default branch with
+`[skip ci]`, and rebuilds `security/README.md` (all runs, newest first),
+`security/latest.json` and the README "Security reports" block.
+
+| File | From |
+|---|---|
+| `summary.md` | Every check, its result, the date and time (UTC), links to the files below |
+| `osv-scan.json` / `osv-scan.md` | OSV-Scanner report (the release gate) |
+| `sbom.cdx.json` | CycloneDX SBOM |
+| `SHA256SUMS` | Checksums, re-verified when the report is written |
+| `attestation.md` | Build-provenance attestation link and `gh attestation verify` command |
+| `virustotal.md`, `virustotal-links.txt` | VirusTotal table and permalinks (only when VirusTotal is on) |
+| `scorecard.json` | The latest published OpenSSF Scorecard result (api.scorecard.dev) |
+| `socket.md`, `openssf-best-practices.md` | Only when `vars.SOCKET_URL` / `vars.BESTPRACTICES_PROJECT_ID` are set |
+| `verification.json`, `report.json` | Badge data and the index entry |
+
+How it is kept safe:
+
+- The report is written by `scripts/write_security_report.sh` in the release
+  job and handed to the commit job as the `security-report` artifact.
+- `security-report-commit` needs `release`, runs only when it succeeded, and
+  has `permissions: contents: write` and nothing else. It checks out the
+  default branch without stored credentials; `scripts/commit_security_report.sh`
+  pushes with `GITHUB_TOKEN` through `gh auth setup-git`.
+- Folder names come only from the allowlisted tag (`^[A-Za-z0-9._-]+$`, not
+  starting with `.` or `-`) plus a generated UTC timestamp. No `${{ }}` value
+  is expanded inside a `run:` script; everything is passed through `env:`.
+  Release names and bodies are never read.
+- If the push to the default branch is rejected three times (for example
+  branch protection), the job pushes `reports/<tag>_<timestamp>` and tries to
+  open a PR. That needs `pull-requests: write` on the job and "Allow GitHub
+  Actions to create and approve pull requests" in the repo settings; without
+  them it prints the compare link instead.
+- Blocked runs publish nothing and commit nothing: the `blocked` job writes
+  the report and keeps it only as the `security-report-blocked` artifact.
+
+OpenSSF Best Practices and Socket.dev need accounts the maintainer creates
+by hand: [security/MANUAL-STEPS.md](../security/MANUAL-STEPS.md).
+
 ## Recommended repository settings (not applied; needs Nate's OK)
 
 These are recommendations only. The PR that added this file changed no
