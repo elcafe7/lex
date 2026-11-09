@@ -453,7 +453,12 @@ jobs:
     name: Commit security report
     needs: [build-scan, release]
     # Clean publish only (needs: release succeeded). Nothing else runs here.
-    if: github.event_name == 'push' && needs.release.result == 'success'
+    # !cancelled() is needed: without a status function GitHub skips this job
+    # whenever a transitive dependency (the optional virustotal job) is skipped,
+    # even though release itself succeeded (seen on v2.6.8, run 42702865665).
+    if: >-
+      !cancelled() && github.event_name == 'push' &&
+      needs.build-scan.result == 'success' && needs.release.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       contents: write       # push the reports/<tag>_<ts> branch (never the default branch)
