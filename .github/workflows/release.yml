@@ -351,11 +351,35 @@ jobs:
           subject-path: dist/*
 
       - name: Attest SBOM
+        id: attest-sbom
         if: github.event.repository.visibility == 'public' || vars.ATTESTATIONS_AVAILABLE == 'true'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: dist/lex-v*.tar.gz
           sbom-path: dist/${{ env.PREFIX }}.cdx.json
+
+      # Signed-release files (OpenSSF Scorecard "Signed-Releases"): the
+      # Sigstore bundles from the two attest steps, attached as release
+      # assets so a download can be checked offline with
+      # `gh attestation verify <file> -R <repo> --bundle <bundle>`.
+      # They are made after SHA256SUMS was written and attested, so they
+      # are not listed in it (adding them would change the attested
+      # SHA256SUMS); each bundle is signed and verifies on its own.
+      - name: Stage attestation bundles as release assets
+        if: steps.attest.outcome == 'success'
+        env:
+          PROVENANCE_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.attest-sbom.outputs.bundle-path }}
+        run: |
+          mkdir -p bundles
+          test -s "$PROVENANCE_BUNDLE"
+          jq -e '.mediaType | startswith("application/vnd.dev.sigstore.bundle")' "$PROVENANCE_BUNDLE" >/dev/null
+          cp -- "$PROVENANCE_BUNDLE" "bundles/${PREFIX}.intoto.jsonl"
+          if [ -n "$SBOM_BUNDLE" ] && [ -s "$SBOM_BUNDLE" ]; then
+            jq -e '.mediaType | startswith("application/vnd.dev.sigstore.bundle")' "$SBOM_BUNDLE" >/dev/null
+            cp -- "$SBOM_BUNDLE" "bundles/${PREFIX}.sbom.sigstore.json"
+          fi
+          ls -l bundles
 
       - name: Write release notes
         env:
@@ -378,6 +402,12 @@ jobs:
             if [ "$ATTESTED" = "true" ]; then
               echo "- Provenance: \`gh attestation verify <file> -R ${REPO}\`"
             fi
+            if [ -f "bundles/${PREFIX}.intoto.jsonl" ]; then
+              echo "- \`${PREFIX}.intoto.jsonl\`: signed build-provenance bundle (Sigstore) for every file above; offline check: \`gh attestation verify ${PREFIX}.tar.gz -R ${REPO} --bundle ${PREFIX}.intoto.jsonl\`"
+            fi
+            if [ -f "bundles/${PREFIX}.sbom.sigstore.json" ]; then
+              echo "- \`${PREFIX}.sbom.sigstore.json\`: signed SBOM attestation bundle for \`${PREFIX}.tar.gz\`"
+            fi
             if [ "$VT_RAN" = "true" ]; then
               echo "- VirusTotal: checked before publishing (links in the workflow run summary)"
             fi
@@ -389,7 +419,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create "$TAG" dist/* \
+          shopt -s nullglob
+          files=(dist/* bundles/*)
+          gh release create "$TAG" "${files[@]}" \
             --verify-tag \
             --title "$TITLE" \
             --notes-file "$RUNNER_TEMP/notes.md"
