@@ -98,7 +98,9 @@ score, which are listed in the report):
 }
 ```
 
-Latest release copy: `https://github.com/elcafe7/lex/releases/latest/download/verification.json`.
+A release's copy: `https://github.com/elcafe7/lex/releases/download/<tag>/verification.json`
+(prefer the tag URL over `/releases/latest/`, which can point at a different
+kind of release).
 GitHub release downloads don't send CORS headers, so a download page should
 copy this file at deploy time (or fetch it server-side). Browser-side
 `fetch()` won't work.

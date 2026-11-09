@@ -167,9 +167,18 @@ def main():
             seen.add(key)
             pkg_rows = [x for x in rows if (x["package"], x["version"]) == key]
             fixes = sorted({f for x in pkg_rows for f in x["fixed"]}, key=version_key)
+            # Smallest fixed version above the current one, per advisory; the
+            # package needs the highest of those to clear every advisory.
+            current = version_key(r["version"])
+            needed = []
+            for x in pkg_rows:
+                above = [f for f in x["fixed"] if version_key(f) > current]
+                if above:
+                    needed.append(min(above, key=version_key))
+            target = max(needed, key=version_key) if needed else None
             what = "must fix before release" if any(x["score"] is not None for x in pkg_rows) else "unscored: review"
-            if fixes:
-                lines.append(f"- `{r['package']}` {r['version']} ({what}): upgrade to at least {fixes[-1]} "
+            if target:
+                lines.append(f"- `{r['package']}` {r['version']} ({what}): upgrade to {target} or later "
                              f"(OSV lists fixes in: {', '.join(fixes)}).")
             else:
                 lines.append(f"- `{r['package']}` {r['version']} ({what}): no fixed version listed; "

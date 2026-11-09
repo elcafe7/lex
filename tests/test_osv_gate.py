@@ -54,7 +54,7 @@ class OsvGateTests(unittest.TestCase):
         self.assertIn("- Unscored: 2", md)
         self.assertIn("- Result: FAIL", md)
         self.assertIn("## Suggested fix", md)
-        self.assertIn("upgrade to at least 10.3.0", md)
+        self.assertIn("upgrade to 10.3.0 or later", md)
         self.assertIn("### Fix prompt", md)
         w = warnings(proc)
         self.assertEqual(len(w), 2)
