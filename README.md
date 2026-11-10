@@ -403,14 +403,20 @@ never changes your saved Bible, theme, or history.
 
 ```bash
 lex --json John 3:16                 # {"schema_version":1,"command":"read",...}
+lex -json John 3:16                  # same; long options accept one dash or two
 lex --json -B kjv strongs G3056      # -B is still a one-command override
 lex --json search grace -nt --limit 5
 lex --plain study John 1:1 | less    # no colour, borders, or prompts
 NO_COLOR=1 lex John 3:16             # colour off, normal layout
+lex --help                           # also -help, -h, and --h
 ```
 
 JSON errors go to stderr as `{"error":{"code":...}}` with exit code 2 (usage),
 3 (not found) or 4 (data missing). `-v` is refused in JSON mode; use `-B`.
+`--help`, `-help`, `-h`, and `--h` all show the same full help. Long options
+also accept one dash (`-json`, `-plain`); single-letter flags also accept two
+(`--h`, `--B kjv`). Search scopes such as `-nt` and attached values such as
+`-Bkjv` are unchanged.
 
 ---
 

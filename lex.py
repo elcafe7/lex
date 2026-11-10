@@ -2432,6 +2432,10 @@ class LexAgent:
         config.add_row("lex history", "Show recent local Lex commands with a compact cheat sheet")
         config.add_row("LEX_THEME=light lex", "Use a theme for one shell command")
         config.add_row("LEX_NO_COLOR=1 lex", "Print plain output without Lex colors")
+        config.add_row("NO_COLOR=1 lex", "Same: honour the standard NO_COLOR convention")
+        config.add_row("lex --json John 3:16", "One JSON document for scripts and agents")
+        config.add_row("lex --plain John 3:16", "Plain text: no colour, borders, or prompts")
+        config.add_row("lex --help", "Full help; also -help, -h, and --h")
 
         launch = Table.grid(padding=(0, 1))
         launch.add_column(style="dim")
@@ -2555,6 +2559,21 @@ Any command or flag that needs an argument, run without one (for example
 *   `lex -light` / `lex -dark` / `lex -auto` - terminal theme preference
 *   `LEX_THEME=light lex John 3:16` - one-command theme override
 *   `LEX_NO_COLOR=1 lex search covenant` - plain terminal output
+
+## Output
+
+*   `lex --json John 3:16` - one JSON document (schema: `docs/json-output.md`)
+*   `lex --plain study John 1:1` - plain text: no colour, borders, or prompts
+*   `NO_COLOR=1 lex John 3:16` / `LEX_NO_COLOR=1 lex John 3:16` - colour off
+*   `lex --animate` / `lex --no-animate` - study/read transition animation
+
+`--help`, `-help`, `-h`, and `--h` all show the same full help (also after a
+subcommand, e.g. `lex study --help`). Long options also accept one dash
+(`-json`, `-plain`, `-update`) and single-letter flags also accept two
+(`--h`, `--B kjv`). Theme flags: `-light` / `--light`, `-dark`, `-auto`.
+Attached short values (`-Bkjv`), negative numbers, and search scopes (`-nt`)
+are not rewritten. `-v` sets the default Bible; `--version` prints the Lex
+version.
 
 ## Maintenance
 
@@ -6173,12 +6192,20 @@ class JsonExit(Exception):
         self.hint = hint
         self.extra = extra
 
+def _option_name(token):
+    """Option name without leading dashes or an attached =value, or None."""
+    if token == "-" or not token.startswith("-"):
+        return None
+    body = token[2:] if token.startswith("--") else token[1:]
+    return body.split("=", 1)[0]
+
+
 def json_mode_requested(argv):
-    """True when --json appears before any `--` end-of-options marker."""
+    """True when --json or -json appears before any `--` end-of-options marker."""
     for token in argv:
         if token == "--":
             return False
-        if token == "--json":
+        if _option_name(token) == "json":
             return True
     return False
 
@@ -6524,31 +6551,52 @@ def json_markdown_text(markdown):
     text = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?!\w)", r"\1", text)
     return text.strip()
 
+# Table names are keys only; every statement is a fixed literal so Bandit B608
+# does not see string-built SQL. Values are always bound parameters.
+_JSON_DEFINE_SQL = {
+    "dictionary": {
+        "exact": "SELECT topic, content, source FROM dictionary WHERE lower(topic) = lower(?) LIMIT 3",
+        "prefix": (
+            "SELECT topic, content, source FROM dictionary WHERE lower(topic) LIKE lower(?) "
+            "ORDER BY CASE WHEN lower(topic) LIKE lower(?) THEN 0 ELSE 1 END, topic LIMIT 3"
+        ),
+        "fulltext": "SELECT topic, content, source FROM dictionary_fts WHERE dictionary_fts MATCH ? LIMIT 3",
+        "fts": "dictionary_fts",
+    },
+    "encyclopedia": {
+        "exact": "SELECT topic, content, source FROM encyclopedia WHERE lower(topic) = lower(?) LIMIT 3",
+        "prefix": (
+            "SELECT topic, content, source FROM encyclopedia WHERE lower(topic) LIKE lower(?) "
+            "ORDER BY CASE WHEN lower(topic) LIKE lower(?) THEN 0 ELSE 1 END, topic LIMIT 3"
+        ),
+        "fulltext": "SELECT topic, content, source FROM encyclopedia_fts WHERE encyclopedia_fts MATCH ? LIMIT 3",
+        "fts": "encyclopedia_fts",
+    },
+}
+
+
 def json_define(agent, edition, query):
-    def rows_for(db, table, fts_table):
-        if not db:
+    def rows_for(db, table):
+        sql = _JSON_DEFINE_SQL.get(table)
+        if not db or not sql:
             return []
         tables = {row[0] for row in db.query("SELECT name FROM sqlite_master WHERE type='table'")}
         if table not in tables:
             return []
-        res = db.query(f"SELECT topic, content, source FROM {table} WHERE lower(topic) = lower(?) LIMIT 3", (query,))
+        res = db.query(sql["exact"], (query,))
         match = "exact"
         if not res:
             match = "prefix"
-            res = db.query(
-                f"SELECT topic, content, source FROM {table} WHERE lower(topic) LIKE lower(?) "
-                "ORDER BY CASE WHEN lower(topic) LIKE lower(?) THEN 0 ELSE 1 END, topic LIMIT 3",
-                (f"{query}%", f"%{query}%"),
-            )
-        if not res and fts_table in tables:
+            res = db.query(sql["prefix"], (f"{query}%", f"%{query}%"))
+        if not res and sql["fts"] in tables:
             safe = agent.escape_fts_query(query)
             if safe:
                 match = "fulltext"
-                res = db.query(f"SELECT topic, content, source FROM {fts_table} WHERE {fts_table} MATCH ? LIMIT 3", (safe,))
+                res = db.query(sql["fulltext"], (safe,))
         return [{"topic": t, "source": s, "match": match, "text": json_markdown_text(c), "markdown": c} for t, c, s in res]
 
-    dictionary = rows_for(agent.dictionary_db, "dictionary", "dictionary_fts")
-    encyclopedia = rows_for(agent.encyclopedia_db, "encyclopedia", "encyclopedia_fts")
+    dictionary = rows_for(agent.dictionary_db, "dictionary")
+    encyclopedia = rows_for(agent.encyclopedia_db, "encyclopedia")
     if not dictionary and not encyclopedia:
         raise JsonExit("not_found", f"No dictionary or encyclopedia entry found for: {query}", JSON_EXIT_NOT_FOUND)
     return json_envelope("define", edition, query=query, dictionary=dictionary, encyclopedia=encyclopedia)
@@ -6867,18 +6915,18 @@ PLAIN_BOX_RE = re.compile(r"[\u2500-\u257f]")
 PLAIN_MODE = False
 
 def plain_mode_requested(argv):
-    """True when --plain appears before any `--` end-of-options marker."""
+    """True when --plain or -plain appears before any `--` end-of-options marker."""
     for token in argv:
         if token == "--":
             return False
-        if token == "--plain":
+        if _option_name(token) == "plain":
             return True
     return False
 
 def strip_plain_flags(argv):
     out, seen_end = [], False
     for token in argv:
-        if not seen_end and token in {"--plain", "--animate"}:
+        if not seen_end and _option_name(token) in {"plain", "animate"}:
             continue
         if token == "--":
             seen_end = True
@@ -7121,19 +7169,34 @@ def build_arg_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""commands:
   lex help                           show the full command map
-  lex John 3:16                    read a verse in context
-  lex study John 1:1               open interlinear and lexicon study
-  lex search "holy spirit" -nt     ranked, scoped scripture search
-  lex search covenant --page 2     browse more search results
-  lex manuscript John 1:1          map readings and manuscript witnesses
-  lex manuscript P66               open a manuscript profile
-  lex web John 3:16                 map connected verses
-  lex strongs G3056                 Strong's entry plus reverse verse usage
-  lex strongs love                  search Strong's entries by English/gloss
-  lex naves grace                   browse Nave's topical index
-  lex commentary John 3:16         read available commentary
-  lex -v esv                        set the default Bible version
-  lex -B kjv John 3:16              use a Bible version for one command
+  lex John 3:16                      read a verse in context
+  lex study John 1:1                 open interlinear and lexicon study
+  lex search "holy spirit" -nt       ranked, scoped scripture search
+  lex search covenant --page 2       browse more search results
+  lex manuscript John 1:1            map readings and manuscript witnesses
+  lex manuscript P66                 open a manuscript profile
+  lex web John 3:16                  map connected verses
+  lex strongs G3056                  Strong's entry plus reverse verse usage
+  lex strongs love                   search Strong's entries by English/gloss
+  lex naves grace                    browse Nave's topical index
+  lex commentary John 3:16           read available commentary
+  lex -v esv                         set the default Bible version
+  lex -B kjv John 3:16               use a Bible version for one command
+
+output:
+  lex --json John 3:16               one JSON document (docs/json-output.md)
+  lex --plain study John 1:1         plain text: no colour, borders, or prompts
+  NO_COLOR=1 lex John 3:16           colour off (also LEX_NO_COLOR=1)
+
+flags:
+  `--help`, `-help`, `-h`, and `--h` all show this help, including after a
+  subcommand (`lex study --help`). Long options also accept one dash
+  (`-json`, `-plain`, `-update`) and single-letter flags also accept two
+  (`--h`, `--B kjv`). Theme flags stay `-light` / `--light`, `-dark`, `-auto`.
+  Known option names only are rewritten; these are left alone:
+  attached short values (`-Bkjv`, `-vkjv`), negative numbers (`-1`),
+  numeric-looking tokens (`-3:16`), and search scopes (`-nt`, `-ot`).
+  `-v` sets the default Bible; `--version` prints the Lex version.
 
 Run `lex <command>` or a flag such as `lex -v` without an argument for
 command-specific help.
@@ -7168,8 +7231,77 @@ command-specific help.
     parser.add_argument("--clear", action="store_true", help="Clear command history when used with `lex history`; `lex history clear` also works")
     return parser
 
+
+# Tokens that look like negative numbers or numeric references, e.g. -1, -16, -3:16, -1-2.
+_NUMERIC_DASH_TOKEN = re.compile(r"^-\d+(?::\d+)?(?:-\d+)?$")
+
+
+def option_alias_maps(parser=None):
+    """Map option names (no dashes) to the form registered with argparse."""
+    parser = parser or build_arg_parser()
+    long_map = {}
+    short_map = {}
+    for action in parser._actions:
+        for opt in action.option_strings:
+            if opt.startswith("--"):
+                long_map[opt[2:]] = opt
+            elif opt.startswith("-") and len(opt) > 2:
+                long_map[opt[1:]] = opt
+            elif opt.startswith("-") and len(opt) == 2:
+                short_map[opt[1:]] = opt
+    return long_map, short_map
+
+
+def normalize_argv(argv, parser=None):
+    """Rewrite known options so one dash or two both work.
+
+    Long options registered as ``--json`` also accept ``-json``; single-letter
+    flags registered as ``-h`` also accept ``--h``. Theme flags registered as
+    ``-light`` also accept ``--light``. Only exact known names are rewritten.
+
+    Left unchanged (and why):
+    - attached short values such as ``-Bkjv`` or ``-vkjv`` (the short flag
+      already carries its value)
+    - negative numbers and numeric-looking tokens (``-1``, ``-3:16``, ``-1-2``)
+    - unknown single-dash words, including search scopes (``-nt``, ``-ot``,
+      ``-jeremiah``) and combined shorts (``-id``)
+    - everything after a ``--`` end-of-options marker
+    """
+    long_map, short_map = option_alias_maps(parser)
+    out = []
+    for idx, token in enumerate(argv):
+        if token == "--":
+            out.extend(argv[idx:])
+            break
+        if token == "-" or not token.startswith("-") or _NUMERIC_DASH_TOKEN.fullmatch(token):
+            out.append(token)
+            continue
+        body = token[2:] if token.startswith("--") else token[1:]
+        name, eq, value = body.partition("=")
+        if name in long_map:
+            out.append(long_map[name] + (eq + value if eq else ""))
+        elif len(name) == 1 and name in short_map:
+            out.append(short_map[name] + (eq + value if eq else ""))
+        else:
+            out.append(token)
+    return out
+
+
+def help_requested(argv):
+    """True when a help flag appears before any ``--`` marker."""
+    for token in argv:
+        if token == "--":
+            return False
+        if token in {"-h", "--help"}:
+            return True
+    return False
+
+
 def main():
-    raw_argv = sys.argv[1:]
+    raw_argv = normalize_argv(sys.argv[1:])
+    if help_requested(raw_argv):
+        build_arg_parser().print_help()
+        sys.exit(0)
     if json_mode_requested(raw_argv):
         run_json_cli(raw_argv)
     if plain_mode_requested(raw_argv) and not PLAIN_MODE:

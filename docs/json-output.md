@@ -1,15 +1,19 @@
 # `lex --json` — machine-readable output (schema v1)
 
-Status: draft for review (issue #16).
+Status: proposed for merge (issue #16, PR #17).
 
-`--json` gives scripts and AI agents a stable, parseable result instead of the
-Rich terminal UI. Put it anywhere before `--`:
+`--json` (also `-json`) gives scripts and AI agents a stable, parseable result
+instead of the Rich terminal UI. Put it anywhere before `--`:
 
 ```sh
 lex --json John 3:16
+lex -json John 3:16
 lex --json -B kjv study Romans 1:1
 lex strongs G3056 --limit 5 --json
 ```
+
+`--help`, `-help`, `-h`, and `--h` all print the same full human help and exit
+0, even when combined with `--json`. They do not emit a JSON document.
 
 ## Guarantees
 
@@ -36,7 +40,7 @@ Every success object starts with:
 | field | type | notes |
 |---|---|---|
 | `schema_version` | int | `1`. Bumped only on breaking changes; new fields may be added in v1. |
-| `lex_version` | string | e.g. `"2.6.6"` |
+| `lex_version` | string | e.g. `"2.6.8"` |
 | `command` | string | `read`, `study`, `strongs`, `strongs_search`, `web`, `search`, `define`, `commentary`, `naves`, `creed`, `creed_list`, `creed_matches`, `creed_search`, `history` |
 | `edition` | string | edition id actually used (`esv`, `kjv`, `gen`, …) |
 | `edition_name` | string | display name |
@@ -235,3 +239,21 @@ not a schema and may change between releases; settings behave as without the fla
 
 - `words` → `tokens[{word, strongs[], confidence}]` from the word-tag tier.
 - Per-edition Strong's usage index (KJV/Geneva), so `usage.total` is edition-correct.
+
+## What's not covered yet
+
+- **`lex words` JSON.** Issue #16 proposed `lex --json -B kjv words John 3:16`
+  (KJV / Geneva / KJ16 word tags). There is no `words` command on main yet and
+  no per-edition word-tag data, so `--json words` still returns
+  `unsupported_in_json` (exit 2).
+- **Per-edition Strong's verse-count indexes.** Reverse usage is still keyed
+  from the ESV interlinear. JSON already exposes `usage.index` (`esv-interlinear`),
+  `usage.indexed`, `usage.projected_to`, and `usage.note` so a zero count is not
+  read as "never occurs." Building KJV/Geneva usage counts needs the same word
+  data as `words`.
+- **`manuscript`, `export`, `help`, `update`, and `--next`/`--prev`** still
+  return `unsupported_in_json`. (`--help` is handled before JSON mode, as above.)
+- **LXX/Vulgate study JSON** is tested against synthetic data only. Stock
+  releases do not ship parsed `lxx.db` or `latin.db`, so real installs get
+  `data_missing`.
+

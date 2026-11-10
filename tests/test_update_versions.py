@@ -174,15 +174,19 @@ class VersionFlagTest(unittest.TestCase):
         return subprocess.run([sys.executable, LEX, *argv], env=self.env, capture_output=True, text=True, timeout=60)
 
     def test_double_dash_version_prints_cli_version(self):
-        for flag in ("--version", "--v"):
+        # `-version` is the one-dash form of `--version`. `--v` is the
+        # two-dash form of `-v` (default Bible), not an abbreviation of
+        # `--version`.
+        for flag in ("--version", "-version"):
             result = self.run_lex(flag)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.strip(), LEXMOD.VERSION)
 
     def test_single_dash_v_is_still_the_bible_explainer(self):
-        result = self.run_lex("-v")
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("lex -v: Set Default Bible", ANSI.sub("", result.stdout))
+        for flag in ("-v", "--v"):
+            result = self.run_lex(flag)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("lex -v: Set Default Bible", ANSI.sub("", result.stdout))
         self.assertFalse(os.path.exists(os.path.join(self.home, ".lex_config.json")))
 
 

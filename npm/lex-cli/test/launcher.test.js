@@ -95,3 +95,44 @@ test("quiet mode keeps release-tag chatter off stderr", async () => {
     delete process.env.LEX_CLI_RELEASE_TAG;
   }
 });
+
+test("normalizeArgs maps known option names either dash style", () => {
+  const cases = [
+    [["--json", "John", "3:16"], ["--json", "John", "3:16"]],
+    [["-json", "John", "3:16"], ["--json", "John", "3:16"]],
+    [["-plain"], ["--plain"]],
+    [["--h"], ["-h"]],
+    [["-help"], ["--help"]],
+    [["--help"], ["--help"]],
+    [["-h"], ["-h"]],
+    [["-version"], ["--version"]],
+    [["--version"], ["--version"]],
+    [["--v", "kjv"], ["-v", "kjv"]],
+    [["-v", "kjv"], ["-v", "kjv"]],
+    [["--B", "kjv"], ["-B", "kjv"]],
+    [["--B=kjv"], ["-B=kjv"]],
+    [["-bible", "kjv"], ["--bible", "kjv"]],
+    [["--light"], ["-light"]],
+    [["-light"], ["-light"]],
+    [["-update"], ["--update"]],
+    [["-npm-version"], ["--npm-version"]],
+    [["-no-animate"], ["--no-animate"]],
+    // skipped
+    [["-Bkjv"], ["-Bkjv"]],
+    [["-vkjv"], ["-vkjv"]],
+    [["-1"], ["-1"]],
+    [["-3:16"], ["-3:16"]],
+    [["-nt"], ["-nt"]],
+    [["search", "grace", "-nt", "-json"], ["search", "grace", "-nt", "--json"]],
+    [["search", "--", "-json"], ["search", "--", "-json"]],
+    [["-id"], ["-id"]],
+  ];
+  for (const [input, expected] of cases) {
+    assert.deepEqual(launcher.normalizeArgs(input), expected, String(input));
+  }
+});
+
+test("jsonModeRequested accepts -json as well as --json", () => {
+  assert.equal(launcher.jsonModeRequested(["-json", "John", "3:16"]), true);
+  assert.equal(launcher.jsonModeRequested(["search", "--", "-json"]), false);
+});
