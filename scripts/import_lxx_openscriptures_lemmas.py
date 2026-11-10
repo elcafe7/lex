@@ -6,7 +6,7 @@ import re
 import sqlite3
 
 from init_lxx_db import DEFAULT_DB, init_lxx_db
-from safe_paths import MissingSourceFile, UnsafePathError, safe_source_file
+from safe_paths import MissingSourceFile, UnsafePathError, safe_source_dir, safe_source_file
 
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "runtime-data")
@@ -205,11 +205,24 @@ def main():
     parser.add_argument("--book", action="append", choices=sorted(BOOKS), help="Import one SBL book abbreviation; repeatable")
     args = parser.parse_args()
 
-    lemma_dir = os.path.join(args.source, "LxxLemmas")
-    if not os.path.isdir(lemma_dir):
-        raise SystemExit(f"Missing LxxLemmas directory: {lemma_dir}")
+    # Confine LxxLemmas inside the operator-supplied checkout: resolve, require
+    # the real path to stay under the resolved source, require the directory to
+    # exist, and reject a symlink that escapes (CodeQL py/path-injection #58).
+    if not isinstance(args.source, str) or not args.source or "\x00" in args.source:
+        raise SystemExit(f"invalid source path: {args.source!r}")
+    source_real = os.path.realpath(args.source)
+    lemma_dir = os.path.realpath(os.path.join(source_real, "LxxLemmas"))
+    prefix = source_real if source_real.endswith(os.sep) else source_real + os.sep
+    if not lemma_dir.startswith(prefix):
+        raise SystemExit(f"LxxLemmas escapes source directory: {lemma_dir}")
     try:
-        word_list_path = safe_source_file(args.source, "GreekWordList.js")
+        lemma_dir = safe_source_dir(source_real, "LxxLemmas")
+    except MissingSourceFile:
+        raise SystemExit(f"Missing LxxLemmas directory: {lemma_dir}")
+    except UnsafePathError as exc:
+        raise SystemExit(f"Missing or unsafe LxxLemmas directory in {args.source}: {exc}")
+    try:
+        word_list_path = safe_source_file(source_real, "GreekWordList.js")
     except UnsafePathError as exc:
         raise SystemExit(f"Missing or unsafe GreekWordList.js in {args.source}: {exc}")
 

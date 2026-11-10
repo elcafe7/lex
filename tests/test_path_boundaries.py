@@ -320,5 +320,98 @@ class ScriptSourceFileTest(TempDirs):
         self.assertEqual(refs, ["kj16:Genesis:1:1"])
 
 
+class LemmaSourceDirTest(TempDirs):
+    """LxxLemmas must stay inside the operator-supplied checkout (CodeQL #58)."""
+
+    def test_safe_source_dir_allows_real_directory(self):
+        path = os.path.join(self.base, "LxxLemmas")
+        os.makedirs(path)
+        self.assertEqual(safe_paths.safe_source_dir(self.base, "LxxLemmas"), path)
+
+    def test_safe_source_dir_symlink_inside_is_allowed(self):
+        real = os.path.join(self.base, "real-lemmas")
+        os.makedirs(real)
+        os.symlink(real, os.path.join(self.base, "LxxLemmas"))
+        self.assertEqual(safe_paths.safe_source_dir(self.base, "LxxLemmas"), real)
+
+    def test_safe_source_dir_rejects_attacks_and_symlink_escape(self):
+        os.symlink(self.outside, os.path.join(self.base, "LxxLemmas"))
+        for name in ATTACKS + ["LxxLemmas"]:
+            with self.subTest(name=name):
+                with self.assertRaises(safe_paths.UnsafePathError):
+                    safe_paths.safe_source_dir(self.base, name)
+
+    def test_safe_source_dir_missing_is_reported(self):
+        with self.assertRaises(safe_paths.MissingSourceFile):
+            safe_paths.safe_source_dir(self.base, "LxxLemmas")
+
+    def _write_lemma_checkout(self, root, lemmas_is_symlink_to=None):
+        if lemmas_is_symlink_to is None:
+            os.makedirs(os.path.join(root, "LxxLemmas"))
+            with open(os.path.join(root, "LxxLemmas", "Gen.js"), "w", encoding="utf-8") as fh:
+                fh.write('{"Gen.1.1": [{"key": "k1", "lemma": "\u1f00\u03c1\u03c7\u1fc6"}]}')
+        else:
+            os.symlink(lemmas_is_symlink_to, os.path.join(root, "LxxLemmas"))
+        with open(os.path.join(root, "GreekWordList.js"), "w", encoding="utf-8") as fh:
+            fh.write('greekWordList = {"k1": {"strong": "746", "def": "beginning", "pos": "N"}};\n')
+        bible_db = os.path.join(self.tmp, "lxx-bible.db")
+        import sqlite3
+        with sqlite3.connect(bible_db) as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS bible (reference TEXT, text TEXT)")
+            conn.execute("DELETE FROM bible")
+            conn.execute(
+                "INSERT INTO bible VALUES (?, ?)",
+                ("lxx:Genesis:1:1", "\u1f18\u03bd \u1f00\u03c1\u03c7\u1fc7"),
+            )
+        return bible_db
+
+    def _run_lemma_import(self, source, bible_db):
+        import import_lxx_openscriptures_lemmas as lemmas
+        db_path = os.path.join(self.tmp, "lxx-target.db")
+        argv = [
+            "import_lxx_openscriptures_lemmas.py",
+            source,
+            "--db", db_path,
+            "--lxx-bible-db", bible_db,
+            "--book", "Gen",
+        ]
+        with mock.patch.object(sys, "argv", argv), mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            try:
+                lemmas.main()
+                return 0, out.getvalue(), db_path
+            except SystemExit as exc:
+                return exc.code, out.getvalue(), db_path
+
+    def test_import_lemmas_main_accepts_valid_source(self):
+        bible_db = self._write_lemma_checkout(self.base)
+        code, out, db_path = self._run_lemma_import(self.base, bible_db)
+        self.assertEqual(code, 0, msg=repr(out))
+        self.assertIn("GEN:", out)
+        self.assertIn("1 rows", out)
+        import sqlite3
+        with sqlite3.connect(db_path) as conn:
+            rows = list(conn.execute("SELECT lemma, strong FROM lxx_text"))
+        self.assertEqual(len(rows), 1)
+
+    def test_import_lemmas_main_rejects_symlink_escape(self):
+        bible_db = self._write_lemma_checkout(self.base, lemmas_is_symlink_to=self.outside)
+        code, out, _db_path = self._run_lemma_import(self.base, bible_db)
+        self.assertNotEqual(code, 0)
+        self.assertTrue(
+            isinstance(code, str) and ("escapes" in code or "unsafe" in code.lower()),
+            msg=repr(code),
+        )
+
+    def test_import_lemmas_main_rejects_missing_lemmas_dir(self):
+        os.makedirs(self.base, exist_ok=True)
+        with open(os.path.join(self.base, "GreekWordList.js"), "w") as fh:
+            fh.write("greekWordList = {};\n")
+        bible_db = os.path.join(self.tmp, "lxx-bible.db")
+        open(bible_db, "wb").close()
+        code, _out, _db_path = self._run_lemma_import(self.base, bible_db)
+        self.assertNotEqual(code, 0)
+        self.assertTrue(isinstance(code, str) and "Missing LxxLemmas" in code, msg=repr(code))
+
+
 if __name__ == "__main__":
     unittest.main()
