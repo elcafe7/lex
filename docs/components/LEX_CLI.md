@@ -125,8 +125,11 @@ themed terminal output; set `LEX_NO_COLOR=1` to intentionally disable Lex color.
 `lex --version` is reserved for plain, non-interactive application version
 output.
 
-Bible versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `lxx`, `vulg` (alias
-`vulgate`).
+Bible versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `dra`, `lxx`, `vulg` (alias
+`vulgate`). `-B dra` is the Douay-Rheims 1899 American Edition, including the
+deuterocanon. Douay book names (Tobias, Ecclesiasticus, 3 Kings, Apocalypse)
+resolve to the stored modern English names. Psalm numbers follow DRA/Vulgate
+numbering.
 
 - `lex -v <id>` (also `lex version <id>` / `lex bible <id>`) sets the sticky
   default and saves it as `"bible"` in `~/.lex_config.json`. It can be combined

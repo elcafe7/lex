@@ -320,12 +320,21 @@ To use a different version for just one command without changing your default:
 ```bash
 lex -B lxx Genesis 1:1  # Read the Septuagint once
 lex -B dra Tobit 1:1    # Read Douay-Rheims 1899 once
+lex -B dra Tobias 1:1   # The same verse, using the Douay book name
 ```
 
 `-B` never changes your saved default. `lex -B kjv` with nothing after it just
 explains `-B` and leaves your default alone.
 
 By default, Lex uses the **ESV (English Standard Version)**.
+
+The Douay-Rheims 1899 American Edition (`dra`) is a public-domain Challoner
+text from eBible.org `engDRA`. It includes the 73-book Catholic canon. Book
+names are stored to match the other English editions (1 Samuel, 1 Kings,
+Revelation), and Douay names such as Tobias, Ecclesiasticus, 3 Kings, 4 Kings,
+Isaias, and Apocalypse also resolve. Psalm numbers follow traditional
+DRA/Vulgate numbering: `lex -B dra Psalm 22` is "The Lord ruleth me" (the
+shepherd psalm), not the Protestant Psalm 22.
 
 ## Keeping Lex Updated
 

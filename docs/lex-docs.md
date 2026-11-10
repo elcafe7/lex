@@ -291,7 +291,7 @@ Lex writes exports under `~/Documents/lex_exports`. Study packets go under `~/Do
 
 ## Bible Versions
 
-Lex ships seven Bible editions. The default is the ESV.
+Lex ships eight Bible editions. The default is the ESV.
 
 | ID | Edition |
 |---|---|
@@ -300,8 +300,14 @@ Lex ships seven Bible editions. The default is the ESV.
 | `kj16` | King James Version (1611) |
 | `nasb` | New American Standard Bible (1995) |
 | `gen` | Geneva Bible (1599) |
+| `dra` | Douay-Rheims (1899 American Edition) |
 | `lxx` | Septuagint (Rahlfs 1935) |
 | `vulg` or `vulgate` | Clementine Vulgate |
+
+`dra` includes the 73-book Catholic canon. Book names match the other English
+editions; Douay names such as Tobias, Ecclesiasticus, 3 Kings, and Apocalypse
+also work. Psalm numbers follow traditional DRA/Vulgate numbering (Psalm 22 is
+"The Lord ruleth me"). The source is the public-domain eBible.org `engDRA` text.
 
 | Command | Purpose |
 |---|---|
@@ -362,7 +368,7 @@ A normal checkout resolves data under `runtime-data/`. If the runtime bundle is 
 | Path | Use |
 |---|---|
 | `runtime-data/lexicon.db` | Legacy combined data and update sentinel. |
-| `runtime-data/bible_versions/*.db` | Per-edition Bible text for read and search: `esv`, `kjv`, `kj16`, `nasb`, `gen` (Geneva 1599), `lxx`, `vulg`. |
+| `runtime-data/bible_versions/*.db` | Per-edition Bible text for read and search: `esv`, `kjv`, `kj16`, `nasb`, `gen` (Geneva 1599), `dra` (Douay-Rheims 1899), `lxx`, `vulg`. |
 | `runtime-data/esv-data/data/esv/esv-interlinear.json` | ESV-backed Hebrew/Greek interlinear rows. |
 | `runtime-data/esv-data/data/interlinear/strongs.json` | Interlinear Strong's metadata. |
 | `runtime-data/lxx.db` | In-progress LXX morphology study data. |

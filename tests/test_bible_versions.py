@@ -21,6 +21,21 @@ class BibleVersionsTest(unittest.TestCase):
             lex.BIBLE_VERSIONS["dra"]["file"],
             "bible_versions/dra.db",
         )
+        self.assertIn("dra", lex.CANONICAL_BIBLE_IDS)
+
+    def test_douay_book_name_aliases(self):
+        aliases = lex.BOOK_SCOPE_ALIASES
+        self.assertEqual(aliases["apocalypse"], "Revelation")
+        self.assertEqual(aliases["isaias"], "Isaiah")
+        self.assertEqual(aliases["3kings"], "1 Kings")
+        self.assertEqual(aliases["4kings"], "2 Kings")
+        self.assertEqual(aliases["1paralipomenon"], "1 Chronicles")
+        groups = {name: group for group in lex.BOOK_NAME_ALIAS_GROUPS for name in group}
+        self.assertIn("Tobias", groups)
+        self.assertIn("Tobit", groups)
+        self.assertEqual(groups["Tobias"], groups["Tobit"])
+        self.assertIn("Ecclesiasticus", groups)
+        self.assertIn("1 Machabees", groups)
 
 
 if __name__ == "__main__":

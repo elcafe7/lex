@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **Douay-Rheims 1899 (`dra`), from #5.** Adds the public-domain Douay-Rheims
+  1899 American Edition, packaged from eBible.org `engDRA`, as `lex -B dra`.
+  The 73-book Catholic canon is included (Tobit, Judith, Wisdom, Sirach,
+  Baruch, 1–2 Maccabees, and the longer Esther and Daniel). Book names match
+  the other English editions (for example 1 Samuel, not 1 Kings); Douay names
+  such as Tobias, Ecclesiasticus, 3 Kings, 4 Kings, Isaias, and Apocalypse
+  also work. Psalm numbers follow the traditional DRA/Vulgate numbering
+  (Psalm 22 is "The Lord ruleth me"). No version bump in this change; the
+  edition will ship in the next release archive and npm data download.
+
 ## 2.6.8 — 2026-11-09
 
 - **Verified releases (#11, #10).** Tag pushes now build the release, write a

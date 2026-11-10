@@ -494,10 +494,10 @@ BIBLE_VERSIONS = {
     "kj16": {"name": "King James Version (1611)", "file": "bible_versions/kj16.db"},
     "nasb": {"name": "New American Standard Bible (1995)", "file": "bible_versions/nasb.db"},
     "gen": {"name": "Geneva Bible (1599)", "file": "bible_versions/gen.db"},
+    "dra": {"name": "Douay-Rheims (1899 American Edition)", "file": "bible_versions/dra.db"},
     "lxx": {"name": "Septuagint (Rahlfs 1935)", "file": "bible_versions/lxx.db"},
     "vulg": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db", "latin_db": "latin.db", "type": "latin"},
     "vulgate": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db", "latin_db": "latin.db", "type": "latin", "alias": "vulg"},
-    "dra": {"name": "Douay-Rheims (1899 American Edition)", "file": "bible_versions/dra.db"},
 }
 
 def get_bible_path(bible_id):
@@ -2526,12 +2526,15 @@ Search scopes: `-ot`, `-nt`, `-law`, `-history`, `-wisdom`, `-prophets`,
 
 ## Versions And Settings
 
-*   `lex -v` - explain `-v` and list the 7 versions (current default marked)
+*   `lex -v` - explain `-v` and list the 8 versions (current default marked)
 *   `lex -v kjv` / `lex version kjv` / `lex bible kjv` - set the default Bible (sticky)
 *   `lex -B nasb John 3:16` - use a Bible version for one command only (never saved)
+*   `lex -B dra John 3:16` - read Douay-Rheims 1899 once (deuterocanon included)
 *   `lex -B` - explain `-B` and list the versions
 
-Versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `lxx`, `vulg` (alias `vulgate`).
+Versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `dra`, `lxx`, `vulg` (alias `vulgate`).
+Douay names such as Tobias, Ecclesiasticus, 3 Kings, Isaias, and Apocalypse also
+work with `-B dra`. Psalm numbers follow DRA/Vulgate numbering.
 
 Any command or flag that needs an argument, run without one (for example
 `lex study`, `lex -B`, `lex --page`), prints a short explainer for it.

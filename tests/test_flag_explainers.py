@@ -21,7 +21,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEX = os.path.join(ROOT, "lex.py")
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
-VERSION_IDS = ["esv", "kjv", "kj16", "nasb", "gen", "lxx", "vulg"]
+VERSION_IDS = ["esv", "kjv", "kj16", "nasb", "gen", "dra", "lxx", "vulg"]
 STATE_FILES = [".lex_config.json", ".lex_history", ".lex_query_history"]
 SEED_CONFIG = {"bible": "nasb", "theme": "dark"}
 

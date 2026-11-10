@@ -588,7 +588,7 @@ lex -B lxx Genesis 1:1</code></pre>
 
       <section id="versions">
         <h2>Bible Versions</h2>
-        <p>Lex ships seven Bible editions. The default is the ESV.</p>
+        <p>Lex ships eight Bible editions. The default is the ESV.</p>
         <table>
           <thead><tr><th>ID</th><th>Edition</th></tr></thead>
           <tbody>
@@ -597,10 +597,12 @@ lex -B lxx Genesis 1:1</code></pre>
             <tr><td><code>kj16</code></td><td>King James Version (1611)</td></tr>
             <tr><td><code>nasb</code></td><td>New American Standard Bible (1995)</td></tr>
             <tr><td><code>gen</code></td><td>Geneva Bible (1599)</td></tr>
+            <tr><td><code>dra</code></td><td>Douay-Rheims (1899 American Edition)</td></tr>
             <tr><td><code>lxx</code></td><td>Septuagint (Rahlfs 1935)</td></tr>
             <tr><td><code>vulg</code> or <code>vulgate</code></td><td>Clementine Vulgate</td></tr>
           </tbody>
         </table>
+        <p><code>dra</code> includes the 73-book Catholic canon. Book names match the other English editions; Douay names such as Tobias, Ecclesiasticus, 3 Kings, and Apocalypse also work. Psalm numbers follow traditional DRA/Vulgate numbering (Psalm 22 is "The Lord ruleth me"). The source is the public-domain eBible.org <code>engDRA</code> text.</p>
         <table>
           <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
           <tbody>
@@ -674,7 +676,7 @@ lex -B lxx Genesis 1:1</code></pre>
           <thead><tr><th>Path</th><th>Use</th></tr></thead>
           <tbody>
             <tr><td><code>runtime-data/lexicon.db</code></td><td>Legacy combined data and update sentinel.</td></tr>
-            <tr><td><code>runtime-data/bible_versions/*.db</code></td><td>Per-edition Bible text for read and search: <code>esv</code>, <code>kjv</code>, <code>kj16</code>, <code>nasb</code>, <code>gen</code> (Geneva 1599), <code>lxx</code>, <code>vulg</code>.</td></tr>
+            <tr><td><code>runtime-data/bible_versions/*.db</code></td><td>Per-edition Bible text for read and search: <code>esv</code>, <code>kjv</code>, <code>kj16</code>, <code>nasb</code>, <code>gen</code> (Geneva 1599), <code>dra</code> (Douay-Rheims 1899), <code>lxx</code>, <code>vulg</code>.</td></tr>
             <tr><td><code>runtime-data/esv-data/data/esv/esv-interlinear.json</code></td><td>ESV-backed Hebrew/Greek interlinear rows.</td></tr>
             <tr><td><code>runtime-data/esv-data/data/interlinear/strongs.json</code></td><td>Interlinear Strong's metadata.</td></tr>
             <tr><td><code>runtime-data/lxx.db</code></td><td>In-progress LXX morphology study data.</td></tr>
