@@ -1,0 +1,13 @@
+# Gitleaks config for Lex. The default rule set is used as-is.
+#
+# Allowlist entries are only for proven historical false positives, each
+# with a reason in the description. Do not add a baseline of ignored
+# secrets, and do not silence a real credential here — rotate it and
+# remove it from the repository instead.
+#
+# A full-history scan when this file was added (gitleaks 8.30.1, 150
+# commits) found 0 leaks, so there are no allowlist entries yet.
+title = "lex"
+
+[extend]
+useDefault = true

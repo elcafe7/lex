@@ -24,6 +24,12 @@
   short values (`-Bkjv`, `-vkjv`), negative numbers, and search scopes
   (`-nt`, `-ot`) are left alone. `-v` still sets the default Bible;
   `--version` (or `-version`) prints the Lex version.
+- **LXX lemma import confines `LxxLemmas` (CodeQL `py/path-injection`, alert
+  #58).** `scripts/import_lxx_openscriptures_lemmas.py` resolves `--source`,
+  joins `LxxLemmas` under that real path, checks the result stays inside the
+  source directory, requires the directory to exist, and rejects a symlink
+  that escapes it. Shared helper: `safe_source_dir()` in
+  `scripts/safe_paths.py`.
 
 ## 2.6.8 — 2026-11-09
 
