@@ -122,6 +122,8 @@ Example:
 esv:John:3:16
 ```
 
+Other shipped editions use the same schema under `runtime-data/bible_versions/`. The Douay-Rheims 1899 edition is `dra.db` with prefix `dra`.
+
 ### `encyclopedia.db`
 
 Path:

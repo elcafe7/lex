@@ -555,6 +555,7 @@ BIBLE_VERSIONS = {
     "kj16": {"name": "King James Version (1611)", "file": "bible_versions/kj16.db"},
     "nasb": {"name": "New American Standard Bible (1995)", "file": "bible_versions/nasb.db"},
     "gen": {"name": "Geneva Bible (1599)", "file": "bible_versions/gen.db"},
+    "dra": {"name": "Douay-Rheims (1899 American Edition)", "file": "bible_versions/dra.db"},
     "lxx": {"name": "Septuagint (Rahlfs 1935)", "file": "bible_versions/lxx.db"},
     "vulg": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db", "latin_db": "latin.db", "type": "latin"},
     "vulgate": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db", "latin_db": "latin.db", "type": "latin", "alias": "vulg"},
@@ -953,6 +954,25 @@ BOOK_SCOPE_ALIASES.update({
     "rv": "Revelation",
     "re": "Revelation",
     "revelations": "Revelation",
+    "apocalypse": "Revelation",
+    "isaias": "Isaiah",
+    "jeremias": "Jeremiah",
+    "ezechiel": "Ezekiel",
+    "osee": "Hosea",
+    "abdias": "Obadiah",
+    "jonas": "Jonah",
+    "micheas": "Micah",
+    "habacuc": "Habakkuk",
+    "sophonias": "Zephaniah",
+    "aggeus": "Haggai",
+    "zacharias": "Zechariah",
+    "malachias": "Malachi",
+    "1paralipomenon": "1 Chronicles",
+    "2paralipomenon": "2 Chronicles",
+    "3kings": "1 Kings",
+    "4kings": "2 Kings",
+    "3kgs": "1 Kings",
+    "4kgs": "2 Kings",
     "tobit": "Tob",
     "tob": "Tob",
     "judith": "Jdt",
@@ -974,6 +994,18 @@ BOOK_SCOPE_ALIASES.update({
     "2mac": "2Macc",
     "secondmaccabees": "2Macc",
 })
+
+# Alternate labels that map onto whatever name the active edition stored.
+# Used so Douay, LXX, and KJV 1611 deuterocanon names resolve to the DB row.
+BOOK_NAME_ALIAS_GROUPS = (
+    ("Tobit", "Tobias", "Tobit BA"),
+    ("Judith",),
+    ("Wisdom", "Wisdom of Solomon"),
+    ("Sirach", "Ecclesiasticus", "Wisdom of Sirach", "Ben Sira"),
+    ("Baruch",),
+    ("1 Maccabees", "1 Machabees", "I Maccabees", "I Machabees", "1 Macc", "1 Mac"),
+    ("2 Maccabees", "2 Machabees", "II Maccabees", "II Machabees", "2 Macc", "2 Mac"),
+)
 
 BOOK_SCOPE_GROUPS = {
     "ot": BIBLE_BOOKS[:39],
@@ -1587,6 +1619,21 @@ class LexAgent:
                 # Also map reverse for study mode
                 canon_target = "Psalm" if book == "Psalms" else book
                 self.reverse_canon_map[db_target] = canon_target
+
+        for group in BOOK_NAME_ALIAS_GROUPS:
+            db_target = None
+            for name in group:
+                key = re.sub(r"[^a-z0-9]+", "", name.lower())
+                if key in self.canon_map:
+                    db_target = self.canon_map[key]
+                    break
+            if not db_target:
+                continue
+            for name in group:
+                key = re.sub(r"[^a-z0-9]+", "", name.lower())
+                slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+                self.canon_map[key] = db_target
+                self.canon_map[slug] = db_target
 
         self.encyclopedia_db = LexDB(ENCYCLOPEDIA_DB_PATH) if os.path.exists(ENCYCLOPEDIA_DB_PATH) else None
         self.cross_refs_db = LexDB(CROSS_REFS_DB_PATH if os.path.exists(CROSS_REFS_DB_PATH) else LEXICON_DB_PATH)
@@ -2551,12 +2598,15 @@ Search scopes: `-ot`, `-nt`, `-law`, `-history`, `-wisdom`, `-prophets`,
 
 ## Versions And Settings
 
-*   `lex -v` - explain `-v` and list the 7 versions (current default marked)
+*   `lex -v` - explain `-v` and list the 8 versions (current default marked)
 *   `lex -v kjv` / `lex version kjv` / `lex bible kjv` - set the default Bible (sticky)
 *   `lex -B nasb John 3:16` - use a Bible version for one command only (never saved)
+*   `lex -B dra John 3:16` - read Douay-Rheims 1899 once (deuterocanon included)
 *   `lex -B` - explain `-B` and list the versions
 
-Versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `lxx`, `vulg` (alias `vulgate`).
+Versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `dra`, `lxx`, `vulg` (alias `vulgate`).
+Douay names such as Tobias, Ecclesiasticus, 3 Kings, Isaias, and Apocalypse also
+work with `-B dra`. Psalm numbers follow DRA/Vulgate numbering.
 
 Any command or flag that needs an argument, run without one (for example
 `lex study`, `lex -B`, `lex --page`), prints a short explainer for it.
@@ -2602,6 +2652,11 @@ version.
             "Bible text",
             "Local bible-data / ESV-derived SQLite: bible_versions/esv.db; source package notes: bible-data",
             "Permission/copyright-controlled translation text; do not relicense as MIT",
+        )
+        table.add_row(
+            "Douay-Rheims 1899",
+            "eBible.org engDRA (Douay-Rheims American Edition, 1899): bible_versions/dra.db",
+            "Public domain",
         )
         table.add_row(
             "TSK cross refs",
