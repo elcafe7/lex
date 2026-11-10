@@ -124,6 +124,15 @@ class JsonCliTest(unittest.TestCase):
         self.assertEqual(self.config_text(), '{"bible": "esv"}')
         self.assertEqual(self.ok("John", "3:16")["edition"], "esv")
 
+    def test_dra_one_command_override(self):
+        payload = self.ok("-B", "dra", "John", "3:16")
+        self.assertEqual(payload["edition"], "dra")
+        self.assertEqual(payload["edition_name"], "Douay-Rheims (1899 American Edition)")
+        self.assertIn("life everlasting", payload["passages"][0]["verses"][0]["text"])
+        self.assertEqual(payload["passages"][0]["verses"][0]["key"], "dra:John:3:16")
+        self.assertEqual(self.config_text(), '{"bible": "esv"}')
+        self.assertEqual(self.ok("John", "3:16")["edition"], "esv")
+
     def test_no_state_written(self):
         self.ok("John", "3:16")
         self.ok("strongs", "G3056", "--limit", "2")

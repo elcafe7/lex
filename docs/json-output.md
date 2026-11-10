@@ -42,7 +42,7 @@ Every success object starts with:
 | `schema_version` | int | `1`. Bumped only on breaking changes; new fields may be added in v1. |
 | `lex_version` | string | e.g. `"2.6.8"` |
 | `command` | string | `read`, `study`, `strongs`, `strongs_search`, `web`, `search`, `define`, `commentary`, `naves`, `creed`, `creed_list`, `creed_matches`, `creed_search`, `history` |
-| `edition` | string | edition id actually used (`esv`, `kjv`, `gen`, …) |
+| `edition` | string | edition id actually used (`esv`, `kjv`, `dra`, `gen`, …) |
 | `edition_name` | string | display name |
 
 ### Verse object

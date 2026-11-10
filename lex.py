@@ -7241,6 +7241,7 @@ def build_arg_parser():
   lex commentary John 3:16           read available commentary
   lex -v esv                         set the default Bible version
   lex -B kjv John 3:16               use a Bible version for one command
+  lex -B dra John 3:16               read Douay-Rheims 1899 for one command
 
 output:
   lex --json John 3:16               one JSON document (docs/json-output.md)
