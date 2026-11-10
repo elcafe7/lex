@@ -12,6 +12,12 @@
   (Psalm 22 is "The Lord ruleth me"). No version bump in this change; the
   edition will ship in the next release archive and npm data download.
 
+- **DRA packager confines the VPL path (CodeQL `py/path-injection`, alert
+  #65).** `package_dra_1899` opens the source file only after
+  `safe_source_file` confirms the basename stays inside its parent
+  directory, matching the other packagers. A symlink that escapes that
+  directory is refused.
+
 - **LXX lemma import confines `LxxLemmas` (CodeQL `py/path-injection`, alert
   #58).** `scripts/import_lxx_openscriptures_lemmas.py` resolves `--source`,
   joins `LxxLemmas` under that real path, checks the result stays inside the

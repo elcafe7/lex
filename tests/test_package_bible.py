@@ -83,5 +83,27 @@ class PackageDra1899Test(unittest.TestCase):
         self.assertGreater(count, 0)
 
 
+class PackageDra1899PathTest(unittest.TestCase):
+    def test_rejects_symlink_that_escapes_source_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "src"
+            source_dir.mkdir()
+            outside = Path(tmp) / "secret.vpl"
+            outside.write_text("JHN 3:16 For God so loved the world\n", encoding="utf-8")
+            link = source_dir / "engDRA_vpl.txt"
+            link.symlink_to(outside)
+            db_path = os.path.join(tmp, "dra.db")
+            with self.assertRaises(ValueError):
+                package_bible.package_dra_1899(str(link), db_path)
+            self.assertFalse(os.path.exists(db_path))
+
+    def test_rejects_missing_vpl_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = os.path.join(tmp, "missing.vpl")
+            db_path = os.path.join(tmp, "dra.db")
+            with self.assertRaises(FileNotFoundError):
+                package_bible.package_dra_1899(missing, db_path)
+
+
 if __name__ == "__main__":
     unittest.main()

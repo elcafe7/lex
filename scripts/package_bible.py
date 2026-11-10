@@ -455,6 +455,25 @@ def package_dra_1899(vpl_path, db_path):
         'language': 'en',
         'reference_prefix': 'dra'
     }
+
+    # Confine the operator-supplied VPL basename inside its parent
+    # directory, the same way the other packagers use safe_source_file.
+    if not isinstance(vpl_path, str) or not vpl_path or "\x00" in vpl_path:
+        raise ValueError(f"invalid VPL path: {vpl_path!r}")
+    source_dir = os.path.dirname(os.path.abspath(vpl_path))
+    source_name = os.path.basename(vpl_path)
+    source_dir_real = os.path.realpath(source_dir)
+    candidate = os.path.realpath(os.path.join(source_dir_real, source_name))
+    prefix = source_dir_real if source_dir_real.endswith(os.sep) else source_dir_real + os.sep
+    if not candidate.startswith(prefix):
+        raise ValueError(f"VPL path escapes source directory: {vpl_path!r}")
+    try:
+        vpl_path = safe_source_file(source_dir_real, source_name)
+    except MissingSourceFile as exc:
+        raise FileNotFoundError(str(exc)) from exc
+    except UnsafePathError as exc:
+        raise ValueError(f"unsafe DRA VPL path: {exc}") from exc
+
     conn = init_target_db(db_path, metadata)
 
     code_to_name = {code: name for code, name in DRA_1899_BOOKS}
