@@ -13,6 +13,100 @@ const metadata = require("../package.json");
 const { isUpdateCommand, selfUpdate } = require("./self-update");
 const config = metadata.lexCli;
 
+// `lex --json ...` must keep stdout for the JSON document and stderr for a
+// JSON error, so launcher chatter and child install output are silenced.
+let quiet = false;
+
+// Canonical option forms. Long names may map to --name or a single-dash
+// form already registered in lex.py (`-light`). Keep in sync with
+// lex.py's build_arg_parser(). `--npm-version` is launcher-only.
+const LONG_OPTIONS = {
+  interlinear: "--interlinear",
+  define: "--define",
+  creed: "--creed",
+  strongs: "--strongs",
+  version: "--version",
+  bible: "--bible",
+  update: "--update",
+  light: "-light",
+  dark: "-dark",
+  auto: "-auto",
+  credits: "--credits",
+  next: "--next",
+  prev: "--prev",
+  page: "--page",
+  limit: "--limit",
+  all: "--all",
+  mode: "--mode",
+  format: "--format",
+  ratio: "--ratio",
+  animate: "--animate",
+  "no-animate": "--no-animate",
+  json: "--json",
+  plain: "--plain",
+  clear: "--clear",
+  help: "--help",
+  "npm-version": "--npm-version",
+};
+
+const SHORT_OPTIONS = {
+  i: "-i",
+  d: "-d",
+  c: "-c",
+  s: "-s",
+  v: "-v",
+  B: "-B",
+  h: "-h",
+};
+
+// Negative numbers and numeric-looking tokens: -1, -16, -3:16, -1-2.
+const NUMERIC_DASH_TOKEN = /^-\d+(?::\d+)?(?:-\d+)?$/;
+
+function normalizeArgs(args) {
+  const out = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+    if (token === "--") {
+      out.push(...args.slice(i));
+      break;
+    }
+    if (token === "-" || !token.startsWith("-") || NUMERIC_DASH_TOKEN.test(token)) {
+      out.push(token);
+      continue;
+    }
+    const body = token.startsWith("--") ? token.slice(2) : token.slice(1);
+    const eq = body.indexOf("=");
+    const name = eq === -1 ? body : body.slice(0, eq);
+    const suffix = eq === -1 ? "" : body.slice(eq);
+    if (Object.prototype.hasOwnProperty.call(LONG_OPTIONS, name)) {
+      out.push(LONG_OPTIONS[name] + suffix);
+    } else if (name.length === 1 && Object.prototype.hasOwnProperty.call(SHORT_OPTIONS, name)) {
+      out.push(SHORT_OPTIONS[name] + suffix);
+    } else {
+      // Skipped: attached short values (-Bkjv, -vkjv), search scopes
+      // (-nt, -ot), unknown tokens, combined shorts (-id).
+      out.push(token);
+    }
+  }
+  return out;
+}
+
+function jsonModeRequested(args) {
+  for (const arg of normalizeArgs(args)) {
+    if (arg === "--") return false;
+    if (arg === "--json") return true;
+  }
+  return false;
+}
+
+function setQuiet(value) {
+  quiet = Boolean(value);
+}
+
+function note(message) {
+  if (!quiet) console.error(message);
+}
+
 // Release tags come from the GitHub API or the environment. Only plain
 // vX.Y.Z tags are accepted, so a tag can never add path segments to a URL or
 // to the archive root used during extraction.
@@ -94,15 +188,15 @@ async function resolveReleaseTag() {
   const override = process.env.LEX_CLI_RELEASE_TAG;
   if (override) {
     if (validReleaseTag(override)) return override;
-    console.error(`lex: ignoring LEX_CLI_RELEASE_TAG (not a vX.Y.Z tag), using pinned ${config.releaseTag}`);
+    note(`lex: ignoring LEX_CLI_RELEASE_TAG (not a vX.Y.Z tag), using pinned ${config.releaseTag}`);
     return config.releaseTag;
   }
   try {
     const tag = await latestReleaseTag();
-    console.error(`lex: latest release is ${tag}`);
+    note(`lex: latest release is ${tag}`);
     return tag;
   } catch (err) {
-    console.error(`lex: couldn't resolve latest release, using pinned ${config.releaseTag} (${err.message})`);
+    note(`lex: couldn't resolve latest release, using pinned ${config.releaseTag} (${err.message})`);
     return config.releaseTag;
   }
 }
@@ -153,7 +247,7 @@ async function expectedChecksum(url) {
 }
 
 function checked(command, args, options = {}) {
-  const result = spawnSync(command, args, { stdio: "inherit", ...options });
+  const result = spawnSync(command, args, { stdio: quiet ? "ignore" : "inherit", ...options });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} exited with status ${result.status}`);
 }
@@ -269,7 +363,7 @@ async function downloadRelease(tag) {
   try {
     const urls = releaseUrls(tag);
     const archive = path.join(temporary, config.assetName);
-    console.error(`lex: downloading ${config.releaseTag} release data…`);
+    note(`lex: downloading ${config.releaseTag} release data…`);
     const [expected] = await Promise.all([expectedChecksum(urls.checksum), download(urls.archive, archive)]);
     const actual = await sha256(archive);
     if (actual !== expected) throw new Error("release archive checksum mismatch");
@@ -307,6 +401,8 @@ async function resolveLexHome() {
 }
 
 async function main(args) {
+  args = normalizeArgs(args);
+  setQuiet(jsonModeRequested(args));
   if (args.length === 1 && args[0] === "--npm-version") {
     console.log(metadata.version);
     return;
@@ -355,5 +451,8 @@ module.exports = {
   validLexHome,
   pythonPath,
   dependenciesInstalled,
+  jsonModeRequested,
+  normalizeArgs,
+  setQuiet,
   main,
 };

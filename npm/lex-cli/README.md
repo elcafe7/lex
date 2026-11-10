@@ -16,8 +16,27 @@ large offline runtime data.
 
 ```sh
 lex --version
+lex -version          # same; long options accept one dash or two
+lex --help            # also -help, -h, and --h
 lex help
 ```
+
+## Output flags
+
+```sh
+lex --json John 3:16
+lex -json John 3:16
+lex --plain study John 1:1
+NO_COLOR=1 lex John 3:16
+```
+
+`--json` prints one JSON document and keeps the launcher quiet (no "latest
+release" or "downloading" lines). `--plain` prints undecorated text. `--help`,
+`-help`, `-h`, and `--h` all show the same full help. Long options also accept
+one dash (`-json`, `-plain`, `-update`, `-npm-version`) and single-letter flags
+also accept two (`--h`, `--B kjv`). Attached short values (`-Bkjv`), negative
+numbers, and search scopes (`-nt`) are left alone. `-v` sets the default Bible;
+`--version` prints the Lex version.
 
 ## Try It
 

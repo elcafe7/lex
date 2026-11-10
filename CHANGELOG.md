@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- **New: `--json` machine-readable output (#16).** One compact JSON document on
+  stdout (`schema_version` 1, see `docs/json-output.md`) for `read`, `study`
+  (ESV direct, other editions labelled proxy; LXX/Vulgate when their study data
+  is installed), `strongs` (number and English), `web`, `search`, `define`,
+  `commentary`, `naves`/`topic`, `creed`, and `history`. Never prompts, never
+  writes config/theme/history, keeps `-B` one-command, refuses `-v`. Errors are
+  JSON on stderr with exit codes 1/2/3/4. The npm launcher stays quiet in JSON
+  mode and reports its own failures as JSON.
+- **New: `--plain`.** Normal output as plain text: no colour, borders, prompts,
+  or animation.
+- **Fixed: raw JSON in some Strong's entries.** 209 entries (e.g. G5594) showed
+  `{"_":…,"strongsref":[…]}`; they now read as text with the referenced numbers
+  filled in.
+- **`NO_COLOR` is honoured** (previously only `LEX_NO_COLOR`).
+- **Help spellings.** `--help`, `-help`, `-h`, and `--h` all print the same
+  full help, at the top level and after a subcommand (`lex study --help`).
+- **Dashes on flags.** Known long options also accept one dash (`-json`,
+  `-plain`, `-update`) and single-letter flags also accept two (`--h`,
+  `--B kjv`). Theme flags accept either form (`-light` / `--light`). Attached
+  short values (`-Bkjv`, `-vkjv`), negative numbers, and search scopes
+  (`-nt`, `-ot`) are left alone. `-v` still sets the default Bible;
+  `--version` (or `-version`) prints the Lex version.
 - **Douay-Rheims 1899 (`dra`), from #5.** Adds the public-domain Douay-Rheims
   1899 American Edition, packaged from eBible.org `engDRA`, as `lex -B dra`.
   The 73-book Catholic canon is included (Tobit, Judith, Wisdom, Sirach,
