@@ -14,6 +14,7 @@ certified or vulnerability-free.
 | Python public repositories, including Lex | GitHub CodeQL default setup | Enabled | Lex remediation is in progress; see [#6](https://github.com/elcafe7/lex/issues/6). |
 | All public `elcafe7` repositories | Private vulnerability reporting | Enabled | Add a public `SECURITY.md` with a response commitment and supported versions. |
 | Lex | Local static checks | In use | Bandit, Ruff, `pip-audit`, `py_compile`, and targeted regression checks; turn the reproducible checks into CI. |
+| Lex | Gitleaks secret scan | Shipped | CLI 8.30.1, checksum-verified. `.github/workflows/gitleaks.yml` on PRs (PR commits only), pushes to `main`, weekly and on demand (full history). The same full-history scan is a blocking gate in `release.yml`, in parallel with build-scan and Bandit. All output is `--redact`ed. Fail on any finding. `.gitleaks.toml` extends the default rules; allowlist entries only for proven historical false positives, each with a reason. A full-history scan at introduction (150 commits) found 0 leaks. |
 
 ## Open remediation work
 
@@ -34,7 +35,7 @@ SonarCloud is not planned unless a separate quality-gate need emerges.
 |---|---|---|---|
 | 1 | GitHub CodeQL | Supported public code repositories | Keep default setup enabled; review high/critical findings before release. Archive run URL and scanned SHA. |
 | 2 | Dependabot | All public repositories | Keep alerts and security updates enabled; triage alerts/PRs with a documented reason when deferred. |
-| 3 | Gitleaks | All public repositories | Add a pinned GitHub Action for push/PR scanning and a reviewed `.gitleaks.toml` baseline only for known historical false positives. Fail on new secrets. |
+| 3 | Gitleaks | Lex (public). Other public repositories still pending. | **Shipped on Lex.** Pinned Gitleaks CLI 8.30.1 (checksum-verified, not the licensed action) for push/PR/weekly scanning and as a blocking release gate. `.gitleaks.toml` extends the default rules; allowlist entries only for known historical false positives, each with a reason. Fail on any finding. Output is always `--redact`ed. |
 | 4 | OpenSSF Scorecard | All public repositories | Scheduled and default-branch workflow using a pinned action revision. Publish the JSON artifact and track material score regressions. |
 | 5 | OSV-Scanner | Dependency-bearing public repositories | Scan lockfiles and manifests in CI; upload SARIF or retain the report artifact; triage findings alongside Dependabot. |
 | 6 | SBOM generation | Release-producing repositories | Generate CycloneDX or SPDX SBOM at release; attach it and its SHA-256 to the release evidence. |

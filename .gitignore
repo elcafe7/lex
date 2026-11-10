@@ -52,3 +52,5 @@ pre-public/
 dist/
 build/
 bandit-report/
+gitleaks-report/
+.gitleaks-test-*/

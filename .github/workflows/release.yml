@@ -17,13 +17,19 @@
 #      proven false positives carry an inline "# nosec BXXX  # reason: ...".
 #      Runs in parallel with build-scan; also runs on PRs, pushes to main
 #      and weekly via bandit.yml.
-#   3. virustotal: optional, only if vars.ENABLE_VIRUSTOTAL == 'true' AND the
+#   3. gitleaks: Gitleaks secret scan (CLI 8.30.1, checksum-verified) over
+#      the full git history, always --redact'ed. Any finding, or a scan that
+#      could not finish, fails the job and blocks the release. No baseline;
+#      proven false positives go in .gitleaks.toml with a reason. Runs in
+#      parallel with build-scan and bandit; also runs on PRs, pushes to main
+#      and weekly via gitleaks.yml.
+#   4. virustotal: optional, only if vars.ENABLE_VIRUSTOTAL == 'true' AND the
 #      VT_API_KEY secret is set, and only on a public repo.
-#   4. release: re-verifies SHA256SUMS, attests, publishes the release with
+#   5. release: re-verifies SHA256SUMS, attests, publishes the release with
 #      the scan report and verification.json (badge data).
-#   5. security-report-commit: after a clean publish only, commits the
+#   6. security-report-commit: after a clean publish only, commits the
 #      run's report folder security/reports/<tag>_<UTC timestamp>/ (OSV,
-#      Bandit, SBOM, SHA256SUMS, attestation link, VirusTotal links, Scorecard JSON,
+#      Bandit, Gitleaks, SBOM, SHA256SUMS, attestation link, VirusTotal links, Scorecard JSON,
 #      summary.md) plus security/README.md, security/latest.json and the
 #      README "Security reports" block, with [skip ci], on a reports/<tag>_<ts>
 #      branch and opens a PR to the default branch (never pushes to it).
@@ -33,8 +39,8 @@
 # issue "Release blocked: <tag> security check failed" (assigned to elcafe7)
 # with the findings and a fix prompt. A later clean run publishes and closes it.
 #
-# workflow_dispatch: dry run of steps 1 and 2 only. Never attests, publishes or
-# opens issues.
+# workflow_dispatch: dry run of steps 1–3 only (build-scan, bandit, gitleaks).
+# Never attests, publishes or opens issues.
 #
 # Free tools only. Every action is pinned to a full commit SHA.
 name: Release (verified)
@@ -60,6 +66,9 @@ env:
   # CVSS score at or above which the release fails (7.0 = High, 9.0 = Critical)
   SEVERITY_THRESHOLD: "7.0"
   PYTHON_VERSION: "3.12"
+  GITLEAKS_VERSION: "8.30.1"
+  # sha256 of gitleaks_8.30.1_linux_x64.tar.gz, from that release's checksums file
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
 
 jobs:
   build-scan:
@@ -304,6 +313,65 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+
+  gitleaks:
+    name: Gitleaks (secret scan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      gate: ${{ steps.gitleaks.outputs.gate }}
+    steps:
+      - name: Check out the full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Install gitleaks (checksum-verified)
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          cd "${RUNNER_TEMP}"
+          curl -fsSL -o "${tarball}" "${base}/${tarball}"
+          curl -fsSL -o checksums.txt "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep -qxF "${GITLEAKS_SHA256}  ${tarball}" checksums.txt
+          echo "${GITLEAKS_SHA256}  ${tarball}" | sha256sum -c -
+          tar -xzf "${tarball}" gitleaks
+          ./gitleaks version
+          echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
+
+      - name: Self-test the Gitleaks gate
+        run: python3 -m unittest -v tests.test_gitleaks_gate
+
+      # Any finding or an incomplete scan fails this job, so the release job
+      # below never runs and the blocked job opens the issue with gitleaks.md
+      # (values redacted). gitleaks.json/.sarif stay in the artifact.
+      - name: Scan the full history (redacted) and gate on the result
+        id: gitleaks
+        env:
+          TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          REPO: ${{ github.repository }}
+          GITLEAKS_LOG_OPTS: "--all"
+        run: |
+          set +e
+          bash scripts/gitleaks_check.sh gitleaks-report
+          rc=$?
+          set -e
+          if [ -f gitleaks-report/gitleaks.md ]; then cat gitleaks-report/gitleaks.md >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ "$rc" -eq 0 ]; then echo "gate=pass" >> "$GITHUB_OUTPUT"; else echo "gate=fail" >> "$GITHUB_OUTPUT"; fi
+          exit "$rc"
+
+      - name: Keep the redacted Gitleaks report as a workflow artifact
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gitleaks-report
+          path: gitleaks-report/
+          if-no-files-found: ignore
+          retention-days: 30
+
   virustotal:
     name: VirusTotal (optional)
     needs: build-scan
@@ -367,8 +435,8 @@ jobs:
 
   release:
     name: Attest and publish
-    needs: [build-scan, bandit, virustotal]
-    # Bandit guard: publish only if the Bandit job passed (gate == pass).
+    needs: [build-scan, bandit, gitleaks, virustotal]
+    # Bandit and Gitleaks guards: publish only if both jobs passed (gate == pass).
     # VirusTotal guard: publish only if the VT job passed, or was skipped
     # because VT is off (ENABLE_VIRUSTOTAL unset or repo not public). An
     # enabled VT job that fails, is cancelled or is skipped for any other
@@ -377,6 +445,7 @@ jobs:
       !cancelled() && github.event_name == 'push' &&
       needs.build-scan.result == 'success' && needs.build-scan.outputs.gate == 'pass' &&
       needs.bandit.result == 'success' && needs.bandit.outputs.gate == 'pass' &&
+      needs.gitleaks.result == 'success' && needs.gitleaks.outputs.gate == 'pass' &&
       (needs.virustotal.result == 'success' ||
        (needs.virustotal.result == 'skipped' &&
         !(vars.ENABLE_VIRUSTOTAL == 'true' && github.event.repository.visibility == 'public')))
@@ -530,6 +599,13 @@ jobs:
           name: bandit-report
           path: bandit-report
 
+      - name: Download the Gitleaks report
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: gitleaks-report
+          path: gitleaks-report
+
       - name: Download the VirusTotal report
         if: needs.virustotal.outputs.ran == 'true'
         continue-on-error: true
@@ -548,6 +624,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           DIST_DIR: dist
           BANDIT_DIR: bandit-report
+          GITLEAKS_DIR: gitleaks-report
           VT_DIR: vt-report
           ATTESTED: ${{ github.event.repository.visibility == 'public' || vars.ATTESTATIONS_AVAILABLE == 'true' }}
           ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
@@ -569,17 +646,18 @@ jobs:
 
   security-report-commit:
     name: Commit security report
-    needs: [build-scan, bandit, virustotal, release]
+    needs: [build-scan, bandit, gitleaks, virustotal, release]
     # Clean publish only (needs: release succeeded). Nothing else runs here.
     # !cancelled() is needed: without a status function GitHub skips this job
     # whenever a transitive dependency (the optional virustotal job) is skipped,
     # even though release itself succeeded (seen on v2.6.8, run 42702865665).
-    # The VirusTotal guard repeats the release job's, so this job can never
-    # run after a failed VT check even if the release condition changes.
+    # The VirusTotal, Bandit and Gitleaks guards repeat the release job's, so
+    # this job can never run after a failed check even if the release condition changes.
     if: >-
       !cancelled() && github.event_name == 'push' &&
       needs.build-scan.result == 'success' && needs.release.result == 'success' &&
       needs.bandit.result == 'success' && needs.bandit.outputs.gate == 'pass' &&
+      needs.gitleaks.result == 'success' && needs.gitleaks.outputs.gate == 'pass' &&
       (needs.virustotal.result == 'success' ||
        (needs.virustotal.result == 'skipped' &&
         !(vars.ENABLE_VIRUSTOTAL == 'true' && github.event.repository.visibility == 'public')))
@@ -614,11 +692,11 @@ jobs:
 
   blocked:
     name: Report blocked release
-    needs: [build-scan, bandit, virustotal, release]
+    needs: [build-scan, bandit, gitleaks, virustotal, release]
     if: >-
       always() && github.event_name == 'push' &&
       (contains(needs.*.result, 'failure') || needs.build-scan.outputs.gate == 'fail' ||
-       needs.bandit.outputs.gate == 'fail')
+       needs.bandit.outputs.gate == 'fail' || needs.gitleaks.outputs.gate == 'fail')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -644,7 +722,7 @@ jobs:
           # Prefer the validated build-scan tag; fall back to ref_name (script allowlists).
           TAG: ${{ needs.build-scan.outputs.tag || github.ref_name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          FAILED_JOBS: "build-scan: ${{ needs.build-scan.result }} (scan ${{ needs.build-scan.outputs.gate || 'not run' }}), bandit: ${{ needs.bandit.result }} (gate ${{ needs.bandit.outputs.gate || 'not run' }}), virustotal: ${{ needs.virustotal.result }}, release: ${{ needs.release.result }}"
+          FAILED_JOBS: "build-scan: ${{ needs.build-scan.result }} (scan ${{ needs.build-scan.outputs.gate || 'not run' }}), bandit: ${{ needs.bandit.result }} (gate ${{ needs.bandit.outputs.gate || 'not run' }}), gitleaks: ${{ needs.gitleaks.result }} (gate ${{ needs.gitleaks.outputs.gate || 'not run' }}), virustotal: ${{ needs.virustotal.result }}, release: ${{ needs.release.result }}"
         run: |
           mkdir -p reports
           rm -f reports/*.json
@@ -670,6 +748,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SCAN_DIR: report-inputs
           BANDIT_DIR: report-inputs
+          GITLEAKS_DIR: report-inputs
           VT_DIR: report-inputs
         run: |
           bash scripts/write_security_report.sh "$RUNNER_TEMP/security-report"
