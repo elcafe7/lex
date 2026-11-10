@@ -63,9 +63,21 @@ TARGETS = {
 }
 
 
+SAFE_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+ALLOWED_TABLES = frozenset(table for config in TARGETS.values() for table in config["tables"])
+
+
+def quote_identifier(name):
+    """Return a double-quoted SQLite identifier, or raise if it is not a plain name."""
+    if not isinstance(name, str) or not SAFE_IDENTIFIER.fullmatch(name):
+        raise ValueError(f"Unsafe SQLite identifier: {name!r}")
+    return f'"{name}"'
+
+
 def create_table_from_source(source, target, table):
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
-        raise ValueError(f"Unsafe SQLite identifier: {table!r}")
+    if table not in ALLOWED_TABLES:
+        raise ValueError(f"Table is not in the split plan: {table!r}")
+    table_sql = quote_identifier(table)
     sql = source.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
         (table,),
@@ -74,14 +86,17 @@ def create_table_from_source(source, target, table):
         raise RuntimeError(f"Missing source table: {table}")
     target.execute(sql[0])
 
-    columns = [row[1] for row in source.execute(f"PRAGMA table_info({table})")]
-    col_list = ", ".join(columns)
+    # Column names come from the source database file, so they are checked
+    # and quoted like the table name; row values are always bound parameters.
+    columns = [row[0] for row in source.execute("SELECT name FROM pragma_table_info(?)", (table,))]
+    if not columns:
+        raise RuntimeError(f"Source table has no columns: {table}")
+    col_list = ", ".join(quote_identifier(column) for column in columns)
     placeholders = ", ".join("?" for _ in columns)
-    rows = source.execute(f"SELECT {col_list} FROM {table}").fetchall()
-    target.executemany(
-        f"INSERT INTO {table} ({col_list}) VALUES ({placeholders})",
-        rows,
-    )
+    select_sql = f"SELECT {col_list} FROM {table_sql}"  # nosec B608  # reason: identifiers allowlisted and quoted by quote_identifier(); no values in the string
+    insert_sql = f"INSERT INTO {table_sql} ({col_list}) VALUES ({placeholders})"  # nosec B608  # reason: identifiers allowlisted and quoted by quote_identifier(); values are bound "?" parameters
+    rows = source.execute(select_sql).fetchall()
+    target.executemany(insert_sql, rows)
     return len(rows)
 
 

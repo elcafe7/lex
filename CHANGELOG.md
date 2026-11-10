@@ -1,6 +1,43 @@
 # Changelog
 
-## Unreleased
+## 2.6.8 — 2026-11-09
+
+- **Verified releases (#11, #10).** Tag pushes now build the release, write a
+  CycloneDX SBOM, scan it with OSV-Scanner (fails on CVSS 7.0 or higher),
+  write and check `SHA256SUMS`, attest build provenance and only then publish.
+  Each clean release opens a PR with its report folder under
+  `security/reports/`. See `docs/RELEASE_VERIFICATION.md`.
+
+- **Filesystem boundaries for untrusted paths (CodeQL `py/path-injection`,
+  #6, #8, #9).** Paths built from downloaded or updated data (the `lex
+  --update` manifest, the manuscript profiles manifest, files inside
+  downloaded import checkouts) or from the environment must now resolve inside
+  a known Lex directory; `..`, encoded `..%2f`, absolute paths, NUL bytes and
+  symlinks that escape are refused. `LEX_PDF_FONT` / `LEX_PDF_HEBREW_FONT`
+  must name a `.ttf`, `.otf` or `.ttc` file in the bundled, system or user
+  font folders. The npm launcher checks every release-archive entry before
+  and after extraction (no absolute, `..`, out-of-root, symlink or hard-link
+  entries) and only accepts `vX.Y.Z` release tags.
+
+## 2.6.7 — 2026-11-06
+
+- **`lex --update` now updates the CLI too, not only the data (#19).** Before,
+  `lex --update` pulled the 2.6.6 data but left an npm install at 2.6.2, so
+  `lex --version` still said 2.6.2. Now the npm launcher checks the npm
+  registry for a newer `@n8te_/lex-cli`. When the install is a global npm
+  install (`<prefix>/lib/node_modules/@n8te_/lex-cli`, e.g. under `~/.local`)
+  and that folder is writable, it runs
+  `npm install -g --prefix <prefix> @n8te_/lex-cli@<latest>`, checks the new
+  version, and hands off to the new launcher. The data update then runs as
+  before. Afterwards Lex prints both versions, e.g. `Lex CLI: 2.6.6 (updated
+  from 2.6.2)` and `Lex data: 2.6.6 (up to date)`.
+  If the CLI can't be updated (no write permission, npx or project-local
+  install, npm error, or offline), Lex says so, prints the exact command to
+  run, and never claims the CLI is current. An npm upgrade that fails makes
+  `lex --update` exit 1. Git clones stay data-only and print the
+  `git pull --ff-only && ./setup.sh` command when their code is older than
+  the data. `-v` and `-B` behave as before. New tests:
+  `npm/lex-cli/test/self-update.test.js` and `tests/test_update_versions.py`.
 
 - **New: `--json` machine-readable output (#16).** One compact JSON document on
   stdout (`schema_version` 1, see `docs/json-output.md`) for `read`, `study`

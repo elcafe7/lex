@@ -1,0 +1,15 @@
+{
+  "results": [
+    {
+      "source": {"path": "/fixture/app.cdx.json", "type": "sbom"},
+      "packages": [
+        {
+          "package": {"name": "examplepkg", "version": "1.0.0", "ecosystem": "PyPI"},
+          "groups": [
+            {"ids": ["PYSEC-test-noscore"], "aliases": ["PYSEC-test-noscore"], "max_severity": ""}
+          ]
+        }
+      ]
+    }
+  ]
+}

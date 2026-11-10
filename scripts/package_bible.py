@@ -11,6 +11,9 @@ import re
 import sys
 from defusedxml import ElementTree as ET
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from safe_paths import MissingSourceFile, UnsafePathError, safe_source_file  # noqa: E402
+
 
 def strip_markup_tags(text):
     """Remove tag delimiters in linear time from imported source text."""
@@ -131,11 +134,16 @@ def package_kjv_modern(json_dir, db_path):
     # sequence; alphabetical filename order would break id-based navigation.
     for book_abbr in book_map:
         filename = f"{book_abbr}.json"
-        if filename not in os.listdir(json_dir):
+        try:
+            source_path = safe_source_file(json_dir, filename)
+        except MissingSourceFile:
             print(f"Missing source file: {filename}")
             continue
+        except UnsafePathError as exc:
+            print(f"Skipping unsafe source file: {exc}")
+            continue
         full_book = book_map[book_abbr]
-        with open(os.path.join(json_dir, filename), 'r', encoding='utf-8') as f:
+        with open(source_path, 'r', encoding='utf-8') as f:
                 try:
                     data = json.load(f)
                     book_data = data.get(book_abbr, {})
@@ -171,7 +179,13 @@ def package_kjv_1611(json_dir, db_path):
     
     for filename in sorted(os.listdir(json_dir)):
         if filename.endswith(".json") and filename not in ["Books.json", "Books_chapter_count.json", "README.md"]:
-            with open(os.path.join(json_dir, filename), 'r', encoding='utf-8') as f:
+            # Names come from a downloaded checkout's listing: confine them.
+            try:
+                source_path = safe_source_file(json_dir, filename)
+            except UnsafePathError as exc:
+                print(f"Skipping unsafe source file: {exc}")
+                continue
+            with open(source_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 full_book = data.get("book")
                 for chapter_data in data.get("chapters", []):

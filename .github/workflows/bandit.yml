@@ -1,0 +1,76 @@
+# Bandit: Python static analysis (SAST) for lex.py, indexer.py, scripts/ and
+# tests/, on every pull request, every push to main, weekly, and on demand.
+# The release workflow (release.yml) runs the same check before publishing.
+#
+# Gate: any finding of medium or high severity, at any confidence, fails;
+# low severity is listed as information. No baseline file and no skipped
+# tests: a proven false positive needs an inline "# nosec BXXX  # reason: ..."
+# comment, reviewed in its PR. Bandit is installed from the hash-pinned
+# .github/requirements/bandit-requirements.txt (pip --require-hashes).
+# Reports (bandit.json, bandit.txt, bandit.md) are kept as a workflow artifact.
+#
+# Free tools only. Every action is pinned to a full commit SHA.
+name: Bandit (Python SAST)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "41 8 * * 1"  # Mondays 08:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bandit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bandit:
+    name: Bandit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Bandit (hash-pinned)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/bandit-venv"
+          "$RUNNER_TEMP/bandit-venv/bin/python" -m pip install --quiet --require-hashes --no-deps \
+            -r .github/requirements/bandit-requirements.txt
+          "$RUNNER_TEMP/bandit-venv/bin/bandit" --version
+
+      - name: Self-test the Bandit gate
+        run: python3 -m unittest -v tests.test_bandit_gate
+
+      - name: Scan with Bandit and gate on the result
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          PATH="$RUNNER_TEMP/bandit-venv/bin:$PATH" bash scripts/bandit_check.sh bandit-report
+          rc=$?
+          set -e
+          if [ -f bandit-report/bandit.md ]; then cat bandit-report/bandit.md >> "$GITHUB_STEP_SUMMARY"; fi
+          exit "$rc"
+
+      - name: Keep the Bandit reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bandit-report
+          path: bandit-report/
+          if-no-files-found: warn
+          retention-days: 90

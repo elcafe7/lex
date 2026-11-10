@@ -7,9 +7,9 @@ const launcher = require("../lib/launcher");
 
 test("release URLs use the pinned GitHub release contract", () => {
   const urls = launcher.releaseUrls();
-  assert.equal(urls.archive, "https://github.com/elcafe7/lex/releases/download/v2.6.6/lex-v2.6.6.tar.gz");
-  assert.equal(urls.checksum, "https://github.com/elcafe7/lex/releases/download/v2.6.6/lex-v2.6.6.tar.gz.sha256");
-  assert.equal(launcher.archiveRoot(), "lex-2.6.6");
+  assert.equal(urls.archive, "https://github.com/elcafe7/lex/releases/download/v2.6.8/lex-v2.6.8.tar.gz");
+  assert.equal(urls.checksum, "https://github.com/elcafe7/lex/releases/download/v2.6.8/lex-v2.6.8.tar.gz.sha256");
+  assert.equal(launcher.archiveRoot(), "lex-2.6.8");
 });
 
 test("releaseUrls accepts an explicit tag", () => {
@@ -42,7 +42,7 @@ test("resolveReleaseTag falls back to pinned tag when lookup fails", async () =>
   };
   try {
     const tag = await launcher.resolveReleaseTag();
-    assert.equal(tag, "v2.6.6");
+    assert.equal(tag, "v2.6.8");
   } finally {
     https.get = original;
   }
@@ -74,7 +74,6 @@ test("quiet mode keeps release-tag chatter off stderr", async () => {
   const lines = [];
   const original = console.error;
   console.error = (...parts) => lines.push(parts.join(" "));
-  process.env.LEX_CLI_RELEASE_TAG = "";
   const https = require("node:https");
   const originalGet = https.get;
   https.get = (url, options, cb) => {
@@ -84,7 +83,7 @@ test("quiet mode keeps release-tag chatter off stderr", async () => {
   };
   try {
     launcher.setQuiet(true);
-    assert.equal(await launcher.resolveReleaseTag(), "v2.6.6");
+    assert.equal(await launcher.resolveReleaseTag(), "v2.6.8");
     assert.deepEqual(lines, []);
     launcher.setQuiet(false);
     await launcher.resolveReleaseTag();

@@ -5,6 +5,7 @@ import re
 import sqlite3
 
 from init_lxx_db import DEFAULT_DB, init_lxx_db
+from safe_paths import MissingSourceFile, UnsafePathError, safe_source_file
 
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "runtime-data")
@@ -137,9 +138,13 @@ def decode_parse(type_code, parse_code):
 
 def iter_rows(source_dir):
     for filename in sorted(FILE_BOOKS):
-        path = os.path.join(source_dir, filename)
-        if not os.path.exists(path):
+        # source_dir holds downloaded CCAT files: confine each one.
+        try:
+            path = safe_source_file(source_dir, filename)
+        except MissingSourceFile:
             continue
+        except UnsafePathError as exc:
+            raise SystemExit(f"Refusing unsafe source file: {exc}")
         book_code, _ = FILE_BOOKS[filename]
         chapter = verse = None
         word_num = 0

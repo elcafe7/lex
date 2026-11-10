@@ -47,9 +47,19 @@ fails (offline, rate-limited, private network).
 Override for testing:
 
 ```sh
-LEX_CLI_RELEASE_TAG=v2.6.6 lex        # force a specific tag
+LEX_CLI_RELEASE_TAG=v2.6.8 lex        # force a specific tag
 LEX_CLI_RELEASE_BASE_URL=... lex      # force a mirror URL
 ```
 
 A cached install at `~/.local/share/lex-cli/` is reused; delete it to force a
 re-download of the latest release.
+
+## Self-update (`lex update`)
+
+`lex update` / `lex --update` asks `registry.npmjs.org` for the `latest`
+`@n8te_/lex-cli`. When the running launcher is older and lives in a writable
+global npm prefix, it runs `npm install -g --prefix <prefix>
+@n8te_/lex-cli@<latest>` and re-runs the command with the new launcher. After
+you publish to npm, existing installs pick up the new launcher the next time
+someone runs `lex update`. For testing, set `LEX_CLI_REGISTRY_URL` to use a
+different registry, or `LEX_CLI_SKIP_SELF_UPDATE=1` to skip the CLI check.

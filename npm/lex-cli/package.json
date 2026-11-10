@@ -1,6 +1,6 @@
 {
   "name": "@n8te_/lex-cli",
-  "version": "2.6.6",
+  "version": "2.6.8",
   "description": "Launcher for Lex, the local-first Bible study terminal",
   "license": "MIT",
   "bin": {
@@ -37,8 +37,8 @@
   },
   "lexCli": {
     "repository": "elcafe7/lex",
-    "releaseTag": "v2.6.6",
-    "assetName": "lex-v2.6.6.tar.gz",
-    "checksumName": "lex-v2.6.6.tar.gz.sha256"
+    "releaseTag": "v2.6.8",
+    "assetName": "lex-v2.6.8.tar.gz",
+    "checksumName": "lex-v2.6.8.tar.gz.sha256"
   }
 }
