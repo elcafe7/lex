@@ -362,6 +362,10 @@ class StrongsDefinitionCleanupTest(unittest.TestCase):
         raw = '{"_":" properly, a story","strongsref":[{"$":{"language":"GREEK","strongs":"1868"}}]}'
         self.assertEqual(self.lex.clean_strongs_definition(raw), ("properly, a story (see G1868)", ["G1868"]))
 
+    def test_spaces_before_punctuation_are_trimmed_without_regex(self):
+        raw = '{"_":" hello   ) world  .  yes ;  no"}'
+        self.assertEqual(self.lex.clean_strongs_definition(raw), ("hello) world. yes; no", []))
+
     def test_no_raw_json_left_in_any_entry(self):
         app_cls = next(v for v in vars(self.lex).values() if isinstance(v, type) and hasattr(v, "find_strongs_rows"))
         app = app_cls()

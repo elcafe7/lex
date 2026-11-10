@@ -174,7 +174,11 @@ def clean_strongs_definition(raw):
                 filled = True
                 break
     body = " ".join(body.split())
-    body = re.sub(r"\s+([),;.:])", r"\1", body)
+    # After split/join, leftover spaces before punctuation are a single
+    # space. Strip them with replaces so we don't run a repeating regex
+    # on lexicon text (CodeQL py/polynomial-redos).
+    for punct in "),;.:":
+        body = body.replace(f" {punct}", punct)
     if fills and not filled:
         body = f"{body} (see {', '.join(fills)})"
     return body.strip(), refs
