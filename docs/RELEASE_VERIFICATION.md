@@ -3,6 +3,7 @@
 How releases of Lex are verified, and the repository settings the
 release workflow assumes. Workflows: [`release.yml`](../.github/workflows/release.yml),
 [`bandit.yml`](../.github/workflows/bandit.yml),
+[`gitleaks.yml`](../.github/workflows/gitleaks.yml),
 [`scorecard.yml`](../.github/workflows/scorecard.yml); Dependabot:
 [`dependabot.yml`](../.github/dependabot.yml).
 
@@ -20,8 +21,10 @@ version, a fix after a blocked release means a new patch version.
      (`scripts/osv_gate.py`), then `SHA256SUMS` written and verified.
   2. **bandit** (in parallel with build-scan): Bandit Python static
      analysis, see "Bandit" below.
-  3. **virustotal** (optional, see below).
-  4. **release**: needs build-scan, bandit and virustotal; re-checks
+  3. **gitleaks** (in parallel with build-scan and bandit): Gitleaks
+     secret scan of the full git history, see "Gitleaks" below.
+  4. **virustotal** (optional, see below).
+  5. **release**: needs build-scan, bandit, gitleaks and virustotal; re-checks
      `SHA256SUMS`, checks `verification.json` says pass / 0 known
      vulnerabilities, attests (actions/attest-build-provenance, plus an SBOM
      attestation) and publishes the release. The two Sigstore
@@ -29,9 +32,9 @@ version, a fix after a blocked release means a new patch version.
      every release file) and `lex-v<VERSION>.sbom.sigstore.json` (SBOM
      attestation for the archive). They are made after `SHA256SUMS` is
      attested, so they are not in it; each bundle is signed on its own.
-- **workflow_dispatch**: dry run of steps 1 and 2 (build-scan and bandit).
-  Files are kept as a 14-day workflow artifact. It never attests, publishes
-  or opens issues.
+- **workflow_dispatch**: dry run of steps 1–3 (build-scan, bandit and
+  gitleaks). Files are kept as a 14-day workflow artifact. It never attests,
+  publishes or opens issues.
 - **Gate**: any advisory with CVSS 7.0 or higher fails the release. Scored
   advisories below 7.0 also hold it, so a published report and badge always
   say 0 known vulnerabilities. Advisories with no CVSS score don't block;
@@ -84,14 +87,50 @@ python3 -m venv .venv-bandit
 PATH="$PWD/.venv-bandit/bin:$PATH" bash scripts/bandit_check.sh bandit-report
 ```
 
+## Gitleaks (secret scan)
+
+[Gitleaks](https://github.com/gitleaks/gitleaks) 8.30.1 scans git history
+for secrets through `scripts/gitleaks_check.sh`, and `scripts/gitleaks_gate.py`
+decides:
+
+- **Blocks** on any finding, and on a scan that could not finish (no valid
+  JSON report). There is no severity threshold and no baseline file.
+- **All output is `--redact`ed.** Logs, `gitleaks.json` and `gitleaks.sarif`
+  never contain secret values. The Markdown summary lists rule, file:line,
+  commit and fingerprint only; that is what a "Release blocked" issue shows.
+- **Proven false positives** go in [`.gitleaks.toml`](../.gitleaks.toml) as
+  an `[[allowlists]]` entry with a reason in the description, reviewed in
+  the PR. The file extends the default rule set (`useDefault = true`). Do
+  not add a baseline of ignored secrets. A real credential must be rotated
+  and removed, not allowlisted.
+- The CLI is downloaded from the GitHub release, checked against a
+  hardcoded SHA-256 (and against that release's checksums file), and pinned
+  at 8.30.1 in both workflows.
+- Where it runs: `release.yml` (tag push and the workflow_dispatch dry run;
+  full history; the release job needs it), and `gitleaks.yml` on every pull
+  request (only the PR's commits), every push to `main`, weekly (Mondays
+  07:53 UTC) and on demand (full history).
+- Reports: `gitleaks.json` and `gitleaks.sarif` (redacted), `gitleaks.md`
+  (issue-safe summary) and `gitleaks-gate.json`. They are kept as the
+  `gitleaks-report` workflow artifact and copied into the security report
+  folder.
+
+Run it locally the same way (after installing Gitleaks 8.30.1 and checking
+its SHA-256, as the workflow does):
+
+```bash
+export GITLEAKS_LOG_OPTS=--all
+bash scripts/gitleaks_check.sh gitleaks-report
+```
+
 ## When a check fails: nothing is published
 
-If the OSV gate, Bandit, a checksum check or VirusTotal (when on) fails, the run
+If the OSV gate, Bandit, Gitleaks, a checksum check or VirusTotal (when on) fails, the run
 publishes **nothing**: no release, no release assets, no scan report on a
 release and no `verification.json`. Instead:
 
 - The findings stay in the run as workflow artifacts (`scan-report`,
-  `bandit-report`, `virustotal-report`). Release files are not even uploaded as an artifact
+  `bandit-report`, `gitleaks-report`, `virustotal-report`). Release files are not even uploaded as an artifact
   when the OSV scan fails.
 - The job summary shows the findings, a **Suggested fix** (fixed versions
   from OSV where known) and a **Fix prompt** to paste into a PR or a coding
@@ -198,6 +237,7 @@ publishes the report in the index.
 | `summary.md` | Every check, its result, the date and time (UTC), links to the files below |
 | `osv-scan.json` / `osv-scan.md` | OSV-Scanner report (the release gate) |
 | `bandit.json`, `bandit.txt`, `bandit.md` | Bandit Python static analysis (a release gate); "not run" in `summary.md` when it did not run |
+| `gitleaks.json`, `gitleaks.md`, `gitleaks.sarif` | Gitleaks secret scan (a release gate; values redacted); "not run" in `summary.md` when it did not run |
 | `sbom.cdx.json` | CycloneDX SBOM |
 | `SHA256SUMS` | Checksums, re-verified when the report is written |
 | `attestation.md` | Build-provenance attestation link and `gh attestation verify` command |

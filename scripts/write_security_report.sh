@@ -13,6 +13,9 @@
 #   SCAN_DIR                  scan-report artifact (OSV report) for blocked runs
 #   BANDIT_DIR                bandit-report artifact: bandit.json, bandit.txt,
 #                             bandit.md (from scripts/bandit_check.sh)
+#   GITLEAKS_DIR              gitleaks-report artifact: gitleaks.json,
+#                             gitleaks.md (from scripts/gitleaks_check.sh;
+#                             values are --redact'ed)
 #   VT_DIR                    virustotal-report artifact: virustotal.md (scan
 #                             results) and/or virustotal-not-run.md (VT on but
 #                             no scan, e.g. missing VT_API_KEY)
@@ -146,6 +149,42 @@ if [ "$bandit_result" != "not run" ]; then
   fi
 fi
 add_row "Bandit (Python static analysis)" "$bandit_result" "$bandit_files"
+
+# --- Gitleaks (secret scan) ---------------------------------------------
+# Counts come from the redacted findings list. A valid report is a JSON
+# array. No valid JSON means "not run" or "FAIL (scan incomplete)"; it is
+# never reported as clean. Secret values are not copied into summary.md.
+gitleaks_dir="${GITLEAKS_DIR:-}"
+g_json="$(first_match 'gitleaks.json' "$gitleaks_dir")"
+g_md="$(first_match 'gitleaks.md' "$gitleaks_dir")"
+g_sarif="$(first_match 'gitleaks.sarif' "$gitleaks_dir")"
+gitleaks_files="-"
+if [ -n "$g_json" ] && jq -e 'type == "array"' "$g_json" >/dev/null 2>&1; then
+  cp "$g_json" "$dir/gitleaks.json"
+  gitleaks_files="$(link gitleaks.json)"
+  g_n="$(jq 'length' "$g_json")"
+  [[ "$g_n" =~ ^[0-9]+$ ]] || g_n="?"
+  if [ "$g_n" = "0" ]; then
+    gitleaks_result="pass (0 findings)"
+  else
+    gitleaks_result="FAIL (${g_n} findings; values redacted)"
+  fi
+elif [ -n "$g_json" ] || [ -n "$g_md" ] || [ -n "$g_sarif" ]; then
+  gitleaks_result="FAIL (scan incomplete: no valid Gitleaks JSON)"
+else
+  gitleaks_result="not run"
+fi
+if [ "$gitleaks_result" != "not run" ]; then
+  g_links=()
+  [ "$gitleaks_files" = "-" ] || g_links+=("$gitleaks_files")
+  if [ -n "$g_md" ]; then cp "$g_md" "$dir/gitleaks.md"; g_links+=("$(link gitleaks.md)"); fi
+  if [ -n "$g_sarif" ]; then cp "$g_sarif" "$dir/gitleaks.sarif"; g_links+=("$(link gitleaks.sarif)"); fi
+  if [ "${#g_links[@]}" -gt 0 ]; then
+    gitleaks_files="$(IFS=,; echo "${g_links[*]}")"
+    gitleaks_files="${gitleaks_files//,/, }"
+  fi
+fi
+add_row "Gitleaks (secret scan)" "$gitleaks_result" "$gitleaks_files"
 
 # --- SBOM ----------------------------------------------------------------
 sbom="$(first_match '*.cdx.json' "$dist")"

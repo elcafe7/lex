@@ -218,6 +218,65 @@ class BanditReportTests(unittest.TestCase):
             self.assertIn("| Bandit (Python static analysis) | not run | - |", s)
 
 
+
+class GitleaksReportTests(unittest.TestCase):
+    """The Gitleaks row reflects the redacted findings list; no JSON is never 'pass'."""
+
+    def _summary(self, tmp: Path, files: dict, status="published"):
+        dist, vt, sc = make_inputs(tmp)
+        gdir = tmp / "gitleaks-report"
+        gdir.mkdir()
+        for name, text in files.items():
+            (gdir / name).write_text(text)
+        env = writer_env("v1.2.3", dist, vt, sc, status=status)
+        env["GITLEAKS_DIR"] = str(gdir)
+        p = run(WRITER, str(tmp / "out"), env=env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        d = tmp / "out" / "v1.2.3_20261109T205501Z"
+        rows = [l for l in (d / "summary.md").read_text().splitlines()
+                if l.startswith("| Gitleaks (secret scan) |")]
+        self.assertEqual(len(rows), 1)
+        return d, rows[0]
+
+    def test_clean_scan_passes_and_copies_reports(self):
+        with tempfile.TemporaryDirectory() as t:
+            d, row = self._summary(Path(t), {
+                "gitleaks.json": "[]",
+                "gitleaks.md": "# Gitleaks\n",
+                "gitleaks.sarif": "{}",
+            })
+            self.assertIn("| pass (0 findings) |", row)
+            self.assertIn("[gitleaks.json](gitleaks.json), [gitleaks.md](gitleaks.md), [gitleaks.sarif](gitleaks.sarif)", row)
+            for f in ("gitleaks.json", "gitleaks.md", "gitleaks.sarif"):
+                self.assertTrue((d / f).is_file(), f)
+
+    def test_findings_fail(self):
+        with tempfile.TemporaryDirectory() as t:
+            _, row = self._summary(Path(t), {"gitleaks.json": json.dumps([
+                {"RuleID": "generic-api-key", "File": "x.py"},
+                {"RuleID": "aws-access-key", "File": "y.py"},
+            ])}, status="blocked")
+            self.assertIn("| FAIL (2 findings; values redacted) |", row)
+
+    def test_broken_or_missing_json_is_never_pass(self):
+        for files in ({"gitleaks.json": "{not json"}, {"gitleaks.md": "# Gitleaks\n"},
+                      {"gitleaks.json": json.dumps({"findings": []})}):
+            with self.subTest(files=list(files)), tempfile.TemporaryDirectory() as t:
+                d, row = self._summary(Path(t), files, status="blocked")
+                self.assertIn("FAIL (scan incomplete: no valid Gitleaks JSON)", row)
+                self.assertNotIn("pass", row)
+                self.assertFalse((d / "gitleaks.json").exists())
+
+    def test_no_gitleaks_dir_says_not_run(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            dist, vt, sc = make_inputs(tmp)
+            p = run(WRITER, str(tmp / "out"), env=writer_env("v1.2.3", dist, vt, sc))
+            self.assertEqual(p.returncode, 0, p.stderr)
+            s = (tmp / "out" / "v1.2.3_20261109T205501Z" / "summary.md").read_text()
+            self.assertIn("| Gitleaks (secret scan) | not run | - |", s)
+
+
 VT_HEADER = "| File | Malicious | Suspicious | Undetected | Result | Link |\n|---|---|---|---|---|---|\n"
 
 
@@ -458,6 +517,117 @@ class WorkflowBanditTests(unittest.TestCase):
         for line in pkgs:
             self.assertIn("==", line)
         self.assertGreaterEqual(req.count("--hash=sha256:"), len(pkgs))
+
+
+
+class WorkflowGitleaksTests(unittest.TestCase):
+    """release.yml: Gitleaks runs on tag push and dry run, and gates the publish."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import yaml
+        except ImportError:  # pragma: no cover
+            raise unittest.SkipTest("PyYAML not installed")
+        wf_dir = ROOT / ".github" / "workflows"
+        cls.wf = yaml.safe_load((wf_dir / "release.yml").read_text())
+        cls.jobs = cls.wf["jobs"]
+        cls.gitleaks_wf = yaml.safe_load((wf_dir / "gitleaks.yml").read_text())
+
+    @staticmethod
+    def _cond(job):
+        return " ".join(job["if"].split())
+
+    def _install_and_scan(self, job):
+        runs = "\n".join(s.get("run", "") for s in job["steps"])
+        self.assertIn("GITLEAKS_VERSION", json.dumps(self.wf.get("env", {})) + runs + json.dumps(job))
+        # Version/hash come from env, not from a ${{ }} in run:.
+        self.assertIn("gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz", runs)
+        self.assertIn("sha256sum -c", runs)
+        self.assertIn("bash scripts/gitleaks_check.sh gitleaks-report", runs)
+        self.assertIn("python3 -m unittest -v tests.test_gitleaks_gate", runs)
+        script = (ROOT / "scripts" / "gitleaks_check.sh").read_text()
+        self.assertIn("gitleaks git --redact", script)
+        self.assertNotIn("--baseline-path", script)
+        self.assertNotIn("--baseline-path", runs)
+        self.assertNotIn("${{", runs, "values reach run: only through env")
+        checkout = next(s for s in job["steps"] if str(s.get("uses", "")).startswith("actions/checkout@"))
+        self.assertIs(checkout["with"]["persist-credentials"], False)
+        self.assertEqual(checkout["with"].get("fetch-depth"), 0)
+
+    def test_gitleaks_job_runs_on_push_and_dry_run(self):
+        job = self.jobs["gitleaks"]
+        self.assertNotIn("if", job, "Gitleaks must run on tag push and workflow_dispatch")
+        self.assertNotIn("needs", job)
+        self.assertEqual(job["permissions"], {"contents": "read"})
+        self._install_and_scan(job)
+        upload = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/upload-artifact@"))
+        self.assertEqual(upload["with"]["name"], "gitleaks-report")
+        self.assertEqual(upload["if"], "always()")
+        self.assertIn("workflow_dispatch", self.wf[True])
+        self.assertIn("push", self.wf[True])
+        self.assertEqual(self.wf["env"]["GITLEAKS_VERSION"], "8.30.1")
+        self.assertEqual(
+            self.wf["env"]["GITLEAKS_SHA256"],
+            "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+        )
+
+    def test_gitleaks_gate_output(self):
+        step = next(s for s in self.jobs["gitleaks"]["steps"] if s.get("id") == "gitleaks")
+        self.assertIn('echo "gate=pass"', step["run"])
+        self.assertIn('echo "gate=fail"', step["run"])
+        self.assertIn('exit "$rc"', step["run"])
+        self.assertEqual(step["env"]["GITLEAKS_LOG_OPTS"], "--all")
+
+    def test_release_and_report_commit_need_clean_gitleaks(self):
+        for name in ("release", "security-report-commit"):
+            with self.subTest(job=name):
+                self.assertIn("gitleaks", self.jobs[name]["needs"])
+                cond = self._cond(self.jobs[name])
+                self.assertIn("needs.gitleaks.result == 'success' && needs.gitleaks.outputs.gate == 'pass'", cond)
+
+    def test_blocked_job_reports_gitleaks(self):
+        job = self.jobs["blocked"]
+        self.assertIn("gitleaks", job["needs"])
+        self.assertIn("needs.gitleaks.outputs.gate == 'fail'", self._cond(job))
+        issue = next(s for s in job["steps"] if s.get("name", "").startswith("Open or update"))
+        self.assertIn("gitleaks: ${{ needs.gitleaks.result }}", issue["env"]["FAILED_JOBS"])
+        dl = next(s for s in job["steps"] if s.get("name") == "Download scan reports")
+        self.assertEqual(dl["with"]["pattern"], "*-report")  # picks up gitleaks-report (gitleaks.md)
+        report = next(s for s in job["steps"] if s.get("id") == "report")
+        self.assertEqual(report["env"]["GITLEAKS_DIR"], "report-inputs")
+        self.assertNotIn("contents: write", str(job["permissions"]))
+
+    def test_published_report_gets_gitleaks_dir(self):
+        report = next(s for s in self.jobs["release"]["steps"] if s.get("id") == "report")
+        self.assertEqual(report["env"]["GITLEAKS_DIR"], "gitleaks-report")
+        dl = next(s for s in self.jobs["release"]["steps"] if s.get("name") == "Download the Gitleaks report")
+        self.assertEqual(dl["with"]["name"], "gitleaks-report")
+
+    def test_standalone_workflow_triggers(self):
+        on = self.gitleaks_wf[True]
+        for trigger in ("pull_request", "push", "schedule", "workflow_dispatch"):
+            self.assertIn(trigger, on)
+        self.assertEqual(on["push"]["branches"], ["main"])
+        self.assertEqual(self.gitleaks_wf["permissions"], {"contents": "read"})
+        self.assertEqual(self.gitleaks_wf["env"]["GITLEAKS_VERSION"], "8.30.1")
+        self.assertEqual(
+            self.gitleaks_wf["env"]["GITLEAKS_SHA256"],
+            "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+        )
+        job = self.gitleaks_wf["jobs"]["gitleaks"]
+        self.assertEqual(job["permissions"], {"contents": "read"})
+        runs = "\n".join(s.get("run", "") for s in job["steps"])
+        self.assertIn("bash scripts/gitleaks_check.sh gitleaks-report", runs)
+        self.assertIn("python3 -m unittest -v tests.test_gitleaks_gate", runs)
+        script = (ROOT / "scripts" / "gitleaks_check.sh").read_text()
+        self.assertIn("gitleaks git --redact", script)
+        self.assertNotIn("--baseline-path", script)
+        self.assertNotIn("--baseline-path", runs)
+        self.assertNotIn("${{", runs, "values reach run: only through env")
+        for step in job["steps"]:
+            if str(step.get("uses", "")).startswith("actions/checkout@"):
+                self.assertIs(step["with"]["persist-credentials"], False)
 
 
 class IndexAndCommitTests(unittest.TestCase):
