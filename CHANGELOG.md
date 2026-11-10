@@ -12,6 +12,13 @@
   (Psalm 22 is "The Lord ruleth me"). No version bump in this change; the
   edition will ship in the next release archive and npm data download.
 
+- **LXX lemma import confines `LxxLemmas` (CodeQL `py/path-injection`, alert
+  #58).** `scripts/import_lxx_openscriptures_lemmas.py` resolves `--source`,
+  joins `LxxLemmas` under that real path, checks the result stays inside the
+  source directory, requires the directory to exist, and rejects a symlink
+  that escapes it. Shared helper: `safe_source_dir()` in
+  `scripts/safe_paths.py`.
+
 ## 2.6.8 — 2026-11-09
 
 - **Verified releases (#11, #10).** Tag pushes now build the release, write a
