@@ -23,7 +23,7 @@ head -5 ~/.local/bin/lex
 - [Lex CLI component](components/LEX_CLI.md): command dispatch, rendering, read/study/search/creed/define behavior.
 - [Encyclopedia importer component](components/ENCYCLOPEDIA_IMPORTER.md): builds `encyclopedia.db` from ISBE OCR text.
 - [Bible DB builder component](components/BIBLE_DB_BUILDER.md): builds `bible_versions/esv.db` from `lexicon.db`.
-- [Bible Packager tool](scripts/package_bible.py): converts JSON/CSV/XML sources into per-edition `.db` files.
+- [Bible Packager tool](scripts/package_bible.py): converts JSON/CSV/XML/VPL sources into per-edition `.db` files.
 - [Manifest generator](scripts/generate_manifest.py): generates `manifest.json` with file hashes for the update system.
 - [Data stores component](components/DATA_STORES.md): SQLite/JSON files Lex expects at runtime.
 - [Bible edition standard](BIBLE_EDITION_STANDARD.md): schema expectations for per-edition Bible databases.
