@@ -226,6 +226,40 @@ class CreedAlignmentTest(unittest.TestCase):
             self.assertEqual(self.lex.load_creed_originals([missing, bad]), {})
             self.assertEqual(self.lex.load_creed_originals([missing, ALIGNED_JSON]), self.lex.CREED_ORIGINALS)
 
+    def test_deeply_nested_or_huge_json_falls_back(self):
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            deep = os.path.join(tmp, "deep.json")
+            with open(deep, "w", encoding="utf-8") as fh:
+                fh.write('{"schema": 1, "documents": ' + "[" * 200000 + "]" * 200000 + "}")
+            self.assertEqual(self.lex.load_creed_originals([deep]), {})
+            self.assertEqual(self.lex.load_creed_originals([deep, ALIGNED_JSON]), self.lex.CREED_ORIGINALS)
+            with mock.patch.object(self.lex.json, "load", side_effect=MemoryError):
+                self.assertEqual(self.lex.load_creed_originals([ALIGNED_JSON]), {})
+
+    def test_updated_data_dir_copy_wins_over_bundled(self):
+        import tempfile
+        from unittest import mock
+        updated = {"schema": 1, "documents": {"Updated Creed": {"language": "Latin", "sections": {
+            "Only": [{"n": 1, "orig": "Credo.", "eng": "I believe."}]}}}}
+        with tempfile.TemporaryDirectory() as data_dir, tempfile.TemporaryDirectory() as bundled_dir:
+            with open(os.path.join(bundled_dir, "creeds-aligned.json"), "w", encoding="utf-8") as fh, \
+                    open(ALIGNED_JSON, encoding="utf-8") as src:
+                fh.write(src.read())
+            with mock.patch.object(self.lex, "DATA_DIR", data_dir), \
+                    mock.patch.object(self.lex, "RUNTIME_DATA_DIR", bundled_dir):
+                # No updated copy yet: the bundled file is used.
+                self.assertEqual(self.lex.load_creed_originals(), self.lex.CREED_ORIGINALS)
+                with open(os.path.join(data_dir, "creeds-aligned.json"), "w", encoding="utf-8") as fh:
+                    json.dump(updated, fh)
+                self.assertEqual(self.lex.load_creed_originals(),
+                                 {"Updated Creed": {"language": "Latin", "sections": {"Only": [("Credo.", "I believe.")]}}})
+                # A broken updated copy falls back to the bundled one.
+                with open(os.path.join(data_dir, "creeds-aligned.json"), "w", encoding="utf-8") as fh:
+                    fh.write("{not json")
+                self.assertEqual(self.lex.load_creed_originals(), self.lex.CREED_ORIGINALS)
+
     def test_plain_and_no_color_output_keeps_pairs(self):
         import subprocess
         env = dict(os.environ, NO_COLOR="1", COLUMNS="60")

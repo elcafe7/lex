@@ -89,7 +89,9 @@ bilingual creeds (Apostles' and Athanasian in Latin, Nicene and Chalcedonian in
 Greek). Shape: `{"schema": 1, "documents": {topic: {"language", "sections":
 {title: [{"n", "orig", "eng"}]}}}}`, with `n` continuous through each document.
 Joined with spaces, a section's `eng` lines equal its English text in
-`creeds.db`. The CLI loads it into `CREED_ORIGINALS`; Lex Web can read the same
+`creeds.db`. The CLI loads it into `CREED_ORIGINALS`, preferring a copy in the
+active data folder (from `lex update`) over the bundled one, and falls back to
+English-only if neither parses. Lex Web can read the same
 file. It ships in the release archive and is listed in `manifest.json`.
 
 ### `places.db`

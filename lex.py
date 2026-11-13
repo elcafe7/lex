@@ -1049,11 +1049,16 @@ CREED_ALIGNED_MAX_BYTES = 1024 * 1024
 def load_creed_originals(paths=None):
     """Load aligned creed lines as {topic: {"language", "sections": {title: [(orig, eng)]}}}.
 
-    Looks in the bundled runtime-data/ first, then the active data folder.
-    A missing or malformed file yields {} so creeds fall back to English-only.
+    Looks in the active data folder first, so a copy fetched by `lex update`
+    wins, then in the bundled runtime-data/. A missing or malformed file
+    (including one nested deeply enough to exhaust the parser) yields {} so
+    creeds fall back to English-only.
     """
     if paths is None:
-        paths = [os.path.join(RUNTIME_DATA_DIR, CREED_ALIGNED_FILE), get_lex_path(CREED_ALIGNED_FILE)]
+        paths = [get_lex_path(CREED_ALIGNED_FILE)]
+        bundled = os.path.join(RUNTIME_DATA_DIR, CREED_ALIGNED_FILE)
+        if os.path.abspath(bundled) != os.path.abspath(paths[0]):
+            paths.append(bundled)
     for path in paths:
         try:
             if not os.path.isfile(path) or os.path.getsize(path) > CREED_ALIGNED_MAX_BYTES:
@@ -1074,7 +1079,7 @@ def load_creed_originals(paths=None):
                     sections[str(title)] = pairs
                 documents[str(topic)] = {"language": str(doc["language"]), "sections": sections}
             return documents
-        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError, MemoryError):
             continue
     return {}
 
