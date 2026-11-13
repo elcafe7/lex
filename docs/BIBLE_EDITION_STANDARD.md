@@ -25,6 +25,7 @@ Examples:
 - `bible_versions/kjv.db`
 - `bible_versions/nasb.db`
 - `bible_versions/dra.db`
+- `bible_versions/brenton.db`
 
 ## Required Tables
 
