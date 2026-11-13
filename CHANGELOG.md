@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Fixed: book scopes in other editions (#32).** `lex search <term> -<book>`
+  now resolves the book to the active edition's own identifier, so
+  `lex search enemy -psalms` works in the ESV and NASB ("Psalm"), every book
+  scope works in Geneva ("Gen", "Ps", ...), and the Vulgate's "I Samuel",
+  "Revelation of John" and the LXX's "1 Samuel (1 Kingdoms)" are found.
+  Deuterocanonical scopes (`-tobit`, `-sirach`, `-1-maccabees`,
+  `-prayer-of-manasseh`, `-psalms-of-solomon`, ...) and the new
+  `-apocrypha` / `-deuterocanon` group cover every book in KJV 1611,
+  Douay-Rheims, Vulgate, Geneva and LXX; any stored book also works by its
+  own name. A scope the edition doesn't have is reported instead of silently
+  returning nothing (`--json`: exit 3 `not_found`).
+
 - **New: `--json` machine-readable output (#16).** One compact JSON document on
   stdout (`schema_version` 1, see `docs/json-output.md`) for `read`, `study`
   (ESV direct, other editions labelled proxy; LXX/Vulgate when their study data

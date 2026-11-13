@@ -149,8 +149,10 @@ Whole chapters have `verse_start`/`verse_end` set to the chapter's range. Exit 3
 - `corrections` lists spelling fixes applied (`{"from":"grase","to":"grace"}`);
   `effective_query` is what was searched.
 - `scope` is `null` for the whole Bible; otherwise the scope flag (`-nt`, `-ot`, `-gospels`,
-  a book…) and the books searched.
-- `--page N`, `--limit N` (default 10). No results is exit 3 `not_found`.
+  a book…) and the books searched, as the active edition stores them (ESV
+  `"Psalm"`, Geneva `"Ps"`), matching the `book` field of each result.
+- `--page N`, `--limit N` (default 10). No results is exit 3 `not_found`; so is
+  a book scope the edition doesn't have (`"Book scope Tobit is not in edition kjv"`).
 
 ### `define` — `lex --json define <term>` (also `-d <term>`)
 
