@@ -53,3 +53,37 @@ written into the report.
 - `ENABLE_VIRUSTOTAL` = `true` plus the `VT_API_KEY` secret turns on the
   VirusTotal check and its links in the report. Add the secret first:
   `ENABLE_VIRUSTOTAL` = `true` without `VT_API_KEY` blocks every release.
+
+## 4. Scorecard token for Branch-Protection (optional)
+
+The Scorecard workflow uses a repo secret `SCORECARD_TOKEN` when it exists, so
+it can read every branch protection setting (issue #37). Without it the
+workflow still runs on the default token. The token is read-only and only
+reaches this one repo. Create it yourself on your own device. Never paste the
+value anywhere except the GitHub secret form below.
+
+1. Open <https://github.com/settings/personal-access-tokens/new> (signed in
+   as `elcafe7`).
+2. **Token name:** `OpenSSF Scorecard - elcafe7/lex`.
+   **Expiration:** Custom, one year from today (the maximum). GitHub emails
+   you before it expires; repeat these steps then.
+3. **Resource owner:** `elcafe7`. **Repository access:** *Only select
+   repositories* > `elcafe7/lex`.
+4. **Repository permissions:** set **Administration** to **Read-only**.
+   **Metadata** switches to **Read-only** automatically. Leave every other
+   permission at **No access**, and leave all account permissions at
+   **No access**.
+5. Click **Generate token** and copy it.
+6. Open <https://github.com/elcafe7/lex/settings/secrets/actions/new>.
+   **Name:** `SCORECARD_TOKEN`. **Secret:** paste the token. Click
+   **Add secret**.
+7. Run the Scorecard workflow once by hand: **Actions > Scorecard > Run
+   workflow** on `main` (or wait for Monday's run).
+
+To check: the run's "Run Scorecard" step passes, and the Branch-Protection
+alert in Code scanning shows the newest details. To undo: delete the secret
+and revoke the token at <https://github.com/settings/personal-access-tokens>.
+The workflow then falls back to the default token.
+
+What the token can and can't fix, and the accepted Code-Review risk:
+[docs/SCORECARD.md](../docs/SCORECARD.md).

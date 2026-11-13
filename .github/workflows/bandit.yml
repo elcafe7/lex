@@ -1,13 +1,17 @@
 # Bandit: Python static analysis (SAST) for lex.py, indexer.py, scripts/ and
 # tests/, on every pull request, every push to main, weekly, and on demand.
 # The release workflow (release.yml) runs the same check before publishing.
+# This workflow also writes a SARIF report and uploads it to the Security >
+# Code scanning tab (category bandit). The release gate is unchanged.
 #
 # Gate: any finding of medium or high severity, at any confidence, fails;
 # low severity is listed as information. No baseline file and no skipped
 # tests: a proven false positive needs an inline "# nosec BXXX  # reason: ..."
 # comment, reviewed in its PR. Bandit is installed from the hash-pinned
-# .github/requirements/bandit-requirements.txt (pip --require-hashes).
-# Reports (bandit.json, bandit.txt, bandit.md) are kept as a workflow artifact.
+# .github/requirements/bandit-requirements.txt (pip --require-hashes),
+# including the bandit[sarif] extra used only for the Code scanning upload.
+# Reports (bandit.json, bandit.txt, bandit.md, bandit.sarif) are kept as a
+# workflow artifact.
 #
 # Free tools only. Every action is pinned to a full commit SHA.
 name: Bandit (Python SAST)
@@ -34,6 +38,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      security-events: write  # upload SARIF to code scanning
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -66,6 +71,14 @@ jobs:
           if [ -f bandit-report/bandit.md ]; then cat bandit-report/bandit.md >> "$GITHUB_STEP_SUMMARY"; fi
           exit "$rc"
 
+      - name: Write a SARIF report
+        if: always()
+        run: |
+          mkdir -p bandit-report
+          "$RUNNER_TEMP/bandit-venv/bin/bandit" -q -r . \
+            -x "./.git,./dist,./node_modules,./.venv,./venv" \
+            -f sarif -o bandit-report/bandit.sarif --exit-zero
+
       - name: Keep the Bandit reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -74,3 +87,10 @@ jobs:
           path: bandit-report/
           if-no-files-found: warn
           retention-days: 90
+
+      - name: Upload to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: bandit-report/bandit.sarif
+          category: bandit

@@ -2,6 +2,14 @@
 # Results go to the Security tab (code scanning) and, with publish_results,
 # to api.scorecard.dev so the README badge can show the score.
 # Every action is pinned to a full commit SHA (Dependabot keeps them current).
+#
+# Branch-Protection (issue #37): when the repo secret SCORECARD_TOKEN is set,
+# Scorecard authenticates with it instead of the default GITHUB_TOKEN. It must
+# be a fine-grained PAT limited to elcafe7/lex with only Administration:
+# Read-only (plus the automatic Metadata: Read-only), so Scorecard can read
+# the branch protection rules and ruleset settings. Without the secret the
+# workflow falls back to GITHUB_TOKEN and still runs. Setup steps:
+# security/MANUAL-STEPS.md; accepted gaps: docs/SCORECARD.md.
 name: Scorecard
 
 on:
@@ -38,6 +46,8 @@ jobs:
           results_file: results.sarif
           results_format: sarif
           publish_results: true
+          # Read-only fine-grained PAT when configured, else the default token.
+          repo_token: ${{ secrets.SCORECARD_TOKEN || github.token }}
 
       - name: Keep results as a workflow artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
