@@ -1,0 +1,53 @@
+# Ruff: Python code-quality lint (warnings) for lex.py, indexer.py, scripts/
+# and tests/, on every pull request, every push to main, and on demand.
+#
+# Gate: any Ruff finding fails the job. The rule set lives in pyproject.toml
+# ([tool.ruff.lint]). A proven false positive needs an inline
+# "# noqa: XXXX  # reason: ..." comment, reviewed in its PR. Ruff is
+# installed from the hash-pinned .github/requirements/ruff-requirements.txt
+# (pip --require-hashes).
+#
+# Free tools only. Every action is pinned to a full commit SHA.
+name: Lint (Ruff)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Ruff (hash-pinned)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ruff-venv"
+          "$RUNNER_TEMP/ruff-venv/bin/python" -m pip install --quiet --require-hashes --no-deps \
+            -r .github/requirements/ruff-requirements.txt
+          "$RUNNER_TEMP/ruff-venv/bin/ruff" --version
+
+      - name: Lint with Ruff
+        run: |
+          "$RUNNER_TEMP/ruff-venv/bin/ruff" check --output-format=github .

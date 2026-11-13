@@ -1,7 +1,7 @@
 # Keeps the SHA-pinned actions in .github/workflows current. Dependabot
 # updates the commit SHA and the "# vX.Y.Z" version comment together.
 #
-# pip: only .github/requirements (hash-pinned CI tooling: Bandit). The app's
+# pip: only .github/requirements (hash-pinned CI tooling: Bandit, Ruff). The app's
 # own Python dependencies have no lockfile and are unpinned (or ">=" floors),
 # so version-update PRs would have nothing to bump there. Vulnerable Python
 # packages are still covered by Dependabot alerts (dependency graph) and by

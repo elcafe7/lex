@@ -172,8 +172,8 @@ class BanditReportTests(unittest.TestCase):
         p = run(WRITER, str(tmp / "out"), env=env)
         self.assertEqual(p.returncode, 0, p.stderr)
         d = tmp / "out" / "v1.2.3_20261109T205501Z"
-        rows = [l for l in (d / "summary.md").read_text().splitlines()
-                if l.startswith("| Bandit (Python static analysis) |")]
+        rows = [line for line in (d / "summary.md").read_text().splitlines()
+                if line.startswith("| Bandit (Python static analysis) |")]
         self.assertEqual(len(rows), 1)
         return d, rows[0]
 
@@ -233,8 +233,8 @@ class GitleaksReportTests(unittest.TestCase):
         p = run(WRITER, str(tmp / "out"), env=env)
         self.assertEqual(p.returncode, 0, p.stderr)
         d = tmp / "out" / "v1.2.3_20261109T205501Z"
-        rows = [l for l in (d / "summary.md").read_text().splitlines()
-                if l.startswith("| Gitleaks (secret scan) |")]
+        rows = [line for line in (d / "summary.md").read_text().splitlines()
+                if line.startswith("| Gitleaks (secret scan) |")]
         self.assertEqual(len(rows), 1)
         return d, rows[0]
 
@@ -295,7 +295,7 @@ class VirusTotalWordingTests(unittest.TestCase):
         return d, (d / "summary.md").read_text()
 
     def _vt_row(self, summary: str) -> str:
-        rows = [l for l in summary.splitlines() if l.startswith("| VirusTotal |")]
+        rows = [line for line in summary.splitlines() if line.startswith("| VirusTotal |")]
         self.assertEqual(len(rows), 1, summary)
         return rows[0]
 
@@ -331,7 +331,7 @@ class VirusTotalWordingTests(unittest.TestCase):
             self._assert_not_scanned(d, row)
 
     def test_missing_key_note(self):
-        note = Path(t := tempfile.mkdtemp()) / "note.md"
+        note = Path(tempfile.mkdtemp()) / "note.md"
         p = run(ROOT / "scripts" / "virustotal_not_run.sh", str(note), "missing-key")
         self.assertEqual(p.returncode, 0, p.stderr)
         text = note.read_text()
@@ -512,8 +512,8 @@ class WorkflowBanditTests(unittest.TestCase):
 
     def test_requirements_are_hash_pinned(self):
         req = (ROOT / ".github" / "requirements" / "bandit-requirements.txt").read_text()
-        pkgs = [l for l in req.splitlines() if l and not l.startswith((" ", "#"))]
-        self.assertTrue(any(l.startswith("bandit==") for l in pkgs))
+        pkgs = [line for line in req.splitlines() if line and not line.startswith((" ", "#"))]
+        self.assertTrue(any(p.startswith("bandit==") for p in pkgs))
         for line in pkgs:
             self.assertIn("==", line)
         self.assertGreaterEqual(req.count("--hash=sha256:"), len(pkgs))

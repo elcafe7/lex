@@ -4,6 +4,7 @@ Bible Packager Tool
 Converts structured Bible data (JSON, XML, CSV, VPL) into standardized SQLite
 databases compatible with the Lex CLI engine.
 """
+import csv
 import sqlite3
 import json
 import os
@@ -219,7 +220,8 @@ def package_nasb_1995(json_file, db_path):
         data = json.load(f)
         for verse_data in data:
             ref_raw = verse_data.get("r")
-            if not ref_raw: continue
+            if not ref_raw:
+                continue
             
             parts = ref_raw.split(":")
             if len(parts) == 4 and parts[3] == "0":
@@ -243,9 +245,6 @@ def package_nasb_1995(json_file, db_path):
     conn.close()
     print(f"Packaged NASB 1995 into {db_path}")
 
-import csv
-import sqlite3
-# ... (rest of imports)
 
 def package_lxx(source_db_path, target_db_path):
     """Packages Greek Septuagint (LXX) from eliranwong's SQLite format."""
@@ -257,7 +256,6 @@ def package_lxx(source_db_path, target_db_path):
     }
     
     source_conn = sqlite3.connect(source_db_path)
-    source_cursor = source_conn.cursor()
     
     # Get book mapping from the source DB
     # eliranwong format uses book_number in 'verses', names in 'books'
@@ -347,13 +345,17 @@ def package_geneva_1587(xml_path, db_path):
                 
                 # Extract text excluding notes but including their tails
                 text_parts = []
-                if verse.text: text_parts.append(verse.text)
+                if verse.text:
+                    text_parts.append(verse.text)
                 for elem in verse:
                     if elem.tag == f"{{{ns['osis']}}}note":
-                        if elem.tail: text_parts.append(elem.tail)
+                        if elem.tail:
+                            text_parts.append(elem.tail)
                     else:
-                        if elem.text: text_parts.append(elem.text)
-                        if elem.tail: text_parts.append(elem.tail)
+                        if elem.text:
+                            text_parts.append(elem.text)
+                        if elem.tail:
+                            text_parts.append(elem.tail)
                 
                 raw_text = "".join(text_parts).replace('\n', ' ').strip()
                 raw_text = re.sub(r'\s+', ' ', raw_text)
@@ -526,11 +528,19 @@ if __name__ == "__main__":
     source = sys.argv[2]
     target = sys.argv[3]
     
-    if b_type == "kjv_modern": package_kjv_modern(source, target)
-    elif b_type == "kjv_1611": package_kjv_1611(source, target)
-    elif b_type == "nasb95": package_nasb_1995(source, target)
-    elif b_type == "gen1587": package_geneva_1587(source, target)
-    elif b_type == "lxx": package_lxx(source, target)
-    elif b_type == "vulg": package_vulgate(source, target)
-    elif b_type == "dra1899": package_dra_1899(source, target)
-    else: print(f"Unknown type: {b_type}")
+    if b_type == "kjv_modern":
+        package_kjv_modern(source, target)
+    elif b_type == "kjv_1611":
+        package_kjv_1611(source, target)
+    elif b_type == "nasb95":
+        package_nasb_1995(source, target)
+    elif b_type == "gen1587":
+        package_geneva_1587(source, target)
+    elif b_type == "lxx":
+        package_lxx(source, target)
+    elif b_type == "vulg":
+        package_vulgate(source, target)
+    elif b_type == "dra1899":
+        package_dra_1899(source, target)
+    else:
+        print(f"Unknown type: {b_type}")
