@@ -11,8 +11,11 @@
   `-prayer-of-manasseh`, `-psalms-of-solomon`, ...) and the new
   `-apocrypha` / `-deuterocanon` group cover every book in KJV 1611,
   Douay-Rheims, Vulgate, Geneva and LXX; any stored book also works by its
-  own name. A scope the edition doesn't have is reported instead of silently
-  returning nothing (`--json`: exit 3 `not_found`).
+  own name, and LXX names such as `-3-kingdoms` / `-joshua-a` work too. A
+  scope the edition doesn't have is reported instead of silently returning
+  nothing (`--json`: exit 3 `not_found`), and an unknown scope flag such as
+  `-foobar` is reported instead of being searched as a word (`--json`: exit 2
+  `usage`).
 
 - **New: `--json` machine-readable output (#16).** One compact JSON document on
   stdout (`schema_version` 1, see `docs/json-output.md`) for `read`, `study`

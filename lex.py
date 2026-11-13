@@ -1055,6 +1055,9 @@ BOOK_SCOPE_GROUPS = {
     "deuterocanonical": DEUTEROCANON_BOOKS,
 }
 
+# A single-dash word token in a search query that is not a known scope.
+UNKNOWN_SCOPE_TOKEN_RE = re.compile(r"^-(?!-)[A-Za-z][A-Za-z0-9-]*$")
+
 _ROMAN_BOOK_PREFIX = re.compile(r"^(iv|iii|ii|i)\s+(?=\S)", re.IGNORECASE)
 _ROMAN_VALUES = {"i": "1", "ii": "2", "iii": "3", "iv": "4"}
 
@@ -2028,6 +2031,16 @@ class LexAgent:
                     "label": stored,
                     "books": [stored],
                 }
+        # Septuagint names (`-3-kingdoms`, `-joshua-a`, `-esdras-a`). When the
+        # active edition lacks the book, the scope still parses so search can
+        # say so instead of treating the flag as a search word.
+        target = (LXX_REFERENCE_BOOK_ALIASES.get(scope)
+                  or LXX_REFERENCE_BOOK_ALIASES.get(scope.replace("-", "")))
+        if target:
+            return {
+                "label": target,
+                "books": [target],
+            }
         return None
 
     def resolve_scope_books(self, scope):
@@ -2059,10 +2072,15 @@ class LexAgent:
             tokens = query.split()
         kept = []
         scope = None
+        self.last_search_scope_unknown = None
         for token in tokens:
             parsed_scope = self.parse_book_scope(token)
             if parsed_scope:
                 scope = parsed_scope
+            elif UNKNOWN_SCOPE_TOKEN_RE.match(token):
+                # `-foobar`: looks like a scope flag but names no book or
+                # group; never search it as a word or silently drop it.
+                self.last_search_scope_unknown = token
             else:
                 kept.append(token)
         return " ".join(kept).strip(), scope
@@ -5009,6 +5027,8 @@ text from the active Bible version when available.
         search_query, scope = self.parse_search_query_and_scope(query)
         scope = self.resolve_scope_books(scope)
         self.last_search_scope_missing = None
+        if getattr(self, "last_search_scope_unknown", None):
+            return None
         if scope and not scope["books"]:
             # e.g. `-tobit` in the KJV, `-romans` in the Greek LXX.
             self.last_search_scope_missing = scope["label"]
@@ -6745,6 +6765,14 @@ def json_web(agent, edition, query, limit):
 def json_search(agent, edition, query, page, limit):
     state = agent.resolve_search(query, page=page or 1, limit=limit or 10)
     if not state:
+        unknown_scope = getattr(agent, "last_search_scope_unknown", None)
+        if unknown_scope:
+            raise JsonExit(
+                "usage",
+                f"Unknown book scope {unknown_scope}",
+                JSON_EXIT_USAGE,
+                hint="Use a book or group such as -psalms, -nt, -gospels, -apocrypha; see `lex search`.",
+            )
         missing_scope = getattr(agent, "last_search_scope_missing", None)
         if missing_scope:
             raise JsonExit(
@@ -7771,8 +7799,11 @@ def main():
         if not query:
             sys.exit(1)
         if not agent.display_search(query, page=args.page, limit=args.limit or 10):
+            unknown_scope = getattr(agent, "last_search_scope_unknown", None)
             missing_scope = getattr(agent, "last_search_scope_missing", None)
-            if missing_scope:
+            if unknown_scope:
+                console.print(f"[warning]Unknown book scope {rich_escape(unknown_scope)}; use a book or group such as -psalms, -nt or -apocrypha (see `lex search`).[/]")
+            elif missing_scope:
                 edition_name = BIBLE_VERSIONS.get(agent.bible_prefix, {}).get("name", agent.bible_prefix)
                 console.print(f"[warning]{rich_escape(missing_scope)} is not in {rich_escape(edition_name)}; try another edition with -B.[/]")
             else:

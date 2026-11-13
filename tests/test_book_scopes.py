@@ -176,6 +176,41 @@ class ScopeIndexTest(unittest.TestCase):
                 with self.subTest(edition=edition, token=token):
                     self.assertEqual(agent.resolve(token)["books"], [stored])
 
+    def test_lxx_variant_names(self):
+        agent = FakeAgent(LXX + ["Joshua A"])  # some LXX builds split Joshua A/B
+        for token, stored in {"-3-kingdoms": "1 Kings (3 Kingdoms)", "-iii-kingdoms": "1 Kings (3 Kingdoms)",
+                              "-4-kingdoms": "2 Kings (4 Kingdoms)", "-1-kingdoms": "1 Samuel (1 Kingdoms)",
+                              "-joshua-a": "Joshua A", "-joshua-b": "Joshua B"}.items():
+            with self.subTest(token=token):
+                self.assertEqual(agent.resolve(token)["books"], [stored])
+
+    def test_lxx_name_absent_from_edition_is_reported_not_searched(self):
+        # The installed lxx.db only carries Joshua B; `-joshua-a` must still
+        # parse as a scope (so search reports it) rather than become a word.
+        agent = FakeAgent([b for b in LXX if b != "Joshua A"])
+        resolved = agent.resolve("-joshua-a")
+        self.assertEqual((resolved["label"], resolved["books"]), ("Joshua A", []))
+        self.assertEqual(FakeAgent(STANDARD).resolve("-3-kingdoms")["books"], [])
+
+    def test_unknown_scope_token_is_flagged(self):
+        agent = FakeAgent(STANDARD)
+        query, scope = agent.parse_search_query_and_scope("love -foobar")
+        self.assertEqual((query, scope), ("love", None))
+        self.assertEqual(agent.last_search_scope_unknown, "-foobar")
+        # Numbers and plain words are untouched.
+        query, scope = agent.parse_search_query_and_scope("love -1 world")
+        self.assertEqual(query, "love -1 world")
+        self.assertIsNone(agent.last_search_scope_unknown)
+
+    def test_psalm_and_psalms_in_every_edition(self):
+        for edition, books in self.EDITIONS.items():
+            agent = FakeAgent(books)
+            for token in ("-psalm", "-psalms"):
+                with self.subTest(edition=edition, token=token):
+                    hits = agent.resolve(token)["books"]
+                    self.assertEqual(len(hits), 1)
+                    self.assertIn(hits[0], books)
+
     def test_missing_books_resolve_to_empty_not_wrong_book(self):
         kjv = FakeAgent(STANDARD)
         self.assertEqual(kjv.resolve("-tobit")["books"], [])
@@ -275,6 +310,52 @@ class InstalledEditionScopeTest(unittest.TestCase):
                     )
                     self.assertGreater(rows[0][0], 0)
 
+    def test_every_stored_book_reachable_by_its_own_name(self):
+        for edition in self.editions:
+            agent = lex.LexAgent(edition)
+            for book in self.stored_books(edition):
+                if book == "Wisdom":
+                    continue  # `-wisdom` is the wisdom-literature group; `-wisdom-of-solomon` is tested
+                with self.subTest(edition=edition, book=book):
+                    resolved = agent.resolve_scope_books(agent.parse_book_scope(scope_token(book)))
+                    self.assertIsNotNone(resolved, scope_token(book))
+                    self.assertIn(book, resolved["books"])
+
+    def test_issue_32_cases_against_installed_dbs(self):
+        cases = {
+            "gen": {"-genesis": "Gen", "-psalms": "Ps", "-psalm": "Ps"},
+            "kj16": {"-tobit": "Tobit"},
+            "dra": {"-1-maccabees": "1 Maccabees", "-1maccabees": "1 Maccabees", "-1-macc": "1 Maccabees"},
+            "vulg": {"-i-maccabees": "I Maccabees", "-1-maccabees": "I Maccabees",
+                     "-laodiceans": "Laodiceans", "-prayer-of-manasses": "Prayer of Manasses",
+                     "-prayer-of-manasseh": "Prayer of Manasses"},
+            "lxx": {"-3-kingdoms": "1 Kings (3 Kingdoms)", "-1-kings": "1 Kings (3 Kingdoms)",
+                    "-psalms-of-solomon": "Psalms of Solomon", "-joshua-b": "Joshua B"},
+        }
+        for edition in self.editions:
+            agent = lex.LexAgent(edition)
+            for token in ("-psalm", "-psalms"):
+                with self.subTest(edition=edition, token=token):
+                    hits = agent.resolve_scope_books(agent.parse_book_scope(token))["books"]
+                    self.assertEqual(len(hits), 1, hits)
+            for token, stored in cases.get(edition, {}).items():
+                with self.subTest(edition=edition, token=token):
+                    hits = agent.resolve_scope_books(agent.parse_book_scope(token))["books"]
+                    self.assertEqual(hits, [stored])
+
+    def test_common_term_searches_hit_scoped_books(self):
+        cases = [("kjv", "enemy -psalms"), ("esv", "enemy -psalm"), ("nasb", "enemy -psalms"),
+                 ("gen", "beginning -genesis"), ("kj16", "Tobias -tobit"), ("dra", "Judas -1-maccabees"),
+                 ("vulg", "Judas -i-maccabees"), ("vulg", "Judas -1-maccabees"), ("lxx", "κύριος -psalms-of-solomon"),
+                 ("lxx", "βασιλεὺς -3-kingdoms")]
+        for edition, query in cases:
+            if edition not in self.editions:
+                continue
+            with self.subTest(edition=edition, query=query):
+                state = lex.LexAgent(edition).resolve_search(query, limit=1)
+                self.assertIsNotNone(state)
+                self.assertGreater(state["total"], 0)
+
     def test_esv_psalms_search_returns_results(self):
         if "esv" not in self.editions:
             self.skipTest("esv not installed")
@@ -322,6 +403,18 @@ class ScopeCliTest(unittest.TestCase):
                 error = json.loads(result.stderr or result.stdout)["error"]
                 self.assertEqual(error["code"], "not_found")
                 self.assertIn("Tobit", error["message"])
+
+    def test_unknown_scope_message(self):
+        result = self.run_lex("--plain", "-B", "kjv", "search", "love", "-foobar")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Unknown book scope -foobar", result.stdout + result.stderr)
+
+    def test_unknown_scope_json(self):
+        result = self.run_lex("--json", "-B", "kjv", "search", "love", "-foobar")
+        self.assertEqual(result.returncode, 2)
+        error = json.loads(result.stderr or result.stdout)["error"]
+        self.assertEqual(error["code"], "usage")
+        self.assertIn("-foobar", error["message"])
 
     def test_json_scope_books_are_stored_identifiers(self):
         if not os.path.exists(os.path.join(BIBLE_DIR, "esv.db")):

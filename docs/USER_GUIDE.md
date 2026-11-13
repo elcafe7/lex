@@ -181,7 +181,9 @@ Scopes use the active edition's own book names, so `-psalms` finds the ESV's
 Douay-Rheims, Vulgate, Geneva, Greek LXX), and any book an edition stores
 works by its own name (`-laodiceans`, `-joshua-a`, `-psalms-of-solomon`).
 `-wisdom` is the wisdom-literature group; use `-wisdom-of-solomon` or `-wis`
-for the book. If the edition doesn't have the book, Lex says so.
+for the book. LXX names such as `-3-kingdoms` also work. If the edition
+doesn't have the book, Lex says so, and a scope flag Lex doesn't recognise
+(`-foobar`) is reported rather than searched as a word.
 
 In an interactive terminal, search uses a compact action bar:
 

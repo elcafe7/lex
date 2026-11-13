@@ -153,6 +153,8 @@ Whole chapters have `verse_start`/`verse_end` set to the chapter's range. Exit 3
   `"Psalm"`, Geneva `"Ps"`), matching the `book` field of each result.
 - `--page N`, `--limit N` (default 10). No results is exit 3 `not_found`; so is
   a book scope the edition doesn't have (`"Book scope Tobit is not in edition kjv"`).
+  An unrecognised scope flag (`-foobar`) is exit 2 `usage`
+  (`"Unknown book scope -foobar"`, with a `hint`).
 
 ### `define` — `lex --json define <term>` (also `-d <term>`)
 
