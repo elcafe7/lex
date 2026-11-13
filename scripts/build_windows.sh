@@ -1,27 +1,37 @@
 #!/bin/bash
-# Lex Windows Build Script (requires wine & python installed in wine, or run on Windows)
-# This is a helper for CI/CD or manual builds of the standalone EXE
+# Lex Windows build script: builds a standalone one-file lex.exe with
+# PyInstaller. Run it on Windows (Git Bash) or under wine with Python
+# installed; it is a manual helper, not part of the release workflow.
+#
+# Every build dependency, including PyInstaller and the app's runtime
+# packages, is installed from the hash-locked
+# .github/requirements/windows-build-requirements.txt with
+# pip --require-hashes (OpenSSF Scorecard Pinned-Dependencies). Dependabot
+# keeps that file current. To change a dependency, edit the .in file next to
+# it and re-run the uv pip compile command written at the top of it.
+set -euo pipefail
 
-VERSION="2.3.4"
-REPO_DIR="/home/n8te/lex"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REQUIREMENTS="$REPO_DIR/.github/requirements/windows-build-requirements.txt"
 DIST_DIR="$REPO_DIR/dist/windows"
+PYTHON="${PYTHON:-python}"
 
-mkdir -p $DIST_DIR
+VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$REPO_DIR/pyproject.toml" | head -n 1)"
 
-echo "Preparing build for Lex v$VERSION..."
+mkdir -p "$DIST_DIR"
+cd "$REPO_DIR"
 
-# We use pyinstaller to create a single-file executable
-# --onefile: Bundle everything into one EXE
-# --name: Name of the final executable
-# --icon: Path to icon (if available)
-# --add-data: Include static assets if they are small enough, 
-#            but for Lex we rely on the auto-downloader for DBs.
+echo "Preparing build for Lex v${VERSION:-unknown}..."
 
-pip install pyinstaller rich python-docx reportlab
+# Hash-locked install: pip refuses any package whose hash is not in the file.
+"$PYTHON" -m pip install --require-hashes -r "$REQUIREMENTS"
 
-pyinstaller --onefile \
+# --onefile: bundle everything into one EXE. Databases are not bundled; Lex
+# downloads them on first run.
+"$PYTHON" -m PyInstaller --onefile \
             --name lex \
             --clean \
+            --distpath "$DIST_DIR" \
             lex.py
 
-echo "Build complete. Output available at $REPO_DIR/dist/lex.exe"
+echo "Build complete. Output available at $DIST_DIR/lex.exe"
