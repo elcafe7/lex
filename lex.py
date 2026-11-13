@@ -4598,20 +4598,28 @@ text from the active Bible version when available.
         return aligned
 
     def render_creed_aligned(self, language, aligned, title=None):
-        """Numbered original/English line pairs: columns, or stacked when narrow."""
+        """Numbered original/English line pairs: columns, or stacked when narrow.
+
+        The line number is printed on both sides (before the original and
+        before the English) in the wide and the stacked layout.
+        """
         if console.width >= CREED_ALIGNED_MIN_WIDTH:
             table = Table(title=title, box=box.ROUNDED, expand=True)
+            # The number heads both the original and the English column, so
+            # each side is self-labelled.
             table.add_column("#", style="verse.ref", justify="right", no_wrap=True)
             table.add_column(language, style="cyan", overflow="fold", ratio=1)
+            table.add_column("#", style="verse.ref", justify="right", no_wrap=True)
             table.add_column("English", style="text", overflow="fold", ratio=1)
             for index, section in enumerate(aligned):
                 if index:
                     table.add_section()
-                table.add_row("", Text(section["title"], style="bold green"), "")
+                table.add_row("", Text(section["title"], style="bold green"), "", "")
                 for line in section["lines"]:
                     table.add_row(
                         str(line["n"]),
                         Text(line["original"] or CREED_ORIGINAL_MISSING),
+                        str(line["n"]),
                         Text(line["english"]),
                     )
             console.print(table)
@@ -4628,7 +4636,7 @@ text from the active Bible version when available.
                 if index:
                     grid.add_row("", "")
                 grid.add_row(str(line["n"]), Text(line["original"] or CREED_ORIGINAL_MISSING, style="cyan"))
-                grid.add_row("", Text(line["english"], style="text"))
+                grid.add_row(str(line["n"]), Text(line["english"], style="text"))
             console.print(grid)
 
     def display_creed_note(self, topic):

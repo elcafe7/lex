@@ -112,12 +112,17 @@ class CreedAlignmentTest(unittest.TestCase):
     def test_wide_view_has_number_original_and_english_columns(self):
         topic = "The Nicene Creed"
         out = self.render(140, self.agent.display_creed_document, topic, self.agent.build_creed_sections(topic))
-        self.assertRegex(out, r"#\s+│?\s*Greek\s+│?\s*English")
+        self.assertRegex(out, r"#\s+│?\s*Greek\s+│?\s*#\s+│?\s*English")
         for title in self.lex.CREED_ORIGINALS[topic]["sections"]:
             self.assertIn(title, out)
         row = next(l for l in out.splitlines() if re.match(r"^\W*1\W", l))
-        self.assertIn("Πιστεύομεν", row)
-        self.assertIn("We believe in one God", row)
+        # The number labels both sides: before the Greek and again before the English.
+        self.assertRegex(row, r"^\W*1\W+Πιστεύομεν.*\W1\W+We believe in one God")
+        for line in self.aligned(topic)[0]["lines"]:
+            self.assertTrue(any(
+                re.search(rf"^\W*{line['n']}\W.*\W{line['n']}\W+{re.escape(line['english'].split()[0])}", l)
+                for l in out.splitlines()
+            ), line)
 
     def test_narrow_view_stacks_each_pair(self):
         topic = "Athanasian Creed"
@@ -128,14 +133,18 @@ class CreedAlignmentTest(unittest.TestCase):
             for line in section["lines"]:
                 head = re.compile(rf"^\s*{line['n']} {re.escape(line['original'].split()[0])}")
                 index = next(i for i, text in enumerate(lines) if head.match(text))
-                # Original, then its English, before the next number or section starts.
-                block = [lines[index]]
+                # Numbered original, then the same number with its English, before
+                # the next number or section starts.
+                blocks = [[lines[index]]]
                 for text in lines[index + 1:]:
-                    if re.match(r"^\s*\d+ ", text) or "─" in text:
+                    if "─" in text or (re.match(r"^\s*\d+ ", text) and len(blocks) == 2):
                         break
-                    block.append(text)
-                joined = squash(" ".join(block))
-                self.assertEqual(joined, f"{line['n']} {squash(line['original'])} {squash(line['english'])}")
+                    if re.match(r"^\s*\d+ ", text):
+                        blocks.append([])
+                    blocks[-1].append(text)
+                self.assertEqual(len(blocks), 2, blocks)
+                self.assertEqual(squash(" ".join(blocks[0])), f"{line['n']} {squash(line['original'])}")
+                self.assertEqual(squash(" ".join(blocks[1])), f"{line['n']} {squash(line['english'])}")
 
     def test_missing_original_line_keeps_its_number(self):
         aligned = [{"title": "Part", "lines": [{"n": 7, "original": None, "english": "Only English here."}]}]
@@ -230,7 +239,13 @@ class CreedAlignmentTest(unittest.TestCase):
                 out = re.sub(r"\x1b\[[0-9;]*m", "", out)
                 lines = [l.strip() for l in out.splitlines() if l.strip()]
                 i = lines.index(next(l for l in lines if l.startswith("1 Credo in Deum Patrem omnipotentem")))
-                self.assertTrue(lines[i + 1].startswith("I believe in God, the Father almighty"), lines[i:i + 2])
+                self.assertTrue(lines[i + 1].startswith("1 I believe in God, the Father almighty"), lines[i:i + 2])
+                wide = subprocess.run(
+                    [sys.executable, LEX, *args], cwd=ROOT, env=dict(env, COLUMNS="140"),
+                    capture_output=True, text=True, timeout=120,
+                ).stdout
+                self.assertRegex(re.sub(r"\x1b\[[0-9;]*m", "", wide),
+                                 r"(?m)^\W*1\W+Credo in Deum Patrem omnipotentem,\W+1\W+I believe in God")
 
 
 if __name__ == "__main__":
