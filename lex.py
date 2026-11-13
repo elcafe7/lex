@@ -1034,281 +1034,52 @@ BOOK_SCOPE_GROUPS = {
 # Original-language creed text is only stored for short documents where
 # side-by-side display is useful. Longer confessions stay English-only for now.
 #
-# Each section is a list of aligned (original, English) line pairs: a clause or
-# sentence each, split at the same point in both languages (issue #12). Joined
-# with single spaces, the English lines are exactly the English section text
-# from the creeds database and the original lines are the full original text,
-# so the split adds line breaks and changes no words. Where word order does not
-# allow a clean split, the clause stays one line in both columns. Lines are
-# numbered continuously through a document by creed_aligned_sections().
-CREED_ORIGINALS = {
-    "The Apostles' Creed": {
-        "language": "Latin",
-        "sections": {
-            "God the Father": [
-                ("Credo in Deum Patrem omnipotentem,",
-                 "I believe in God, the Father almighty,"),
-                ("Creatorem caeli et terrae.",
-                 "creator of heaven and earth."),
-            ],
-            "Jesus Christ": [
-                ("Et in Iesum Christum, Filium eius unicum, Dominum nostrum,",
-                 "I believe in Jesus Christ, his only Son, our Lord,"),
-                ("qui conceptus est de Spiritu Sancto,",
-                 "who was conceived by the Holy Spirit,"),
-                ("natus ex Maria Virgine,",
-                 "born of the Virgin Mary,"),
-                ("passus sub Pontio Pilato,",
-                 "suffered under Pontius Pilate,"),
-                ("crucifixus, mortuus, et sepultus;",
-                 "was crucified, died, and was buried;"),
-                ("descendit ad inferos;",
-                 "he descended to the dead."),
-                ("tertia die resurrexit a mortuis;",
-                 "On the third day he rose again;"),
-                ("ascendit ad caelos;",
-                 "he ascended into heaven,"),
-                ("sedet ad dexteram Dei Patris omnipotentis;",
-                 "he is seated at the right hand of the Father,"),
-                ("inde venturus est iudicare vivos et mortuos.",
-                 "and he will come to judge the living and the dead."),
-            ],
-            "The Holy Spirit and the Church": [
-                ("Credo in Spiritum Sanctum,",
-                 "I believe in the Holy Spirit,"),
-                ("sanctam Ecclesiam catholicam,",
-                 "the holy catholic Church,"),
-                ("sanctorum communionem,",
-                 "the communion of saints,"),
-                ("remissionem peccatorum,",
-                 "the forgiveness of sins,"),
-                ("carnis resurrectionem,",
-                 "the resurrection of the body,"),
-                ("vitam aeternam. Amen.",
-                 "and the life everlasting. Amen."),
-            ],
-        },
-    },
-    "The Nicene Creed": {
-        "language": "Greek",
-        "sections": {
-            "God the Father": [
-                ("Πιστεύομεν εἰς ἕνα Θεόν, Πατέρα, παντοκράτορα,",
-                 "We believe in one God, the Father almighty,"),
-                ("ποιητὴν οὐρανοῦ καὶ γῆς,",
-                 "maker of heaven and earth,"),
-                ("ὁρατῶν τε πάντων καὶ ἀοράτων.",
-                 "of all things visible and invisible."),
-            ],
-            "Jesus Christ the Son": [
-                ("Καὶ εἰς ἕνα Κύριον Ἰησοῦν Χριστόν,",
-                 "And in one Lord Jesus Christ,"),
-                ("τὸν Υἱὸν τοῦ Θεοῦ τὸν μονογενῆ,",
-                 "the only-begotten Son of God,"),
-                ("τὸν ἐκ τοῦ Πατρὸς γεννηθέντα πρὸ πάντων τῶν αἰώνων·",
-                 "begotten from the Father before all ages,"),
-                ("φῶς ἐκ φωτός, Θεὸν ἀληθινὸν ἐκ Θεοῦ ἀληθινοῦ,",
-                 "God from God, Light from Light, true God from true God,"),
-                ("γεννηθέντα, οὐ ποιηθέντα,",
-                 "begotten, not made;"),
-                ("ὁμοούσιον τῷ Πατρί,",
-                 "of the same essence as the Father."),
-                ("δι᾿ οὗ τὰ πάντα ἐγένετο.",
-                 "Through him all things were made."),
-                ("Τὸν δι᾿ ἡμᾶς τοὺς ἀνθρώπους καὶ διὰ τὴν ἡμετέραν σωτηρίαν κατελθόντα ἐκ τῶν οὐρανῶν",
-                 "For us and for our salvation he came down from heaven;"),
-                ("καὶ σαρκωθέντα ἐκ Πνεύματος ἁγίου καὶ Μαρίας τῆς Παρθένου",
-                 "he became incarnate by the Holy Spirit and the virgin Mary,"),
-                ("καὶ ἐνανθρωπήσαντα.",
-                 "and was made human."),
-                ("Σταυρωθέντα τε ὑπὲρ ἡμῶν ἐπὶ Ποντίου Πιλάτου",
-                 "He was crucified for us under Pontius Pilate;"),
-                ("καὶ παθόντα καὶ ταφέντα.",
-                 "he suffered and was buried."),
-                ("Καὶ ἀναστάντα τῇ τρίτῃ ἡμέρᾳ, κατὰ τὰς Γραφάς.",
-                 "The third day he rose again, according to the Scriptures."),
-                ("Καὶ ἀνελθόντα εἰς τοὺς οὐρανοὺς",
-                 "He ascended to heaven"),
-                ("καὶ καθεζόμενον ἐκ δεξιῶν τοῦ Πατρός.",
-                 "and is seated at the right hand of the Father."),
-                ("Καὶ πάλιν ἐρχόμενον μετὰ δόξης κρῖναι ζῶντας καὶ νεκρούς,",
-                 "He will come again with glory to judge the living and the dead."),
-                ("οὗ τῆς βασιλείας οὐκ ἔσται τέλος.",
-                 "His kingdom will never end."),
-            ],
-            "The Holy Spirit": [
-                ("Καὶ εἰς τὸ Πνεῦμα τὸ Ἅγιον, τὸ κύριον, τὸ ζωοποιόν,",
-                 "And we believe in the Holy Spirit, the Lord, the giver of life."),
-                ("τὸ ἐκ τοῦ Πατρὸς ἐκπορευόμενον,",
-                 "He proceeds from the Father and the Son,"),
-                ("τὸ σὺν Πατρὶ καὶ Υἱῷ συμπροσκυνούμενον καὶ συνδοξαζόμενον,",
-                 "and with the Father and the Son is worshiped and glorified."),
-                ("τὸ λαλῆσαν διὰ τῶν προφητῶν.",
-                 "He spoke through the prophets."),
-            ],
-            "The Church and Final Hope": [
-                ("Εἰς μίαν, ἁγίαν, καθολικὴν καὶ ἀποστολικὴν Ἐκκλησίαν.",
-                 "We believe in one holy catholic and apostolic church."),
-                ("Ὁμολογοῦμεν ἓν βάπτισμα εἰς ἄφεσιν ἁμαρτιῶν.",
-                 "We affirm one baptism for the forgiveness of sins."),
-                ("Προσδοκοῦμεν ἀνάστασιν νεκρῶν",
-                 "We look forward to the resurrection of the dead,"),
-                ("καὶ ζωὴν τοῦ μέλλοντος αἰῶνος. Ἀμήν.",
-                 "and to life in the world to come. Amen."),
-            ],
-        },
-    },
-    "Athanasian Creed": {
-        "language": "Latin",
-        "sections": {
-            "Opening": [
-                ("Quicunque vult salvus esse, ante omnia opus est, ut teneat catholicam fidem:",
-                 "Whosoever will be saved, before all things it is necessary that he hold the Catholic Faith."),
-                ("Quam nisi quisque integram inviolatamque servaverit, absque dubio in aeternum peribit.",
-                 "Which Faith except everyone do keep whole and undefiled, without doubt he shall perish everlastingly."),
-            ],
-            "The Doctrine of the Trinity": [
-                ("Fides autem catholica haec est: ut unum Deum in Trinitate, et Trinitatem in unitate veneremur.",
-                 "And the Catholic Faith is this: That we worship one God in Trinity, and Trinity in Unity;"),
-                ("Neque confundentes personas, neque substantiam separantes.",
-                 "Neither confounding the Persons, nor dividing the Substance."),
-                ("Alia est enim persona Patris alia Filii, alia Spiritus Sancti:",
-                 "For there is one Person of the Father, another of the Son, and another of the Holy Ghost."),
-                ("Sed Patris, et Filii, et Spiritus Sancti una est divinitas, aequalis gloria, coaeterna maiestas.",
-                 "But the Godhead of the Father, of the Son and of the Holy Ghost is all One, the Glory Equal, the Majesty Co-Eternal."),
-                ("Qualis Pater, talis Filius, talis Spiritus Sanctus.",
-                 "Such as the Father is, such is the Son, and such is the Holy Ghost."),
-                ("Increatus Pater, increatus Filius, increatus Spiritus Sanctus.",
-                 "The Father Uncreate, the Son Uncreate, and the Holy Ghost Uncreate."),
-                ("Immensus Pater, immensus Filius, immensus Spiritus Sanctus.",
-                 "The Father Incomprehensible, the Son Incomprehensible, and the Holy Ghost Incomprehensible."),
-                ("Aeternus Pater, aeternus Filius, aeternus Spiritus Sanctus.",
-                 "The Father Eternal, the Son Eternal, and the Holy Ghost Eternal"),
-                ("Et tamen non tres aeterni, sed unus aeternus.",
-                 "and yet they are not Three Eternals but One Eternal."),
-                ("Sicut non tres increati, nec tres immensi, sed unus increatus, et unus immensus.",
-                 "As also there are not Three Uncreated, nor Three Incomprehensibles, but One Uncreated, and One Incomprehensible."),
-                ("Similiter omnipotens Pater, omnipotens Filius, omnipotens Spiritus Sanctus.",
-                 "So likewise the Father is Almighty, the Son Almighty, and the Holy Ghost Almighty."),
-                ("Et tamen non tres omnipotentes, sed unus omnipotens.",
-                 "And yet they are not Three Almighties but One Almighty."),
-                ("Ita Deus Pater, Deus Filius, Deus Spiritus Sanctus.",
-                 "So the Father is God, the Son is God, and the Holy Ghost is God."),
-                ("Et tamen non tres Dii, sed unus est Deus.",
-                 "And yet they are not Three Gods, but One God."),
-                ("Ita Dominus Pater, Dominus Filius, Dominus Spiritus Sanctus.",
-                 "So likewise the Father is Lord, the Son Lord, and the Holy Ghost Lord."),
-                ("Et tamen non tres Domini, sed unus est Dominus.",
-                 "And yet not Three Lords but One Lord."),
-                ("Quia, sicut singillatim unamquamque personam Deum ac Dominum confiteri christiana veritate compellimur:",
-                 "For, like as we are compelled by the Christian verity to acknowledge every Person by Himself to be God and Lord,"),
-                ("ita tres Deos aut Dominos dicere catholica religione prohibemur.",
-                 "so are we forbidden by the Catholic Religion to say, there be Three Gods or Three Lords."),
-                ("Pater a nullo est factus: nec creatus, nec genitus.",
-                 "The Father is made of none, neither created, nor begotten."),
-                ("Filius a Patre solo est: non factus, nec creatus, sed genitus.",
-                 "The Son is of the Father alone; not made, nor created, but begotten."),
-                ("Spiritus Sanctus a Patre et Filio: non factus, nec creatus, nec genitus, sed procedens.",
-                 "The Holy Ghost is of the Father, and of the Son neither made, nor created, nor begotten, but proceeding."),
-                ("Unus ergo Pater, non tres Patres: unus Filius, non tres Filii: unus Spiritus Sanctus, non tres Spiritus Sancti.",
-                 "So there is One Father, not Three Fathers; one Son, not Three Sons; One Holy Ghost, not Three Holy Ghosts."),
-                ("Et in hac Trinitate nihil prius aut posterius, nihil maius aut minus:",
-                 "And in this Trinity none is afore or after another; None is greater or less than another,"),
-                ("sed totae tres personae coaeternae sibi sunt et coaequales.",
-                 "but the whole Three Persons are Co-eternal together, and Co-equal."),
-                ("Ita ut per omnia, sicut iam supra dictum est, et unitas in Trinitate, et Trinitas in unitate veneranda sit.",
-                 "So that in all things, as is aforesaid, the Unity in Trinity, and the Trinity in Unity, is to be worshipped."),
-                ("Qui vult ergo salvus esse, ita de Trinitate sentiat.",
-                 "He therefore that will be saved, must thus think of the Trinity."),
-            ],
-            "The Incarnation of Christ": [
-                ("Sed necessarium est ad aeternam salutem, ut incarnationem quoque Domini nostri Iesu Christi fideliter credat.",
-                 "Furthermore, it is necessary to everlasting salvation that he also believe rightly the Incarnation of our Lord Jesus Christ."),
-                ("Est ergo fides recta ut credamus et confiteamur, quia Dominus noster Iesus Christus, Dei Filius, Deus et homo est.",
-                 "For the right Faith is, that we believe and confess that our Lord Jesus Christ, the Son of God, is God and Man."),
-                ("Deus est ex substantia Patris ante saecula genitus:",
-                 "God, of the Substance of the Father, begotten before the worlds;"),
-                ("et homo est ex substantia matris in saeculo natus.",
-                 "and Man, of the Substance of His Mother, born in the world."),
-                ("Perfectus Deus, perfectus homo: ex anima rationabili et humana carne subsistens.",
-                 "Perfect God, and perfect Man, of a reasonable soul and human flesh subsisting."),
-                ("Aequalis Patri secundum divinitatem: minor Patre secundum humanitatem.",
-                 "Equal to the Father, as touching His Godhead, and inferior to the Father, as touching His Manhood."),
-                ("Qui licet Deus sit et homo, non duo tamen, sed unus est Christus.",
-                 "Who, although He be God and Man, yet He is not two, but one Christ."),
-                ("Unus autem non conversione divinitatis in carnem, sed assumptione humanitatis in Deum.",
-                 "One, not by conversion of the Godhead into flesh, but by taking of the Manhood into God."),
-                ("Unus omnino, non confusione substantiae, sed unitate personae.",
-                 "One altogether, not by confusion of Substance, but by unity of Person."),
-                ("Nam sicut anima rationabilis et caro unus est homo: ita Deus et homo unus est Christus.",
-                 "For as the reasonable soul and flesh is one man, so God and Man is one Christ;"),
-                ("Qui passus est pro salute nostra: descendit ad inferos: tertia die resurrexit a mortuis.",
-                 "Who suffered for our salvation, descended into hell, rose again the third day from the dead."),
-                ("Ascendit ad caelos, sedet ad dexteram Dei Patris omnipotentis:",
-                 "He ascended into heaven, He sitteth on the right hand of the Father, God Almighty,"),
-                ("inde venturus est iudicare vivos et mortuos.",
-                 "from whence He shall come to judge the quick and the dead."),
-                ("Ad cuius adventum omnes homines resurgere habent cum corporibus suis:",
-                 "At whose coming all men shall rise again with their bodies"),
-                ("et reddituri sunt de factis propriis rationem.",
-                 "and shall give account for their own works."),
-                ("Et qui bona egerunt, ibunt in vitam aeternam:",
-                 "And they that have done good shall go into life everlasting,"),
-                ("qui vero mala, in ignem aeternum.",
-                 "and they that have done evil into everlasting fire."),
-            ],
-            "Conclusion": [
-                ("Haec est fides catholica, quam nisi quisque fideliter firmiterque crediderit, salvus esse non poterit.",
-                 "This is the Catholic Faith, which except a man believe faithfully, he cannot be saved."),
-            ],
-        },
-    },
-    "Chalcedonian Definition": {
-        "language": "Greek",
-        "sections": {
-            "Introduction": [
-                ("Ἡ ἁγία καὶ μεγάλη καὶ οἰκουμενικὴ σύνοδος, ἡ κατὰ θεοῦ χάριν καὶ θέσπισμα τῶν εὐσεβεστάτων καὶ φιλοχρίστων ἡμῶν βασιλέων Μαρκιανοῦ καὶ Οὐαλεντινιανοῦ Αὐγούστων ἐν Χαλκηδόνι τῇ μητροπόλει τῆς Βιθυνῶν ἐπαρχίας συναχθεῖσα ἐν τῷ μαρτυρίῳ τῆς ἁγίας καὶ καλλινίκου μάρτυρος Εὐφημίας, ὥρισε τὰ ὑποτεταγμένα.",
-                 "The holy, great, and ecumenical synod, assembled by the grace of God and the command of our most religious and Christian Emperors, Marcian and Valentinian, Augusti, at Chalcedon, the metropolis of the Bithynian Province, in the martyry of the holy and victorious martyr Euphemia, has decreed as follows:"),
-                ("Ὁ κύριος ἡμῶν καὶ σωτὴρ Ἰησοῦς Χριστός, τὴν τῆς πίστεως γνῶσιν τοῖς μαθηταῖς βεβαιῶν, ἔφη πρὸς αὐτούς· Εἰρήνην τὴν ἐμὴν δίδωμι ὑμῖν, εἰρήνην τὴν ἐμὴν ἀφίημι ὑμῖν, πρὸς τὸ μηδένα πρὸς τὸν πλησίον διχονοεῖν ἐν τοῖς τῆς εὐσεβείας δόγμασιν, ἀλλ' ἐπίσης τοῖς πᾶσι τὸ τῆς ἀληθείας ἐπιδείκνυσθαι κήρυγμα.",
-                 "Our Lord and Saviour Jesus Christ, when strengthening the knowledge of the Faith in his disciples, to the end that no one might disagree with his neighbour concerning the doctrines of religion, and that the proclamation of the truth might be set forth equally to all men, said, 'My peace I leave with you, my peace I give unto you.'"),
-            ],
-            "The Definition": [
-                ("Ἑπόμενοι τοίνυν τοῖς ἁγίοις πατράσιν, ἕνα καὶ τὸν αὐτὸν ὁμολογεῖν υἱὸν τὸν κύριον ἡμῶν Ἰησοῦν Χριστὸν συμφώνως ἅπαντες ἐκδιδάσκομεν,",
-                 "Following the holy Fathers we teach with one voice that the Son of God and our Lord Jesus Christ is to be confessed as one and the same Person,"),
-                ("τέλειον τὸν αὐτὸν ἐν θεότητι καὶ τέλειον τὸν αὐτὸν ἐν ἀνθρωπότητι, θεὸν ἀληθῶς καὶ ἄνθρωπον ἀληθῶς τὸν αὐτόν, ἐκ ψυχῆς λογικῆς καὶ σώματος,",
-                 "that he is perfect in Godhead and perfect in manhood, very God and very man, of a reasonable soul and human body;"),
-                ("ὁμοούσιον τῷ πατρὶ κατὰ τὴν θεότητα καὶ ὁμοούσιον τὸν αὐτὸν ἡμῖν κατὰ τὴν ἀνθρωπότητα,",
-                 "consubstantial with the Father as touching his Godhead, and consubstantial with us as touching his manhood;"),
-                ("κατὰ πάντα ὅμοιον ἡμῖν χωρὶς ἁμαρτίας·",
-                 "made in all things like us, sin only excepted;"),
-                ("πρὸ αἰώνων μὲν ἐκ τοῦ πατρὸς γεννηθέντα κατὰ τὴν θεότητα,",
-                 "begotten of his Father before the worlds according to his Godhead;"),
-                ("ἐπ' ἐσχάτων δὲ τῶν ἡμερῶν τὸν αὐτὸν δι' ἡμᾶς καὶ διὰ τὴν ἡμετέραν σωτηρίαν ἐκ Μαρίας τῆς παρθένου τῆς θεοτόκου κατὰ τὴν ἀνθρωπότητα,",
-                 "in these last days born of the Virgin Mary, the Mother of God, according to his manhood."),
-                ("ἕνα καὶ τὸν αὐτὸν Χριστόν, υἱόν, κύριον, μονογενῆ, ἐν δύο φύσεσιν ἀσυγχύτως, ἀτρέπτως, ἀδιαιρέτως, ἀχωρίστως γνωριζόμενον·",
-                 "This one and the same Jesus Christ, the only-begotten Son of God, must be confessed to be in two natures, unconfusedly, immutably, indivisibly, inseparably united,"),
-                ("οὐδαμοῦ τῆς τῶν φύσεων διαφορᾶς ἀνῃρημένης διὰ τὴν ἕνωσιν,",
-                 "and that without the distinction of natures being taken away by such union,"),
-                ("σωζομένης δὲ μᾶλλον τῆς ἰδιότητος ἑκατέρας φύσεως καὶ εἰς ἓν πρόσωπον καὶ μίαν ὑπόστασιν συντρεχούσης,",
-                 "but rather the peculiar property of each nature being preserved and being united in one Person and subsistence,"),
-                ("οὐκ εἰς δύο πρόσωπα μεριζόμενον ἢ διαιρούμενον, ἀλλ' ἕνα καὶ τὸν αὐτὸν υἱὸν καὶ μονογενῆ θεὸν λόγον, κύριον Ἰησοῦν Χριστόν·",
-                 "not separated or divided into two persons, but one and the same Son and only-begotten, God the Word, our Lord Jesus Christ;"),
-                ("καθάπερ ἄνωθεν οἱ προφῆται περὶ αὐτοῦ καὶ αὐτὸς ἡμᾶς ὁ κύριος Ἰησοῦς Χριστὸς ἐξεπαίδευσε καὶ τὸ τῶν πατέρων ἡμῖν παραδέδωκε σύμβολον.",
-                 "even as the Prophets from the beginning spoke concerning him, and as the Lord Jesus Christ instructed us, and as the Creed of the Fathers has delivered to us."),
-            ],
-            "Prohibitions": [
-                ("Τούτων τοίνυν μετὰ πάσης πανταχόθεν ἀκριβείας τε καὶ ἐμμελείας διατυπωθέντων ἡμῖν, ὥρισεν ἡ ἁγία καὶ οἰκουμενικὴ σύνοδος, ἑτέραν πίστιν μηδενὶ ἐξεῖναι προφέρειν, ἤγουν συγγράφειν ἢ συντιθέναι ἢ φρονεῖν ἢ διδάσκειν ἑτέρους·",
-                 "These things, therefore, having been expressed by us with the greatest accuracy and attention, the holy Ecumenical Synod defines that no one shall be permitted to bring forward a different faith, nor to write, nor to put together, nor to excogitate, nor to teach it to others."),
-                ("τοὺς δὲ τολμῶντας ἢ συντιθέναι πίστιν ἑτέραν, ἤγουν προκομίζειν ἢ διδάσκειν ἢ παραδιδόναι ἕτερον σύμβολον τοῖς ἐθέλουσιν ἐπιστρέφειν εἰς ἐπίγνωσιν τῆς ἀληθείας ἐξ Ἑλληνισμοῦ ἢ ἐξ Ἰουδαϊσμοῦ ἢ γοῦν ἐξ αἱρέσεως οἱασδηποτοῦν,",
-                 "But such as dare either to put together another faith, or to bring forward or to teach or to deliver a different Creed to such as wish to be converted to the knowledge of the truth from the Gentiles, or Jews or any heresy whatever,"),
-                ("τούτους, εἰ μὲν εἶεν ἐπίσκοποι ἢ κληρικοί, ἀλλοτρίους εἶναι τοὺς ἐπισκόπους τῆς ἐπισκοπῆς καὶ τοὺς κληρικοὺς τοῦ κλήρου,",
-                 "if they be Bishops or clerics let them be deposed, the Bishops from the Episcopate, and the clerics from the clergy;"),
-                ("εἰ δὲ μονάζοντες ἢ λαϊκοὶ εἶεν, ἀναθεματίζεσθαι.",
-                 "but if they be monks or laics, let them be anathematized."),
-            ],
-        },
-    },
-}
+# The aligned lines live in runtime-data/creeds-aligned.json so Lex Web can
+# reuse the same data (issue #12). Each section is a list of {n, orig, eng}
+# pairs: a clause or sentence each, split at the same point in both languages,
+# with n continuous through the document. Joined with single spaces, the
+# English lines are exactly the English section text from the creeds database
+# and the original lines are the full original text, so the split adds line
+# breaks and changes no words. Where word order does not allow a clean split,
+# the clause stays one line in both columns.
+CREED_ALIGNED_FILE = "creeds-aligned.json"
+CREED_ALIGNED_MAX_BYTES = 1024 * 1024
+
+
+def load_creed_originals(paths=None):
+    """Load aligned creed lines as {topic: {"language", "sections": {title: [(orig, eng)]}}}.
+
+    Looks in the bundled runtime-data/ first, then the active data folder.
+    A missing or malformed file yields {} so creeds fall back to English-only.
+    """
+    if paths is None:
+        paths = [os.path.join(RUNTIME_DATA_DIR, CREED_ALIGNED_FILE), get_lex_path(CREED_ALIGNED_FILE)]
+    for path in paths:
+        try:
+            if not os.path.isfile(path) or os.path.getsize(path) > CREED_ALIGNED_MAX_BYTES:
+                continue
+            with open(path, "r", encoding="utf-8") as fh:
+                raw = json.load(fh)
+            documents = {}
+            for topic, doc in raw["documents"].items():
+                sections = {}
+                expected = 0
+                for title, rows in doc["sections"].items():
+                    pairs = []
+                    for row in rows:
+                        expected += 1
+                        if row["n"] != expected or not isinstance(row["orig"], str) or not isinstance(row["eng"], str):
+                            raise ValueError(f"bad aligned line in {topic}: {title}")
+                        pairs.append((row["orig"], row["eng"]))
+                    sections[str(title)] = pairs
+                documents[str(topic)] = {"language": str(doc["language"]), "sections": sections}
+            return documents
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            continue
+    return {}
+
+
+CREED_ORIGINALS = load_creed_originals()
 
 CREED_ORIGINAL_MISSING = "[original not yet loaded]"
 # Below this terminal width the aligned creed view stacks each original line

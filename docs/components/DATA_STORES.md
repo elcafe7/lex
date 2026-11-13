@@ -76,6 +76,22 @@ Important tables:
 
 - `creeds`
 
+### `creeds-aligned.json`
+
+Path:
+
+```text
+runtime-data/creeds-aligned.json
+```
+
+Numbered, line-aligned original-language and English text for the four
+bilingual creeds (Apostles' and Athanasian in Latin, Nicene and Chalcedonian in
+Greek). Shape: `{"schema": 1, "documents": {topic: {"language", "sections":
+{title: [{"n", "orig", "eng"}]}}}}`, with `n` continuous through each document.
+Joined with spaces, a section's `eng` lines equal its English text in
+`creeds.db`. The CLI loads it into `CREED_ORIGINALS`; Lex Web can read the same
+file. It ships in the release archive and is listed in `manifest.json`.
+
 ### `places.db`
 
 Path:

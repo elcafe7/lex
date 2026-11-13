@@ -20,6 +20,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEX = os.path.join(ROOT, "lex.py")
 # The original-language text as it was stored before the split, one paragraph per section.
 ORIGINALS_BEFORE = os.path.join(ROOT, "tests", "fixtures", "creed_originals_paragraphs.json")
+ALIGNED_JSON = os.path.join(ROOT, "runtime-data", "creeds-aligned.json")
+# display_creed_document() output for Westminster at width 100, captured from main before #12.
+WESTMINSTER_SNAPSHOT = os.path.join(ROOT, "tests", "fixtures", "westminster_confession_w100.txt")
 BILINGUAL = ["The Apostles' Creed", "The Nicene Creed", "Athanasian Creed", "Chalcedonian Definition"]
 
 
@@ -166,6 +169,68 @@ class CreedAlignmentTest(unittest.TestCase):
         self.assertEqual(squash(" ".join(l["original"] for l in first["lines"])), squash(first["original"]["text"]))
         other = self.lex.json_creed_document(self.agent, "Westminster Shorter Catechism", "")
         self.assertIsNone(other["sections"][0]["lines"])
+
+    def test_westminster_output_matches_snapshot(self):
+        topic = "Westminster Confession of Faith"
+        out = self.render(100, self.agent.display_creed_document, topic, self.agent.build_creed_sections(topic))
+        with open(WESTMINSTER_SNAPSHOT, encoding="utf-8") as fh:
+            self.assertEqual(out, fh.read())
+
+    def test_shared_json_file_is_the_source(self):
+        with open(ALIGNED_JSON, encoding="utf-8") as fh:
+            raw = json.load(fh)
+        self.assertEqual(raw["schema"], 1)
+        self.assertEqual(sorted(raw["documents"]), sorted(BILINGUAL))
+        for topic, doc in raw["documents"].items():
+            with self.subTest(topic=topic):
+                numbers = [row["n"] for rows in doc["sections"].values() for row in rows]
+                self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
+                for rows in doc["sections"].values():
+                    for row in rows:
+                        self.assertEqual(set(row), {"n", "orig", "eng"})
+                        self.assertTrue(row["orig"].strip() and row["eng"].strip(), row)
+                self.assertEqual(
+                    self.lex.CREED_ORIGINALS[topic]["sections"],
+                    {title: [(r["orig"], r["eng"]) for r in rows] for title, rows in doc["sections"].items()},
+                )
+
+    def test_shared_json_ships_with_cli(self):
+        # The npm release archive is `git archive HEAD` and data updates follow manifest.json.
+        import subprocess
+        if not os.path.isdir(os.path.join(ROOT, ".git")) and not os.path.isfile(os.path.join(ROOT, ".git")):
+            self.skipTest("not a git checkout")
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "runtime-data/creeds-aligned.json"],
+            cwd=ROOT, capture_output=True, text=True,
+        )
+        self.assertEqual(tracked.returncode, 0, tracked.stderr)
+        with open(os.path.join(ROOT, "manifest.json"), encoding="utf-8") as fh:
+            self.assertIn("runtime-data/creeds-aligned.json", json.load(fh)["assets"])
+
+    def test_missing_or_bad_json_falls_back_to_english_only(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = os.path.join(tmp, "none.json")
+            bad = os.path.join(tmp, "bad.json")
+            with open(bad, "w", encoding="utf-8") as fh:
+                fh.write('{"schema": 1, "documents": {"X": {"language": "Latin", "sections": {"A": [{"n": 2, "orig": "a", "eng": "b"}]}}}}')
+            self.assertEqual(self.lex.load_creed_originals([missing, bad]), {})
+            self.assertEqual(self.lex.load_creed_originals([missing, ALIGNED_JSON]), self.lex.CREED_ORIGINALS)
+
+    def test_plain_and_no_color_output_keeps_pairs(self):
+        import subprocess
+        env = dict(os.environ, NO_COLOR="1", COLUMNS="60")
+        for args in (["--plain", "creed", "apostles"], ["creed", "apostles"]):
+            with self.subTest(args=args):
+                out = subprocess.run(
+                    [sys.executable, LEX, *args], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120,
+                ).stdout
+                # NO_COLOR drops colours (Rich may keep bold); --plain drops all styling.
+                self.assertIsNone(re.search(r"\x1b\[[0-9;]*(?:3[0-9]|4[0-9]|9[0-7])[;m]", out))
+                out = re.sub(r"\x1b\[[0-9;]*m", "", out)
+                lines = [l.strip() for l in out.splitlines() if l.strip()]
+                i = lines.index(next(l for l in lines if l.startswith("1 Credo in Deum Patrem omnipotentem")))
+                self.assertTrue(lines[i + 1].startswith("I believe in God, the Father almighty"), lines[i:i + 2])
 
 
 if __name__ == "__main__":
