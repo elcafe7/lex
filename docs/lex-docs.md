@@ -237,7 +237,7 @@ Supported group scopes include `-ot`, `-old-testament`, `-nt`, `-new-testament`,
 
 | Command | Purpose |
 |---|---|
-| `lex commentary John 3:16` | Show local commentary notes for a verse (Matthew Henry and John Calvin). |
+| `lex commentary John 3:16` | Show local commentary notes for a verse (Matthew Henry, John Calvin, Matthew Poole, and John Gill). |
 | `lex commentary Romans 1` | Show local commentary notes for a chapter. |
 | `lex creed` | Open the creed and confession navigator. |
 | `lex creed nicene` | Open a specific creed or confession by search term. |
@@ -377,7 +377,7 @@ A normal checkout resolves data under `runtime-data/`. If the runtime bundle is 
 | `runtime-data/strongs_refs.db` | Reverse Strong's verse usage, built from the ESV interlinear data by `scripts/build_strongs_refs_db.py`. |
 | `runtime-data/naves.db` | Nave's Topical Bible. |
 | `runtime-data/places.db` | Place data. |
-| `runtime-data/commentaries/*.db` | Matthew Henry and John Calvin commentaries. |
+| `runtime-data/commentaries/*.db` | Matthew Henry, John Calvin, Matthew Poole (`matthew_poole.db`), and John Gill (`john_gill.db`) commentaries; see `docs/components/COMMENTARIES.md`. |
 | `runtime-data/dictionary.db` | Dictionary entries. |
 | `runtime-data/encyclopedia.db` | ISBE encyclopedia entries. |
 | `runtime-data/creeds.db` | Creed/confession index rows. |

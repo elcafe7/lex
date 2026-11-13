@@ -143,6 +143,25 @@ Important tables:
 
 Current limitation: only ISBE Volume II is imported.
 
+### `commentaries/*.db`
+
+Paths:
+
+```text
+runtime-data/commentaries/matthew_henry.db
+runtime-data/commentaries/john_calvin.db
+runtime-data/commentaries/matthew_poole.db
+runtime-data/commentaries/john_gill.db
+```
+
+Used for `lex commentary <reference>` and `lex --json commentary`. Each
+database has a `commentary` table (`book`, `chapter`, `verse_start`,
+`verse_end`, `section_order`, `section_title`, `markdown`, `source`) and a
+`metadata` table with source and license notes. A section with NULL verse
+bounds is a chapter (or book) introduction: it shows for a chapter lookup but
+not for a single verse. A missing database is skipped. Sources, build steps,
+and checksums for Poole and Gill: `docs/components/COMMENTARIES.md`.
+
 ## JSON Data
 
 ### ESV Interlinear

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **New: Matthew Poole and John Gill commentaries (#18).** `lex commentary`
+  and `lex --json commentary` now also show Poole's *English Annotations on
+  the Holy Bible* (green) and Gill's *Exposition of the Entire Bible*
+  (yellow), whole Bible, public domain. Book and chapter introductions show
+  with chapter lookups. A missing commentary database is skipped. Psalms notes
+  now appear for editions that spell the book "Psalm". Built by
+  `scripts/build_commentary_mybible.py`; sources and checksums in
+  `docs/components/COMMENTARIES.md`.
 - **New: `--json` machine-readable output (#16).** One compact JSON document on
   stdout (`schema_version` 1, see `docs/json-output.md`) for `read`, `study`
   (ESV direct, other editions labelled proxy; LXX/Vulgate when their study data

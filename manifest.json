@@ -96,10 +96,20 @@
       "size": 77000704,
       "path": "runtime-data/commentaries/john_calvin.db"
     },
+    "runtime-data/commentaries/john_gill.db": {
+      "hash": "535312ed21ac86c5c13e2449da83bdc55331e70e718911540f8d98b42bd8ae59",
+      "size": 65691648,
+      "path": "runtime-data/commentaries/john_gill.db"
+    },
     "runtime-data/commentaries/matthew_henry.db": {
       "hash": "9665a156b47fcbf4dbd78c02006aeaeb0fd0464cabef6f67d3905c38fe16a14b",
       "size": 95625216,
       "path": "runtime-data/commentaries/matthew_henry.db"
+    },
+    "runtime-data/commentaries/matthew_poole.db": {
+      "hash": "4c7b2f2c7dc70b4fb11e53869fc90b3feec23d6228725f551ff24e8946a3774f",
+      "size": 27516928,
+      "path": "runtime-data/commentaries/matthew_poole.db"
     },
     "runtime-data/esv-data/data/esv/esv-interlinear.json": {
       "hash": "413a04c8f572cc5614ee956d132098323203cb4b161eeab24261756df5ba7913",

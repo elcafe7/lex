@@ -36,6 +36,7 @@ Known local sources include:
 - **Bible Geocoding Data:** CC BY 4.0, based on local `Bible-Geocoding-Data/license.txt`.
 - **Easton's Bible Dictionary:** public-domain dictionary material.
 - **ISBE encyclopedia import:** public-domain International Standard Bible Encyclopedia OCR source, currently only Volume II (`Clement-Heresh`) imported.
+- **Commentaries:** Matthew Henry (CC0 per `lyteword/mhenry-complete`), John Calvin (public domain, CCEL), Matthew Poole's *English Annotations on the Holy Bible* (1683-85) and John Gill's *Exposition of the Entire Bible* (1746-63), both public domain, converted from the free MySword/theWord modules; see `docs/components/COMMENTARIES.md`.
 - **Historical creeds/confessions:** local TheologAI historical document dataset; preserve source attribution and verify upstream terms before external redistribution.
 
 ## Practical Packaging Rule

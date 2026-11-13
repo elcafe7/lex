@@ -587,6 +587,16 @@ NAVES_DB_PATH = get_lex_path("naves.db")
 LXX_DB_PATH = get_lex_path("lxx.db")
 HENRY_DB_PATH = get_lex_path("commentaries/matthew_henry.db")
 CALVIN_DB_PATH = get_lex_path("commentaries/john_calvin.db")
+POOLE_DB_PATH = get_lex_path("commentaries/matthew_poole.db")
+GILL_DB_PATH = get_lex_path("commentaries/john_gill.db")
+# (commentator, LexAgent attribute, panel border colour) in display order.
+# A commentary whose database is missing is skipped without an error.
+COMMENTARY_SOURCES = (
+    ("Matthew Henry", "henry_db", "blue"),
+    ("John Calvin", "calvin_db", "magenta"),
+    ("Matthew Poole", "poole_db", "green"),
+    ("John Gill", "gill_db", "yellow"),
+)
 INTERLINEAR_PATH = get_lex_path("esv-data/data/esv/esv-interlinear.json")
 INTERLINEAR_STRONGS_PATH = get_lex_path("esv-data/data/interlinear/strongs.json")
 STEP_GREEK_PATH = get_lex_path("theolog-ai/data/biblical-languages/stepbible-lexicons/tbesg-greek.json")
@@ -1644,6 +1654,8 @@ class LexAgent:
         self.places_db = LexDB(PLACES_DB_PATH if os.path.exists(PLACES_DB_PATH) else LEXICON_DB_PATH)
         self.henry_db = LexDB(HENRY_DB_PATH) if os.path.exists(HENRY_DB_PATH) else None
         self.calvin_db = LexDB(CALVIN_DB_PATH) if os.path.exists(CALVIN_DB_PATH) else None
+        self.poole_db = LexDB(POOLE_DB_PATH) if os.path.exists(POOLE_DB_PATH) else None
+        self.gill_db = LexDB(GILL_DB_PATH) if os.path.exists(GILL_DB_PATH) else None
         self.naves_db = LexDB(NAVES_DB_PATH) if os.path.exists(NAVES_DB_PATH) else None
         self.lxx_db = LexDB(LXX_DB_PATH) if os.path.exists(LXX_DB_PATH) else None
         self.last_ref = self.load_history()
@@ -2699,6 +2711,12 @@ version.
             "Public domain per local TheologAI README; preserve source attribution",
         )
         table.add_row(
+            "Commentaries",
+            "Matthew Henry (lyteword/mhenry-complete); John Calvin (CCEL); Matthew Poole, English Annotations "
+            "(1683-85) and John Gill, Exposition (1746-63), from the MySword/theWord modules: commentaries/*.db",
+            "Henry: CC0 per source repo; Calvin, Poole, Gill: public domain",
+        )
+        table.add_row(
             "Interlinear data",
             "Local esv-data interlinear + STEPBible/Strong's-backed resources",
             "Mixed source terms; preserve Bible text, STEPBible, and Strong's source obligations",
@@ -2952,7 +2970,8 @@ relevant thematic clusters.
         md = """
 # Biblical Commentaries
 
-Traverse the Christian tradition with Matthew Henry and John Calvin.
+Traverse the Christian tradition with Matthew Henry, John Calvin,
+Matthew Poole and John Gill.
 Commentary lookups provide historical context and theological depth
 alongside your scripture study.
 
@@ -2965,7 +2984,8 @@ alongside your scripture study.
 ## High-Signal View
 
 Notes from multiple traditions are displayed in sequential themed blocks
-(Henry in Blue, Calvin in Magenta) for immediate visual comparison.
+(Henry in Blue, Calvin in Magenta, Poole in Green, Gill in Yellow) for
+immediate visual comparison. A commentary that is not installed is skipped.
 """
         console.print(Markdown(md))
 
@@ -6175,6 +6195,35 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 pass
             return True
 
+    @staticmethod
+    def commentary_sections(db, books, chap, verse=None):
+        """Sections of one commentary for a chapter, or those covering one verse.
+
+        ``books`` lists the spellings to try (the edition's book name first,
+        then Lex's canonical name), since the commentary databases were built
+        from different sources. Returns (title, markdown, source, verse_start,
+        verse_end) rows in reading order, or [] when the database is missing.
+        """
+        if not db:
+            return []
+        names = list(dict.fromkeys(b for b in books if b))
+        for name in names:
+            if verse:
+                rows = db.query(
+                    "SELECT section_title, markdown, source, verse_start, verse_end FROM commentary "
+                    "WHERE book = ? AND chapter = ? AND verse_start <= ? AND verse_end >= ? ORDER BY section_order",
+                    (name, chap, verse, verse),
+                )
+            else:
+                rows = db.query(
+                    "SELECT section_title, markdown, source, verse_start, verse_end FROM commentary "
+                    "WHERE book = ? AND chapter = ? ORDER BY section_order",
+                    (name, chap),
+                )
+            if rows:
+                return rows
+        return []
+
     def display_commentary(self, query):
         ref_norm, book, chap, verse, v_end = self.normalize_ref(query)
         if not ref_norm:
@@ -6192,35 +6241,15 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
         # Ensure we use the DB-specific book name
         db_book = self.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
 
-        # Helper to query a commentary DB
-        def get_comm(db, b, c, v):
-            if not db: return []
-            if v:
-                # Find sections that cover this verse
-                return db.query(
-                    "SELECT section_title, markdown, source FROM commentary WHERE book = ? AND chapter = ? AND verse_start <= ? AND verse_end >= ? ORDER BY section_order",
-                    (b, c, v, v)
-                )
-            else:
-                # Get entire chapter
-                return db.query(
-                    "SELECT section_title, markdown, source FROM commentary WHERE book = ? AND chapter = ? ORDER BY section_order",
-                    (b, c)
-                )
+        found = False
+        for _commentator, attr, colour in COMMENTARY_SOURCES:
+            for title, md, src, _v_start, _v_end in self.commentary_sections(getattr(self, attr, None), (db_book, book), chap, verse):
+                found = True
+                console.print(Panel(Markdown(md), title=f"📜 {src}: {title}", border_style=colour))
 
-        henry_notes = get_comm(self.henry_db, db_book, chap, verse)
-        calvin_notes = get_comm(self.calvin_db, db_book, chap, verse)
-
-        if not henry_notes and not calvin_notes:
+        if not found:
             console.print(f"[warning]No commentary notes found for {ref_label}.[/]")
             return False
-
-        # Display in side-by-side or sequential blocks
-        for title, md, src in henry_notes:
-            console.print(Panel(Markdown(md), title=f"📜 {src}: {title}", border_style="blue"))
-
-        for title, md, src in calvin_notes:
-            console.print(Panel(Markdown(md), title=f"📜 {src}: {title}", border_style="magenta"))
 
         return True
 
@@ -6666,21 +6695,8 @@ def json_commentary(agent, edition, query):
         raise JsonExit("not_found", f"Not a Bible reference: {query}", JSON_EXIT_NOT_FOUND)
     db_book = agent.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
     notes = []
-    for commentator, db in (("Matthew Henry", agent.henry_db), ("John Calvin", agent.calvin_db)):
-        if not db:
-            continue
-        if verse:
-            rows = db.query(
-                "SELECT section_title, markdown, source, verse_start, verse_end FROM commentary "
-                "WHERE book = ? AND chapter = ? AND verse_start <= ? AND verse_end >= ? ORDER BY section_order",
-                (db_book, chap, verse, verse),
-            )
-        else:
-            rows = db.query(
-                "SELECT section_title, markdown, source, verse_start, verse_end FROM commentary "
-                "WHERE book = ? AND chapter = ? ORDER BY section_order",
-                (db_book, chap),
-            )
+    for commentator, attr, _colour in COMMENTARY_SOURCES:
+        rows = agent.commentary_sections(getattr(agent, attr, None), (db_book, book), chap, verse)
         for title, markdown, source, v_start, v_end in rows:
             notes.append({
                 "commentator": commentator, "source": source, "title": title,
