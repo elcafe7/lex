@@ -252,6 +252,21 @@ lex define heliodorus
 
 Dictionary entries usually come from Easton's Bible Dictionary. Encyclopedia entries currently come from the local ISBE import, which is only partially complete.
 
+## Read Commentaries
+
+```bash
+lex commentary John 3:16
+lex commentary Romans 1
+lex --json commentary Psalm 23:1
+```
+
+Notes come from four public-domain commentaries, each in its own colour:
+Matthew Henry (blue), John Calvin (magenta), Matthew Poole's *English
+Annotations* (green), and John Gill's *Exposition of the Entire Bible*
+(yellow). Poole and Gill cover all 66 books. A verse shows the notes that
+cover it; a chapter also shows chapter and book introductions. Calvin did not
+write on every book, so his panel is missing for some references.
+
 ## Browse Creeds And Confessions
 
 Open the creed navigator:

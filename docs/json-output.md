@@ -173,8 +173,10 @@ emphasis/heading markers removed; `markdown` is the source.
                "text":"…","markdown":"…"}] }
 ```
 
-A chapter reference (`verse: null`) returns every section in the chapter. Coverage follows the
-installed commentary data (no match → exit 3).
+`commentator` is one of `Matthew Henry`, `John Calvin`, `Matthew Poole`, `John Gill`, in that
+order. A chapter reference (`verse: null`) returns every section in the chapter, including
+introductions (`verse_start`/`verse_end` null). Coverage follows the installed commentary data;
+a commentary that is not installed is left out (no match at all → exit 3).
 
 ### `naves` / `topic` — `lex --json naves <subject or reference>`
 
