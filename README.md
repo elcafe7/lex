@@ -1,6 +1,9 @@
 # Lex | The Elegant Bible Terminal 📖
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/elcafe7/lex/badge)](https://scorecard.dev/viewer/?uri=github.com/elcafe7/lex)
+<!-- virustotal-badge:start -->
+[![VirusTotal](https://img.shields.io/badge/VirusTotal-pending-lightgrey)](security/reports/virustotal-latest.md)
+<!-- virustotal-badge:end -->
 <!-- OpenSSF Best Practices badge slot: set PROJECT_ID and uncomment (security/MANUAL-STEPS.md)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/PROJECT_ID/badge)](https://www.bestpractices.dev/projects/PROJECT_ID)
 -->
@@ -279,7 +282,10 @@ its result, date and time in UTC) and one file per check: OSV-Scanner report,
 Bandit report, SBOM, SHA256SUMS, attestation link, VirusTotal links (when
 turned on) and the OpenSSF Scorecard JSON. Index of all runs, newest first:
 [security/README.md](security/README.md) (machine-readable:
-[security/latest.json](security/latest.json)).
+[security/latest.json](security/latest.json)). The VirusTotal badge at the
+top of this README (and any in-repo download page) always links to the
+newest published VirusTotal Markdown report:
+[security/reports/virustotal-latest.md](security/reports/virustotal-latest.md).
 
 <!-- security-reports:start -->
 Latest: `v2.6.8` on 2026-11-09 21:31:02 UTC, result **pass** ([summary](security/reports/v2.6.8_20261109T213102Z/summary.md)). All runs: [security/README.md](security/README.md).
