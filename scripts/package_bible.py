@@ -517,6 +517,186 @@ def package_dra_1899(vpl_path, db_path):
     conn.close()
     print(f"Packaged Douay-Rheims 1899 into {db_path}")
 
+# eBible.org eng-Brenton VPL book codes -> Lex book names, in Lex order:
+# the books shared with the Protestant Old Testament first (Greek Esther and
+# Greek Daniel in their usual places), then the Apocrypha in Brenton's order.
+# Shared books keep the same English names as KJV/DRA so references and
+# scopes line up across editions.
+BRENTON_1851_BOOKS = (
+    ("GEN", "Genesis"),
+    ("EXO", "Exodus"),
+    ("LEV", "Leviticus"),
+    ("NUM", "Numbers"),
+    ("DEU", "Deuteronomy"),
+    ("JOS", "Joshua"),
+    ("JDG", "Judges"),
+    ("RUT", "Ruth"),
+    ("1SA", "1 Samuel"),
+    ("2SA", "2 Samuel"),
+    ("1KI", "1 Kings"),
+    ("2KI", "2 Kings"),
+    ("1CH", "1 Chronicles"),
+    ("2CH", "2 Chronicles"),
+    ("EZR", "Ezra"),
+    ("EZR+", "Nehemiah"),  # EZR chapters 11-23, see BRENTON_EZRA_LAST_CHAPTER
+    ("ESG", "Esther"),
+    ("JOB", "Job"),
+    ("PSA", "Psalms"),
+    ("PRO", "Proverbs"),
+    ("ECC", "Ecclesiastes"),
+    ("SOL", "Song of Solomon"),
+    ("ISA", "Isaiah"),
+    ("JER", "Jeremiah"),
+    ("LAM", "Lamentations"),
+    ("EZE", "Ezekiel"),
+    ("DNG", "Daniel"),
+    ("HOS", "Hosea"),
+    ("JOE", "Joel"),
+    ("AMO", "Amos"),
+    ("OBA", "Obadiah"),
+    ("JON", "Jonah"),
+    ("MIC", "Micah"),
+    ("NAH", "Nahum"),
+    ("HAB", "Habakkuk"),
+    ("ZEP", "Zephaniah"),
+    ("HAG", "Haggai"),
+    ("ZEC", "Zechariah"),
+    ("MAL", "Malachi"),
+    ("TOB", "Tobit"),
+    ("JDT", "Judith"),
+    ("WIS", "Wisdom of Solomon"),
+    ("SIR", "Sirach"),
+    ("BAR", "Baruch"),
+    ("EPJ", "Letter of Jeremiah"),
+    ("SUS", "Susanna"),
+    ("BEL", "Bel and the Dragon"),
+    ("1MA", "1 Maccabees"),
+    ("2MA", "2 Maccabees"),
+    ("1ES", "1 Esdras"),
+    ("PRM", "Prayer of Manasseh"),
+    ("3MA", "3 Maccabees"),
+    ("4MA", "4 Maccabees"),
+)
+# Brenton numbers some Septuagint additions as lettered verses (Gen 31:50a,
+# 3 Kingdoms 2:35a-o). The schema needs integer verses, so a lettered verse is
+# appended to the verse it follows; no text is dropped or renumbered.
+BRENTON_VPL_LINE = re.compile(r"^([0-9]?[A-Z]{2,3}) (\d+):(\d+)([a-z]?) (.*)$")
+# eng-Brenton carries Nehemiah twice: EZR is Brenton's Esdras B (Ezra as
+# chapters 1-10, Nehemiah as 11-23, Septuagint verse numbers) and NEH is a
+# second transcription re-versified to the English Bible (e.g. 3:33-37 moved
+# to 4:1-5). Lex keeps EZR 11-23 as Nehemiah 1-13, because its numbering
+# matches the Greek LXX edition verse for verse, and drops NEH.
+BRENTON_EZRA_LAST_CHAPTER = 10
+BRENTON_SKIPPED_CODES = {"NEH"}
+# eng-Brenton has no Sirach 6:1-2; it letters them "6:2a" and "6:2b". In
+# Brenton's 1851 print (and the KJV Apocrypha) 6:1 is "Instead of a friend
+# become not an enemy" and 6:2 "Extol not thyself", which Rahlfs also numbers
+# 6:2. Restore those numbers rather than merging them into a missing verse.
+BRENTON_VERSE_FIXES = {
+    ("SIR", 6, 2, "a"): (6, 1),
+    ("SIR", 6, 2, "b"): (6, 2),
+}
+
+
+def confined_source_file(source_path, label):
+    """Confine an operator-supplied source file to its parent directory."""
+    if not isinstance(source_path, str) or not source_path or "\x00" in source_path:
+        raise ValueError(f"invalid {label} path: {source_path!r}")
+    source_dir_real = os.path.realpath(os.path.dirname(os.path.abspath(source_path)))
+    source_name = os.path.basename(source_path)
+    candidate = os.path.realpath(os.path.join(source_dir_real, source_name))
+    prefix = source_dir_real if source_dir_real.endswith(os.sep) else source_dir_real + os.sep
+    if not candidate.startswith(prefix):
+        raise ValueError(f"{label} path escapes source directory: {source_path!r}")
+    try:
+        return safe_source_file(source_dir_real, source_name)
+    except MissingSourceFile as exc:
+        raise FileNotFoundError(str(exc)) from exc
+    except UnsafePathError as exc:
+        raise ValueError(f"unsafe {label} path: {exc}") from exc
+
+
+def read_brenton_vpl(vpl_path):
+    """Parse eng-Brenton VPL into {book: {(chapter, verse): text}} plus stats."""
+    code_to_name = dict(BRENTON_1851_BOOKS)
+    verses = {name: {} for _, name in BRENTON_1851_BOOKS}
+    unknown_codes = set()
+    stats = {"lettered_verses_merged": 0, "empty_verses_skipped": 0, "neh_duplicate_verses_dropped": 0}
+    with open(vpl_path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.rstrip("\n").lstrip("\ufeff")
+            if not line.strip():
+                continue
+            match = BRENTON_VPL_LINE.match(line)
+            if not match:
+                raise ValueError(f"unrecognised Brenton VPL line: {line[:60]!r}")
+            code, chap, verse, letter, text = match.groups()
+            if code in BRENTON_SKIPPED_CODES:
+                stats["neh_duplicate_verses_dropped"] += 1
+                continue
+            name = code_to_name.get(code)
+            if not name:
+                unknown_codes.add(code)
+                continue
+            text = text.strip()
+            key = (int(chap), int(verse))
+            fixed = BRENTON_VERSE_FIXES.get((code, key[0], key[1], letter))
+            if fixed:
+                key, letter = fixed, ""
+                stats["verse_numbers_restored"] = stats.get("verse_numbers_restored", 0) + 1
+            if code == "EZR" and key[0] > BRENTON_EZRA_LAST_CHAPTER:
+                name = code_to_name["EZR+"]
+                key = (key[0] - BRENTON_EZRA_LAST_CHAPTER, key[1])
+            book = verses[name]
+            if letter:
+                if key not in book:
+                    raise ValueError(f"lettered verse without its base verse: {line[:40]!r}")
+                if text:
+                    book[key] = f"{book[key]} {text}".strip()
+                stats["lettered_verses_merged"] += 1
+                continue
+            if key in book:
+                raise ValueError(f"duplicate Brenton verse: {code} {chap}:{verse}")
+            if not text:
+                stats["empty_verses_skipped"] += 1
+                continue
+            book[key] = text
+    if unknown_codes:
+        raise ValueError(f"Unknown Brenton book codes: {sorted(unknown_codes)}")
+    return verses, stats
+
+
+def package_brenton_1851(vpl_path, db_path):
+    """Packages Brenton's English Septuagint (1851) from eBible eng-Brenton VPL."""
+    vpl_path = confined_source_file(vpl_path, "Brenton VPL")
+    verses, stats = read_brenton_vpl(vpl_path)
+    metadata = {
+        'edition_id': 'brenton',
+        'edition_name': "Brenton English Septuagint (1851)",
+        'language': 'en',
+        'reference_prefix': 'brenton',
+        'reference_format': 'prefix:Book:Chapter:Verse',
+        'has_headings': 'false',
+        'versification': 'Septuagint (Brenton): LXX Psalm numbering; lettered verses merged',
+        'source': 'eBible.org eng-Brenton (https://ebible.org/eng-Brenton/), public domain',
+        'lettered_verses_merged': str(stats["lettered_verses_merged"]),
+    }
+    conn = init_target_db(db_path, metadata)
+    bible_entries = []
+    fts_entries = []
+    for _, book_name in BRENTON_1851_BOOKS:
+        for (chap, verse) in sorted(verses[book_name]):
+            text = verses[book_name][(chap, verse)]
+            ref = f"brenton:{book_name}:{chap}:{verse}"
+            bible_entries.append((ref, text))
+            fts_entries.append((ref, clean_text(text)))
+    conn.executemany("INSERT INTO bible (reference, text) VALUES (?, ?)", bible_entries)
+    conn.executemany("INSERT INTO bible_fts (reference, text) VALUES (?, ?)", fts_entries)
+    conn.commit()
+    conn.close()
+    print(f"Packaged Brenton English Septuagint into {db_path} ({len(bible_entries)} verses; {stats})")
+    return stats
+
 if __name__ == "__main__":
     if len(sys.argv) < 4:
         print("Usage: python package_bible.py <type> <source_path> <target_db>")
@@ -533,4 +713,5 @@ if __name__ == "__main__":
     elif b_type == "lxx": package_lxx(source, target)
     elif b_type == "vulg": package_vulgate(source, target)
     elif b_type == "dra1899": package_dra_1899(source, target)
+    elif b_type == "brenton1851": package_brenton_1851(source, target)
     else: print(f"Unknown type: {b_type}")

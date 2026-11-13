@@ -125,8 +125,9 @@ themed terminal output; set `LEX_NO_COLOR=1` to intentionally disable Lex color.
 `lex --version` is reserved for plain, non-interactive application version
 output.
 
-Bible versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `dra`, `lxx`, `vulg` (alias
-`vulgate`). `-B dra` is the Douay-Rheims 1899 American Edition, including the
+Bible versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `dra`, `lxx`, `brenton`, `vulg`
+(alias `vulgate`). `-B brenton` is Brenton's English Septuagint (1851), Old
+Testament plus Apocrypha with Septuagint numbering; `-B lxx` stays the Greek. `-B dra` is the Douay-Rheims 1899 American Edition, including the
 deuterocanon. Douay book names (Tobias, Ecclesiasticus, 3 Kings, Apocalypse)
 resolve to the stored modern English names. Psalm numbers follow DRA/Vulgate
 numbering.

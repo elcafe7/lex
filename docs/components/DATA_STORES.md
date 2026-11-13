@@ -122,7 +122,7 @@ Example:
 esv:John:3:16
 ```
 
-Other shipped editions use the same schema under `runtime-data/bible_versions/`. The Douay-Rheims 1899 edition is `dra.db` with prefix `dra`.
+Other shipped editions use the same schema under `runtime-data/bible_versions/`. The Douay-Rheims 1899 edition is `dra.db` with prefix `dra`. Brenton's English Septuagint (1851) is `brenton.db` with prefix `brenton` (OT plus Apocrypha, Septuagint versification; see `docs/editions/BRENTON.md`).
 
 ### `encyclopedia.db`
 
