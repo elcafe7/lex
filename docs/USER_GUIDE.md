@@ -92,6 +92,7 @@ lex -B lxx Genesis 1:1 -i   # LXX study path, in progress
 lex -B kjv Genesis 1:1 -i   # Reads KJV context, then reports that KJV interlinear is unavailable
 lex -B vulg John 1:1 -i     # Vulgate study path, in progress
 lex -B dra John 3:16        # Reads Douay-Rheims 1899, including the deuterocanon
+lex -B brenton Genesis 1:1  # Reads Brenton's English Septuagint (1851)
 ```
 
 In an interactive terminal, study sections can appear with a subtle pause between them. Turn this off or force it with:
@@ -321,6 +322,7 @@ To use a different version for just one command without changing your default:
 lex -B lxx Genesis 1:1  # Read the Septuagint once
 lex -B dra Tobit 1:1    # Read Douay-Rheims 1899 once
 lex -B dra Tobias 1:1   # The same verse, using the Douay book name
+lex -B brenton Tobit 1:1  # Brenton's English Septuagint, Apocrypha included
 ```
 
 `-B` never changes your saved default. `lex -B kjv` with nothing after it just
@@ -335,6 +337,15 @@ Revelation), and Douay names such as Tobias, Ecclesiasticus, 3 Kings, 4 Kings,
 Isaias, and Apocalypse also resolve. Psalm numbers follow traditional
 DRA/Vulgate numbering: `lex -B dra Psalm 22` is "The Lord ruleth me" (the
 shepherd psalm), not the Protestant Psalm 22.
+
+Brenton's English Septuagint (`brenton`, 1851, public domain) is the
+Septuagint in English: the Old Testament plus the Apocrypha (Tobit, Judith,
+Wisdom, Sirach, Baruch, Letter of Jeremiah, Susanna, Bel, 1–4 Maccabees,
+1 Esdras, Prayer of Manasseh), with no New Testament. It is separate from the
+Greek `lxx` edition and uses the same Septuagint numbering, so
+`lex -B brenton Psalm 22` is the shepherd psalm. Brenton's square brackets
+mark words he supplied for English sense. Details:
+[docs/editions/BRENTON.md](editions/BRENTON.md).
 
 ## Keeping Lex Updated
 

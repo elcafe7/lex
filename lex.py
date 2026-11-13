@@ -198,6 +198,11 @@ def open_trusted_https(url_or_request, *, timeout=15):
 # Anything that comes from downloaded or updated data (the update manifest,
 # manuscript manifests, fetched JSON, SQLite rows) or from the environment is
 # untrusted. Paths built from it must stay inside a known Lex root.
+# Inline formatting tags some Bible sources carry; clean_text removes only
+# these, so bracketed words that are part of a translation stay.
+VERSE_MARKUP_TAG = re.compile(r"\[/?(?:i|b|u|em|wj|add|nd|p|pb|sup|sub|br)\]")
+
+
 class UnsafePathError(ValueError):
     """Raised when a path would leave its allowed base directory."""
 
@@ -557,6 +562,7 @@ BIBLE_VERSIONS = {
     "gen": {"name": "Geneva Bible (1599)", "file": "bible_versions/gen.db"},
     "dra": {"name": "Douay-Rheims (1899 American Edition)", "file": "bible_versions/dra.db"},
     "lxx": {"name": "Septuagint (Rahlfs 1935)", "file": "bible_versions/lxx.db"},
+    "brenton": {"name": "Brenton English Septuagint (1851)", "file": "bible_versions/brenton.db"},
     "vulg": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db", "latin_db": "latin.db", "type": "latin"},
     "vulgate": {"name": "Clementine Vulgate", "file": "bible_versions/vulg.db", "latin_db": "latin.db", "type": "latin", "alias": "vulg"},
 }
@@ -1790,7 +1796,9 @@ class LexAgent:
         text = re.sub(r'\*[a-z]+', '', text)
         text = re.sub(r'\byourln\b', 'your', text, flags=re.IGNORECASE)
         text = re.sub(r'\bonld\b', 'on', text, flags=re.IGNORECASE)
-        text = re.sub(r'\[/?[a-z]+\]', '', text)
+        # Formatting tags only ([i]...[/i], [wj]); a bracketed English word is
+        # text, e.g. Brenton's supplied words "This [is] the book".
+        text = VERSE_MARKUP_TAG.sub('', text)
         text = re.sub(r'\s{2,}', ' ', text)
         return text.strip()
 
@@ -2598,15 +2606,19 @@ Search scopes: `-ot`, `-nt`, `-law`, `-history`, `-wisdom`, `-prophets`,
 
 ## Versions And Settings
 
-*   `lex -v` - explain `-v` and list the 8 versions (current default marked)
+*   `lex -v` - explain `-v` and list the 9 versions (current default marked)
 *   `lex -v kjv` / `lex version kjv` / `lex bible kjv` - set the default Bible (sticky)
 *   `lex -B nasb John 3:16` - use a Bible version for one command only (never saved)
 *   `lex -B dra John 3:16` - read Douay-Rheims 1899 once (deuterocanon included)
+*   `lex -B brenton Genesis 1:1` - read Brenton's English Septuagint once (with Apocrypha)
 *   `lex -B` - explain `-B` and list the versions
 
-Versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `dra`, `lxx`, `vulg` (alias `vulgate`).
+Versions: `esv`, `kjv`, `kj16`, `nasb`, `gen`, `dra`, `lxx`, `brenton`, `vulg` (alias `vulgate`).
 Douay names such as Tobias, Ecclesiasticus, 3 Kings, Isaias, and Apocalypse also
 work with `-B dra`. Psalm numbers follow DRA/Vulgate numbering.
+`brenton` is the English translation of the Septuagint (Old Testament and
+Apocrypha, no New Testament); `lxx` stays the Greek text. Its Psalm and verse
+numbers follow the Septuagint, like `lxx`.
 
 Any command or flag that needs an argument, run without one (for example
 `lex study`, `lex -B`, `lex --page`), prints a short explainer for it.
@@ -2656,6 +2668,11 @@ version.
         table.add_row(
             "Douay-Rheims 1899",
             "eBible.org engDRA (Douay-Rheims American Edition, 1899): bible_versions/dra.db",
+            "Public domain",
+        )
+        table.add_row(
+            "Brenton Septuagint 1851",
+            "eBible.org eng-Brenton (Sir L. C. L. Brenton, English Septuagint, 1851): bible_versions/brenton.db",
             "Public domain",
         )
         table.add_row(

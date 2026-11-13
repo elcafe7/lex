@@ -51,6 +51,11 @@
       "size": 23080960,
       "path": "runtime-data/strongs_refs.db"
     },
+    "runtime-data/bible_versions/brenton.db": {
+      "hash": "27d15e1e27c7543421a3cbbfa025f609dd705e91ae62b2366962650607f69541",
+      "size": 15998976,
+      "path": "runtime-data/bible_versions/brenton.db"
+    },
     "runtime-data/bible_versions/dra.db": {
       "hash": "17f7d92e2ffaa4ee7e945f46f8e9c5a6bfade6874aadaa31a478383e23e08b68",
       "size": 18354176,

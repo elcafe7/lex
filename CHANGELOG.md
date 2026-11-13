@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **New: Brenton's English Septuagint (`-B brenton`, #33).** Sir Lancelot
+  Brenton's 1851 English translation of the Septuagint, public domain, from
+  eBible.org `eng-Brenton`: 39 Old Testament books plus the Apocrypha (Tobit,
+  Judith, Wisdom, Sirach, Baruch, Letter of Jeremiah, Susanna, Bel,
+  1–4 Maccabees, 1 Esdras, Prayer of Manasseh). Septuagint numbering like
+  `lxx`, which is unchanged. Read, search, `--json` and export work as for the
+  other editions. Provenance, checksums and alignment with `lxx`:
+  `docs/editions/BRENTON.md`.
+- **Fixed: bracketed words dropped from verse text.** Display no longer strips
+  any `[word]`; only real formatting tags (`[i]`, `[/i]`, `[wj]`, ...) are
+  removed, so Brenton's supplied words (`This [is] the book`) show.
+
 - **New: `--json` machine-readable output (#16).** One compact JSON document on
   stdout (`schema_version` 1, see `docs/json-output.md`) for `read`, `study`
   (ESV direct, other editions labelled proxy; LXX/Vulgate when their study data
