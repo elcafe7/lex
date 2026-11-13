@@ -1,0 +1,75 @@
+# zizmor: static analysis of GitHub Actions workflows, Dependabot config,
+# and related YAML. Findings are uploaded as SARIF to the Security > Code
+# scanning tab (category zizmor). This is not a release gate; the release
+# workflow is unchanged.
+#
+# Installed from the hash-pinned .github/requirements/zizmor-requirements.txt
+# (pip --require-hashes). --format=sarif always exits 0 when the audit
+# itself succeeds, even if there are findings; those findings show up as
+# code scanning alerts. Local review uses `zizmor --pedantic`.
+#
+# Free tools only. Every action is pinned to a full commit SHA.
+name: zizmor (Actions audit)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 10 * * 1"  # Mondays 10:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zizmor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write  # upload SARIF to code scanning
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install zizmor (hash-pinned)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zizmor-venv"
+          "$RUNNER_TEMP/zizmor-venv/bin/python" -m pip install --quiet --require-hashes --no-deps \
+            -r .github/requirements/zizmor-requirements.txt
+          "$RUNNER_TEMP/zizmor-venv/bin/zizmor" --version
+
+      - name: Run zizmor and write SARIF
+        run: |
+          mkdir -p zizmor-report
+          "$RUNNER_TEMP/zizmor-venv/bin/zizmor" --pedantic --format=sarif . \
+            > zizmor-report/zizmor.sarif
+
+      - name: Keep the zizmor report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zizmor-report
+          path: zizmor-report/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Upload to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: zizmor-report/zizmor.sarif
+          category: zizmor
