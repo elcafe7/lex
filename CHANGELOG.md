@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Creeds: numbered, line-aligned original and English (#12).** The Apostles',
+  Nicene, Athanasian, and Chalcedonian texts now show as numbered clause pairs
+  (#, Latin/Greek, English) under their section headings, numbered through the
+  whole document, instead of one paragraph per section. Narrow terminals stack
+  each original line above its English. Wording is unchanged: the lines join
+  back to the same English and original text. `lex --json creed` adds a
+  `lines` array per section.
 - **New: `--json` machine-readable output (#16).** One compact JSON document on
   stdout (`schema_version` 1, see `docs/json-output.md`) for `read`, `study`
   (ESV direct, other editions labelled proxy; LXX/Vulgate when their study data
