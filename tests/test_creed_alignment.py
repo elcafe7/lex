@@ -146,6 +146,64 @@ class CreedAlignmentTest(unittest.TestCase):
                 self.assertEqual(squash(" ".join(blocks[0])), f"{line['n']} {squash(line['original'])}")
                 self.assertEqual(squash(" ".join(blocks[1])), f"{line['n']} {squash(line['english'])}")
 
+    def test_wide_table_columns_never_drift(self):
+        """Every table line has the same cell width and the column gaps sit at
+        identical offsets on every row (no ragged borders or separators)."""
+        from rich.cells import cell_len
+        ansi = re.compile(r"\x1b\[[0-9;]*m")
+        for topic in BILINGUAL:
+            for width in (80, 100, 140):
+                with self.subTest(topic=topic, width=width):
+                    out = ansi.sub("", self.render(width, self.agent.display_creed_document, topic,
+                                                    self.agent.build_creed_sections(topic)))
+                    lines = out.splitlines()
+                    language = self.lex.CREED_ORIGINALS[topic]["language"]
+                    head = next(i for i, l in enumerate(lines) if re.match(rf"^\s*#\s+{language}\s+#\s+English", l))
+                    end = next((i for i in range(head, len(lines)) if lines[i].lstrip().startswith("╭")), len(lines))
+                    table = [l for l in lines[head:end] if l.strip()]
+                    self.assertGreater(len(table), 10)
+                    header = table[0]
+                    hashes = [m.start() for m in re.finditer("#", header)]
+                    starts = [header.index(language), header.index("English")]
+                    self.assertEqual(len(hashes), 2)
+                    for row in table:
+                        # Same cell width as the console, and nothing measures differently from its length.
+                        self.assertEqual(cell_len(row), width, row)
+                        self.assertEqual(cell_len(row), len(row), row)
+                        if set(row.strip()) == {"─"}:
+                            continue
+                        # Gaps before each text column and after each number column are blank.
+                        for col in starts:
+                            self.assertEqual(row[col - 1], " ", row)
+                        for h in hashes:
+                            self.assertEqual(row[h + 1], " ", row)
+                        if row is header:
+                            continue
+                        # Numbers are right-aligned under their "#" on both sides, and match.
+                        left = row[:hashes[0] + 1].strip()
+                        right = re.search(r"(\d*)$", row[:hashes[1] + 1]).group(1)
+                        self.assertTrue(left == "" or left.isdigit(), row)
+                        self.assertEqual(left, right, row)
+                        self.assertEqual(row[hashes[1] - len(right)], " ", row)
+
+    def test_creed_text_is_nfc_and_single_width(self):
+        import unicodedata
+        from rich.cells import cell_len
+        for topic, doc in self.lex.CREED_ORIGINALS.items():
+            for title, pairs in doc["sections"].items():
+                for original, english in pairs:
+                    for text in (original, english):
+                        self.assertEqual(unicodedata.normalize("NFC", text), text)
+                        self.assertEqual(cell_len(self.lex.creed_cell_text(text)), len(self.lex.creed_cell_text(text)), text)
+        decomposed = unicodedata.normalize("NFD", "Πιστεύομεν")
+        self.assertEqual(self.lex.creed_cell_text(decomposed), "Πιστεύομεν")
+
+    def test_section_titles_in_both_text_columns(self):
+        topic = "The Nicene Creed"
+        out = self.render(140, self.agent.display_creed_document, topic, self.agent.build_creed_sections(topic))
+        for title in self.lex.CREED_ORIGINALS[topic]["sections"]:
+            self.assertTrue(any(l.count(title) == 2 for l in out.splitlines()), title)
+
     def test_missing_original_line_keeps_its_number(self):
         aligned = [{"title": "Part", "lines": [{"n": 7, "original": None, "english": "Only English here."}]}]
         for width in (140, 60):
@@ -177,7 +235,7 @@ class CreedAlignmentTest(unittest.TestCase):
         self.assertEqual(squash(" ".join(l["english"] for l in first["lines"])), squash(first["markdown"]))
         self.assertEqual(squash(" ".join(l["original"] for l in first["lines"])), squash(first["original"]["text"]))
         other = self.lex.json_creed_document(self.agent, "Westminster Shorter Catechism", "")
-        self.assertIsNone(other["sections"][0]["lines"])
+        self.assertNotIn("lines", other["sections"][0])
 
     def test_westminster_output_matches_snapshot(self):
         topic = "Westminster Confession of Faith"
@@ -259,6 +317,49 @@ class CreedAlignmentTest(unittest.TestCase):
                 with open(os.path.join(data_dir, "creeds-aligned.json"), "w", encoding="utf-8") as fh:
                     fh.write("{not json")
                 self.assertEqual(self.lex.load_creed_originals(), self.lex.CREED_ORIGINALS)
+
+    def test_json_cli_for_bilingual_and_westminster(self):
+        import subprocess
+        env = dict(os.environ, COLUMNS="100", TERM="xterm-256color")
+        cases = {
+            "apostles": "The Apostles' Creed", "nicene": "The Nicene Creed",
+            "athanasian": "Athanasian Creed", "chalcedon": "Chalcedonian Definition",
+            "westminster confession": "Westminster Confession of Faith",
+        }
+        for query, topic in cases.items():
+            outputs = []
+            for flag in ("--json", "-json"):
+                with self.subTest(query=query, flag=flag):
+                    proc = subprocess.run(
+                        [sys.executable, LEX, flag, "creed", *query.split()], cwd=ROOT, env=env,
+                        capture_output=True, text=True, timeout=120,
+                    )
+                    self.assertEqual(proc.returncode, 0, proc.stderr)
+                    self.assertNotIn("\x1b", proc.stdout)
+                    payload = json.loads(proc.stdout)
+                    outputs.append(payload)
+                    self.assertEqual(payload["command"], "creed")
+                    doc = payload["document"]
+                    self.assertEqual(doc["topic"], topic)
+                    if topic not in BILINGUAL:
+                        # Same section keys as before #12: no `lines`.
+                        for section in doc["sections"]:
+                            self.assertEqual(set(section), {"title", "text", "markdown", "proofs", "original"})
+                            self.assertIsNone(section["original"])
+                        continue
+                    stored = self.lex.CREED_ORIGINALS[topic]["sections"]
+                    numbers = []
+                    for section in doc["sections"]:
+                        lines = section["lines"]
+                        self.assertEqual(len(lines), len(stored[section["title"]]), section["title"])
+                        for line in lines:
+                            self.assertEqual(set(line), {"n", "original", "english"})
+                            self.assertTrue(line["original"].strip() and line["english"].strip())
+                        numbers += [line["n"] for line in lines]
+                        self.assertEqual(squash(" ".join(l["english"] for l in lines)), squash(section["markdown"]))
+                        self.assertEqual(squash(" ".join(l["original"] for l in lines)), squash(section["original"]["text"]))
+                    self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
+            self.assertEqual(outputs[0], outputs[1], query)
 
     def test_plain_and_no_color_output_keeps_pairs(self):
         import subprocess

@@ -12,6 +12,7 @@ import os
 import sys
 import re
 import json
+import unicodedata
 import argparse
 import io
 from collections import Counter
@@ -1087,9 +1088,15 @@ def load_creed_originals(paths=None):
 CREED_ORIGINALS = load_creed_originals()
 
 CREED_ORIGINAL_MISSING = "[original not yet loaded]"
+
+
+def creed_cell_text(text):
+    """NFC-normalise creed text so combining marks (polytonic Greek accents,
+    breathings) are precomposed and Rich measures each cell correctly."""
+    return unicodedata.normalize("NFC", text or "")
 # Below this terminal width the aligned creed view stacks each original line
 # directly above its English line instead of using side-by-side columns.
-CREED_ALIGNED_MIN_WIDTH = 90
+CREED_ALIGNED_MIN_WIDTH = 80
 
 # Topic-level notes for creed texts. These are intentionally separated from the
 # creed body so we can explain textual/traditional variants without altering the
@@ -4609,25 +4616,34 @@ text from the active Bible version when available.
         before the English) in the wide and the stacked layout.
         """
         if console.width >= CREED_ALIGNED_MIN_WIDTH:
-            table = Table(title=title, box=box.ROUNDED, expand=True)
-            # The number heads both the original and the English column, so
-            # each side is self-labelled.
-            table.add_column("#", style="verse.ref", justify="right", no_wrap=True)
+            # One table, no outer box and no vertical rules: columns are
+            # separated by padding only, so polytonic Greek can never push a
+            # border out of line. The number heads both the original and the
+            # English column, so each side is self-labelled; section titles
+            # sit in both text columns, with a blank row between sections.
+            number_width = max((len(str(line["n"])) for section in aligned for line in section["lines"]), default=1)
+            table = Table(
+                title=title, box=box.SIMPLE_HEAD, show_edge=False, expand=True,
+                padding=(0, 1), header_style="bold",
+            )
+            table.add_column("#", style="verse.ref", justify="right", no_wrap=True, width=number_width)
             table.add_column(language, style="cyan", overflow="fold", ratio=1)
-            table.add_column("#", style="verse.ref", justify="right", no_wrap=True)
+            table.add_column("#", style="verse.ref", justify="right", no_wrap=True, width=number_width)
             table.add_column("English", style="text", overflow="fold", ratio=1)
             for index, section in enumerate(aligned):
                 if index:
-                    table.add_section()
-                table.add_row("", Text(section["title"], style="bold green"), "", "")
+                    table.add_row("", "", "", "")
+                heading = creed_cell_text(section["title"])
+                table.add_row("", Text(heading, style="bold green"), "", Text(heading, style="bold green"))
                 for line in section["lines"]:
                     table.add_row(
                         str(line["n"]),
-                        Text(line["original"] or CREED_ORIGINAL_MISSING),
+                        Text(creed_cell_text(line["original"] or CREED_ORIGINAL_MISSING)),
                         str(line["n"]),
-                        Text(line["english"]),
+                        Text(creed_cell_text(line["english"])),
                     )
             console.print(table)
+            console.print()
             return
         if title:
             console.print(Text(title, style="bold"))
@@ -4640,8 +4656,8 @@ text from the active Bible version when available.
             for index, line in enumerate(section["lines"]):
                 if index:
                     grid.add_row("", "")
-                grid.add_row(str(line["n"]), Text(line["original"] or CREED_ORIGINAL_MISSING, style="cyan"))
-                grid.add_row(str(line["n"]), Text(line["english"], style="text"))
+                grid.add_row(str(line["n"]), Text(creed_cell_text(line["original"] or CREED_ORIGINAL_MISSING), style="cyan"))
+                grid.add_row(str(line["n"]), Text(creed_cell_text(line["english"]), style="text"))
             console.print(grid)
 
     def display_creed_note(self, topic):
@@ -6822,14 +6838,18 @@ def json_creed_document(agent, topic, source):
     for section in sections:
         original, language = agent.get_creed_original(topic, section["title"])
         body = "\n\n".join(section["body_parts"])
-        out.append({
+        entry = {
             "title": section["title"],
             "text": json_markdown_text(body),
             "markdown": body,
             "proofs": list(section["proofs"]),
             "original": {"language": language, "text": original} if original else None,
-            "lines": aligned.get(section["title"]),
-        })
+        }
+        # Only the bilingual creeds carry aligned lines; other documents keep
+        # their JSON exactly as before.
+        if section["title"] in aligned:
+            entry["lines"] = aligned[section["title"]]
+        out.append(entry)
     return {
         "topic": topic,
         "source": source,
