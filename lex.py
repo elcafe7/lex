@@ -29,7 +29,7 @@ from rich.table import Table
 from rich import box
 from rich.markdown import Markdown
 from rich.theme import Theme
-from rich.prompt import Prompt, IntPrompt
+from rich.prompt import Prompt
 from rich.rule import Rule
 from rich.markup import escape as rich_escape
 
@@ -337,7 +337,8 @@ class LexUpdateManager:
 
     def check_for_updates(self):
         remote = self.fetch_remote_manifest()
-        if not remote: return None, None, None
+        if not remote:
+            return None, None, None
 
         remote_version = remote.get("version")
         assets = remote.get("assets")
@@ -1659,14 +1660,18 @@ class LexAgent:
     def load_history(self):
         if os.path.exists(HISTORY_FILE):
             try:
-                with open(HISTORY_FILE, "r") as f: return f.read().strip()
-            except: pass
+                with open(HISTORY_FILE, "r") as f:
+                    return f.read().strip()
+            except Exception:
+                pass
         return None
 
     def save_history(self, ref):
         try:
-            with open(HISTORY_FILE, "w") as f: f.write(ref)
-        except: pass
+            with open(HISTORY_FILE, "w") as f:
+                f.write(ref)
+        except Exception:
+            pass
 
     def save_query_history(self, command):
         command = command.strip()
@@ -2040,11 +2045,13 @@ class LexAgent:
 
     def get_reverse_naves(self, db_ref):
         parts = self.parse_reference_parts(db_ref)
-        if not parts: return []
+        if not parts:
+            return []
 
         book = self.reverse_canon_map.get(parts["book"], parts["book"])
         abbr = NAVES_BOOK_ABBR.get(book)
-        if not abbr: return []
+        if not abbr:
+            return []
 
         # Format: "JHN 3:16" or "JHN 3:16-18"
         # We search for the specific verse in the entry text
@@ -3287,7 +3294,8 @@ text from the active Bible version when available.
 
     def display_verse(self, query, interlinear=False, animate=None):
         ref_norm, book, chap, verse, v_end = self.normalize_ref(query)
-        if not ref_norm: return False
+        if not ref_norm:
+            return False
 
         # Ensure we use the DB-specific book name in the LIKE query
         db_book = self.canon_map.get(re.sub(r"[^a-z0-9]+", "", book.lower()), book)
@@ -3627,10 +3635,8 @@ text from the active Bible version when available.
         table.add_column("Syntax", style="dim", overflow="fold", ratio=2)
         for token in tokens[:30]:
             strongs = token["strongs"]
-            is_candidate = False
             if not strongs and token.get("candidate_strongs"):
                 strongs = f"{token['candidate_strongs']}?"
-                is_candidate = True
 
             morph_info = token["morph"] or (f"POS:{token['pos']}" if token["pos"] else "")
             display_morph = strongs or morph_info or "-"
@@ -3888,7 +3894,7 @@ text from the active Bible version when available.
         try:
             from reportlab.lib.pagesizes import letter
             from reportlab.lib.styles import getSampleStyleSheet
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table as PdfTable
+            from reportlab.platypus import SimpleDocTemplate, Spacer, Table as PdfTable
         except ImportError:
             console.print("[warning]PDF export needs reportlab installed.[/]")
             return None
@@ -4778,10 +4784,14 @@ text from the active Bible version when available.
             console.print("[dim][n] Next | [p] Prev | [m] Sections | [q] Quit[/]")
 
             nav = ask("Navigate", choices=["n", "p", "m", "q"], default="q").lower()
-            if nav == "n" and art_idx < len(sections)-1: art_idx += 1
-            elif nav == "p" and art_idx > 0: art_idx -= 1
-            elif nav == "m": break
-            elif nav == "q": sys.exit(0)
+            if nav == "n" and art_idx < len(sections)-1:
+                art_idx += 1
+            elif nav == "p" and art_idx > 0:
+                art_idx -= 1
+            elif nav == "m":
+                break
+            elif nav == "q":
+                sys.exit(0)
 
     # -----------------------------------------------------------------------
     # Scripture search, Strong's lookup, dictionary, and encyclopedia
@@ -5147,7 +5157,7 @@ text from the active Bible version when available.
         try:
             from reportlab.lib.pagesizes import letter
             from reportlab.lib.styles import getSampleStyleSheet
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+            from reportlab.platypus import SimpleDocTemplate, Spacer
         except ImportError:
             console.print("[warning]PDF export needs reportlab installed.[/]")
             return None
@@ -5367,7 +5377,8 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                         "SELECT reference, text FROM bible WHERE reference LIKE ? GROUP BY reference LIMIT 1",
                         (f"%:{db_book}:{chap}:{verse}",)
                     )
-                    if res: all_verses.append(res[0])
+                    if res:
+                        all_verses.append(res[0])
                 else:
                     # Chapter
                     res = self.bible_db.query(
@@ -5386,7 +5397,8 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                     path = self.search_export_filename({"query": "bulk_read", "page": 1}, "pptx")
                     display_verses = [(self.format_display_ref(r), self.clean_text(t)) for r, t in all_verses]
                     final_path = self.export_verses_pptx(display_verses, path, "Lex Bulk Read")
-                    if final_path: self.open_export(final_path)
+                    if final_path:
+                        self.open_export(final_path)
                 elif format == "png":
                     exported_files = []
                     for r, t in all_verses:
@@ -5405,11 +5417,13 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 if format == "pdf":
                     path = self.search_export_filename({"query": "bulk_study", "page": 1}, "pdf")
                     final_path = self.export_bulk_study_pdf(all_verses, path)
-                    if final_path: self.open_export(final_path)
+                    if final_path:
+                        self.open_export(final_path)
                 elif format == "docx":
                     path = self.search_export_filename({"query": "bulk_study", "page": 1}, "docx")
                     final_path = self.export_bulk_study_docx(all_verses, path)
-                    if final_path: self.open_export(final_path)
+                    if final_path:
+                        self.open_export(final_path)
                 else:
                     console.print(f"[error]Format {format} not supported for study mode. Use pdf or docx.[/]")
 
@@ -5417,11 +5431,13 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 if format == "pdf":
                     path = self.search_export_filename({"query": "bulk_web", "page": 1}, "pdf")
                     final_path = self.export_bulk_web_pdf(all_verses, path)
-                    if final_path: self.open_export(final_path)
+                    if final_path:
+                        self.open_export(final_path)
                 elif format == "docx":
                     path = self.search_export_filename({"query": "bulk_web", "page": 1}, "docx")
                     final_path = self.export_bulk_web_docx(all_verses, path)
-                    if final_path: self.open_export(final_path)
+                    if final_path:
+                        self.open_export(final_path)
                 else:
                     console.print(f"[error]Format {format} not supported for web mode. Use pdf or docx.[/]")
         finally:
@@ -5478,7 +5494,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 # We need a font that supports both text and emojis.
                 # As a fallback, we use the main font, but this is a complex limitation.
                 pass
-        except:
+        except Exception:
             main_font = ImageFont.load_default()
             footer_font = ImageFont.load_default()
 
@@ -5601,14 +5617,17 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
         # Resolve DB ref if needed
         if ":" not in db_ref:
             ref_norm, book, chap, verse, v_end = self.normalize_ref(db_ref)
-            if not ref_norm: return None
+            if not ref_norm:
+                return None
             db_ref = f"{self.bible_prefix}:{ref_norm}"
 
         parts = self.parse_reference_parts(db_ref)
-        if not parts or not parts["verse"]: return None
+        if not parts or not parts["verse"]:
+            return None
 
         verse_row = self.bible_db.query("SELECT text FROM bible WHERE reference = ? LIMIT 1", (db_ref,))
-        if not verse_row: return None
+        if not verse_row:
+            return None
 
         display_ref = self.format_display_ref(db_ref)
 
@@ -5660,7 +5679,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
 
     def build_study_pdf_story(self, data):
         from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.platypus import Paragraph, Spacer, Table as PdfTable
+        from reportlab.platypus import Spacer, Table as PdfTable
         styles = getSampleStyleSheet()
         self.setup_pdf_styles(styles)
         story = [self.pdf_paragraph(f"Lex Study: {data['display_ref']}", styles["Title"])]
@@ -5703,7 +5722,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
 
     def build_web_pdf_story(self, data):
         from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.platypus import Paragraph, Spacer
+        from reportlab.platypus import Spacer
         styles = getSampleStyleSheet()
         self.setup_pdf_styles(styles)
         story = [self.pdf_paragraph(f"Lex Verse Web: {data['display_ref']}", styles["Title"])]
@@ -6134,7 +6153,8 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                     "SELECT subject, entry FROM topics_fts WHERE entry MATCH ? LIMIT 20",
                     (normalized,)
                 )
-            except: pass
+            except Exception:
+                pass
 
         if not res:
             # 3. Try Reverse lookup (maybe the query is a verse)
@@ -6171,7 +6191,7 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
                 if 0 <= idx < len(res):
                     self.display_naves(res[idx][0]) # Recursive call to show the single entry
                     return True
-            except:
+            except BaseException:  # as before: Ctrl-C, EOF or a bad choice just returns
                 pass
             return True
 
@@ -6194,7 +6214,8 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
 
         # Helper to query a commentary DB
         def get_comm(db, b, c, v):
-            if not db: return []
+            if not db:
+                return []
             if v:
                 # Find sections that cover this verse
                 return db.query(
@@ -7535,7 +7556,8 @@ def main():
 
     if args.next or args.prev:
         last = agent.last_ref
-        if not last: sys.exit(1)
+        if not last:
+            sys.exit(1)
         query = agent.resolve_navigation_query("next" if args.next else "prev")
         if not query:
             sys.exit(1)
@@ -7680,7 +7702,8 @@ def main():
 
     if args.define or query.startswith("define"):
         q = query.replace("define ", "").strip()
-        if not q or q == "define": agent.display_dictionary_howto()
+        if not q or q == "define":
+            agent.display_dictionary_howto()
         else:
             dictionary_found = agent.display_dictionary(q)
             encyclopedia_found = agent.display_encyclopedia(q)
@@ -7688,7 +7711,8 @@ def main():
                 console.print("[warning]No dictionary or encyclopedia entry found.[/]")
     elif args.creed or query in {"creed", "creeds"} or query.startswith(("creed ", "creeds ")):
         q = re.sub(r"^creeds?\s*", "", query).strip()
-        if not q: agent.display_creed_navigator()
+        if not q:
+            agent.display_creed_navigator()
         elif not agent.display_creed_navigator(q):
             console.print("[warning]No creed or confession entry found.[/]")
             sys.exit(1)

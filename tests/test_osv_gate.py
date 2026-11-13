@@ -49,7 +49,7 @@ def load_gate_module():
 
 
 def warnings(proc):
-    return [l for l in proc.stdout.splitlines() if l.startswith("::warning ")]
+    return [line for line in proc.stdout.splitlines() if line.startswith("::warning ")]
 
 
 class OsvGateTests(unittest.TestCase):

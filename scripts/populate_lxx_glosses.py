@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import re
 import os
@@ -6,7 +7,6 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "runtime-d
 LXX_DB = os.path.join(ROOT, "lxx.db")
 STRONGS_DB = os.path.join(ROOT, "strongs.db")
 
-import json
 
 def clean_definition(defn):
     if not defn:

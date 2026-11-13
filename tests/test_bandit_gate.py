@@ -99,7 +99,7 @@ class BanditGateTests(unittest.TestCase):
         self.assertIn("B???", md)
         self.assertIn("`x____id___script_.py:0`", md)
         # Exactly one ::error command per finding; injected text cannot start another.
-        self.assertEqual(sum(1 for l in proc.stdout.splitlines() if l.startswith("::error")), 1)
+        self.assertEqual(sum(1 for line in proc.stdout.splitlines() if line.startswith("::error")), 1)
 
     def test_scan_errors_fail(self):
         proc, md, summary = run_gate(report(errors=[{"filename": "./broken.py", "reason": "syntax error"}]))
