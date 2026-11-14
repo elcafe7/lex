@@ -2,22 +2,24 @@
 
 The release workflow already writes and commits a security report for every
 clean release (see [README.md](README.md)). Two outside services need an
-account that only you can create. Nothing here has been signed up for or
-configured by an agent. Until you do these, the reports say "not configured"
-for both, and the README badges stay commented out.
+account that only you can create. The OpenSSF Best Practices project is
+registered (see below); Socket.dev is still pending. Until Socket is
+configured, reports say "not configured" for it, and its README badge stays
+commented out.
 
 ## 1. OpenSSF Best Practices badge (bestpractices.dev)
 
-1. On your own device, go to <https://www.bestpractices.dev/en/projects/new>
-   and sign in with GitHub as `elcafe7`.
-2. Add the project `https://github.com/elcafe7/lex` and fill in the questionnaire
-   (the release-verification docs answer most of the security questions).
-3. Note the numeric project id from the project URL
-   (`https://www.bestpractices.dev/projects/<ID>`).
-4. In GitHub: **Settings > Secrets and variables > Actions > Variables >
-   New repository variable**: `BESTPRACTICES_PROJECT_ID` = `<ID>` (digits only).
-5. In the main README, uncomment the "OpenSSF Best Practices" badge line and
-   replace `PROJECT_ID` with the id.
+Lex is registered as project
+[16506](https://www.bestpractices.dev/projects/16506). The README badge
+points at that id.
+
+If it is not set yet, add a repository variable in GitHub:
+**Settings > Secrets and variables > Actions > Variables >
+New repository variable**: `BESTPRACTICES_PROJECT_ID` = `16506`.
+
+The badge reaches "passing" only after the remaining passing-level
+criteria on that form are filled or met. Do not treat issue #38 as done
+until the badge shows passing.
 
 ## 2. Socket.dev
 

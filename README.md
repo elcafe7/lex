@@ -4,9 +4,7 @@
 <!-- virustotal-badge:start -->
 [![VirusTotal](https://img.shields.io/badge/VirusTotal-pending-lightgrey)](security/reports/virustotal-latest.md)
 <!-- virustotal-badge:end -->
-<!-- OpenSSF Best Practices badge slot: set PROJECT_ID and uncomment (security/MANUAL-STEPS.md)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/PROJECT_ID/badge)](https://www.bestpractices.dev/projects/PROJECT_ID)
--->
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16506/badge)](https://www.bestpractices.dev/projects/16506)
 <!-- Socket.dev badge slot: set SOCKET_URL and uncomment (security/MANUAL-STEPS.md)
 [![Socket](https://socket.dev/api/badge/npm/package/@n8te_/lex-cli)](SOCKET_URL)
 -->
@@ -447,6 +445,14 @@ Lex is built on the shoulders of giants. Data is sourced from:
 - STEPBible & Strong's Lexicon data
 - Easton's Bible Dictionary & ISBE
 - TheologAI Creedal Database
+
+---
+
+## 💬 Issues and contributing
+
+- **Questions, bugs and ideas:** open an issue in the [issue tracker](https://github.com/elcafe7/lex/issues).
+- **Code and docs:** pull requests against `main` are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) has the steps, the checks to run, and the requirements for a change to be accepted.
+- **Security problems:** please don't open a public issue. See [SECURITY.md](SECURITY.md) to report privately.
 
 ---
 
