@@ -289,6 +289,13 @@ lex creed baltimore
 lex creed westminster confession
 ```
 
+The Apostles' Creed and Athanasian Creed (Latin) and the Nicene Creed and
+Chalcedonian Definition (Greek) show the original beside the English as
+numbered lines: line 7 of the Latin or Greek is the same clause as line 7 of
+the English, and the number is printed on both sides. On a narrow terminal
+each numbered original line is printed with its numbered English directly
+underneath.
+
 When reading a long creed or confession:
 
 - `n` moves to the next section.

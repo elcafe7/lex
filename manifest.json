@@ -1,6 +1,11 @@
 {
   "version": "2.6.8",
   "assets": {
+    "runtime-data/creeds-aligned.json": {
+      "hash": "db091acd2b32ddf15e7d5946f435777a2ef63ffb1fc92ca7a76f7bf55ae79956",
+      "size": 29506,
+      "path": "runtime-data/creeds-aligned.json"
+    },
     "runtime-data/creeds.db": {
       "hash": "8c9525be7b8316314bcc545d05a829ff4aaaf464c8adfaafc6c899c7ac0f27ae",
       "size": 1703936,

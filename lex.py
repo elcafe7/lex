@@ -12,6 +12,7 @@ import os
 import sys
 import re
 import json
+import unicodedata
 import argparse
 import io
 from collections import Counter
@@ -1123,42 +1124,69 @@ def build_scope_book_index(stored_books):
 
 # Original-language creed text is only stored for short documents where
 # side-by-side display is useful. Longer confessions stay English-only for now.
-CREED_ORIGINALS = {
-    "The Apostles' Creed": {
-        "language": "Latin",
-        "sections": {
-            "God the Father": "Credo in Deum Patrem omnipotentem, Creatorem caeli et terrae.",
-            "Jesus Christ": "Et in Iesum Christum, Filium eius unicum, Dominum nostrum, qui conceptus est de Spiritu Sancto, natus ex Maria Virgine, passus sub Pontio Pilato, crucifixus, mortuus, et sepultus; descendit ad inferos; tertia die resurrexit a mortuis; ascendit ad caelos; sedet ad dexteram Dei Patris omnipotentis; inde venturus est iudicare vivos et mortuos.",
-            "The Holy Spirit and the Church": "Credo in Spiritum Sanctum, sanctam Ecclesiam catholicam, sanctorum communionem, remissionem peccatorum, carnis resurrectionem, vitam aeternam. Amen.",
-        },
-    },
-    "The Nicene Creed": {
-        "language": "Greek",
-        "sections": {
-            "God the Father": "Πιστεύομεν εἰς ἕνα Θεόν, Πατέρα, παντοκράτορα, ποιητὴν οὐρανοῦ καὶ γῆς, ὁρατῶν τε πάντων καὶ ἀοράτων.",
-            "Jesus Christ the Son": "Καὶ εἰς ἕνα Κύριον Ἰησοῦν Χριστόν, τὸν Υἱὸν τοῦ Θεοῦ τὸν μονογενῆ, τὸν ἐκ τοῦ Πατρὸς γεννηθέντα πρὸ πάντων τῶν αἰώνων· φῶς ἐκ φωτός, Θεὸν ἀληθινὸν ἐκ Θεοῦ ἀληθινοῦ, γεννηθέντα, οὐ ποιηθέντα, ὁμοούσιον τῷ Πατρί, δι᾿ οὗ τὰ πάντα ἐγένετο. Τὸν δι᾿ ἡμᾶς τοὺς ἀνθρώπους καὶ διὰ τὴν ἡμετέραν σωτηρίαν κατελθόντα ἐκ τῶν οὐρανῶν καὶ σαρκωθέντα ἐκ Πνεύματος ἁγίου καὶ Μαρίας τῆς Παρθένου καὶ ἐνανθρωπήσαντα. Σταυρωθέντα τε ὑπὲρ ἡμῶν ἐπὶ Ποντίου Πιλάτου καὶ παθόντα καὶ ταφέντα. Καὶ ἀναστάντα τῇ τρίτῃ ἡμέρᾳ, κατὰ τὰς Γραφάς. Καὶ ἀνελθόντα εἰς τοὺς οὐρανοὺς καὶ καθεζόμενον ἐκ δεξιῶν τοῦ Πατρός. Καὶ πάλιν ἐρχόμενον μετὰ δόξης κρῖναι ζῶντας καὶ νεκρούς, οὗ τῆς βασιλείας οὐκ ἔσται τέλος.",
-            "The Holy Spirit": "Καὶ εἰς τὸ Πνεῦμα τὸ Ἅγιον, τὸ κύριον, τὸ ζωοποιόν, τὸ ἐκ τοῦ Πατρὸς ἐκπορευόμενον, τὸ σὺν Πατρὶ καὶ Υἱῷ συμπροσκυνούμενον καὶ συνδοξαζόμενον, τὸ λαλῆσαν διὰ τῶν προφητῶν.",
-            "The Church and Final Hope": "Εἰς μίαν, ἁγίαν, καθολικὴν καὶ ἀποστολικὴν Ἐκκλησίαν. Ὁμολογοῦμεν ἓν βάπτισμα εἰς ἄφεσιν ἁμαρτιῶν. Προσδοκοῦμεν ἀνάστασιν νεκρῶν καὶ ζωὴν τοῦ μέλλοντος αἰῶνος. Ἀμήν.",
-        },
-    },
-    "Athanasian Creed": {
-        "language": "Latin",
-        "sections": {
-            "Opening": "Quicunque vult salvus esse, ante omnia opus est, ut teneat catholicam fidem: Quam nisi quisque integram inviolatamque servaverit, absque dubio in aeternum peribit.",
-            "The Doctrine of the Trinity": "Fides autem catholica haec est: ut unum Deum in Trinitate, et Trinitatem in unitate veneremur. Neque confundentes personas, neque substantiam separantes. Alia est enim persona Patris alia Filii, alia Spiritus Sancti: Sed Patris, et Filii, et Spiritus Sancti una est divinitas, aequalis gloria, coaeterna maiestas. Qualis Pater, talis Filius, talis Spiritus Sanctus. Increatus Pater, increatus Filius, increatus Spiritus Sanctus. Immensus Pater, immensus Filius, immensus Spiritus Sanctus. Aeternus Pater, aeternus Filius, aeternus Spiritus Sanctus. Et tamen non tres aeterni, sed unus aeternus. Sicut non tres increati, nec tres immensi, sed unus increatus, et unus immensus. Similiter omnipotens Pater, omnipotens Filius, omnipotens Spiritus Sanctus. Et tamen non tres omnipotentes, sed unus omnipotens. Ita Deus Pater, Deus Filius, Deus Spiritus Sanctus. Et tamen non tres Dii, sed unus est Deus. Ita Dominus Pater, Dominus Filius, Dominus Spiritus Sanctus. Et tamen non tres Domini, sed unus est Dominus. Quia, sicut singillatim unamquamque personam Deum ac Dominum confiteri christiana veritate compellimur: ita tres Deos aut Dominos dicere catholica religione prohibemur. Pater a nullo est factus: nec creatus, nec genitus. Filius a Patre solo est: non factus, nec creatus, sed genitus. Spiritus Sanctus a Patre et Filio: non factus, nec creatus, nec genitus, sed procedens. Unus ergo Pater, non tres Patres: unus Filius, non tres Filii: unus Spiritus Sanctus, non tres Spiritus Sancti. Et in hac Trinitate nihil prius aut posterius, nihil maius aut minus: sed totae tres personae coaeternae sibi sunt et coaequales. Ita ut per omnia, sicut iam supra dictum est, et unitas in Trinitate, et Trinitas in unitate veneranda sit. Qui vult ergo salvus esse, ita de Trinitate sentiat.",
-            "The Incarnation of Christ": "Sed necessarium est ad aeternam salutem, ut incarnationem quoque Domini nostri Iesu Christi fideliter credat. Est ergo fides recta ut credamus et confiteamur, quia Dominus noster Iesus Christus, Dei Filius, Deus et homo est. Deus est ex substantia Patris ante saecula genitus: et homo est ex substantia matris in saeculo natus. Perfectus Deus, perfectus homo: ex anima rationabili et humana carne subsistens. Aequalis Patri secundum divinitatem: minor Patre secundum humanitatem. Qui licet Deus sit et homo, non duo tamen, sed unus est Christus. Unus autem non conversione divinitatis in carnem, sed assumptione humanitatis in Deum. Unus omnino, non confusione substantiae, sed unitate personae. Nam sicut anima rationabilis et caro unus est homo: ita Deus et homo unus est Christus. Qui passus est pro salute nostra: descendit ad inferos: tertia die resurrexit a mortuis. Ascendit ad caelos, sedet ad dexteram Dei Patris omnipotentis: inde venturus est iudicare vivos et mortuos. Ad cuius adventum omnes homines resurgere habent cum corporibus suis: et reddituri sunt de factis propriis rationem. Et qui bona egerunt, ibunt in vitam aeternam: qui vero mala, in ignem aeternum.",
-            "Conclusion": "Haec est fides catholica, quam nisi quisque fideliter firmiterque crediderit, salvus esse non poterit.",
-        },
-    },
-    "Chalcedonian Definition": {
-        "language": "Greek",
-        "sections": {
-            "Introduction": "Ἡ ἁγία καὶ μεγάλη καὶ οἰκουμενικὴ σύνοδος, ἡ κατὰ θεοῦ χάριν καὶ θέσπισμα τῶν εὐσεβεστάτων καὶ φιλοχρίστων ἡμῶν βασιλέων Μαρκιανοῦ καὶ Οὐαλεντινιανοῦ Αὐγούστων ἐν Χαλκηδόνι τῇ μητροπόλει τῆς Βιθυνῶν ἐπαρχίας συναχθεῖσα ἐν τῷ μαρτυρίῳ τῆς ἁγίας καὶ καλλινίκου μάρτυρος Εὐφημίας, ὥρισε τὰ ὑποτεταγμένα. Ὁ κύριος ἡμῶν καὶ σωτὴρ Ἰησοῦς Χριστός, τὴν τῆς πίστεως γνῶσιν τοῖς μαθηταῖς βεβαιῶν, ἔφη πρὸς αὐτούς· Εἰρήνην τὴν ἐμὴν δίδωμι ὑμῖν, εἰρήνην τὴν ἐμὴν ἀφίημι ὑμῖν, πρὸς τὸ μηδένα πρὸς τὸν πλησίον διχονοεῖν ἐν τοῖς τῆς εὐσεβείας δόγμασιν, ἀλλ' ἐπίσης τοῖς πᾶσι τὸ τῆς ἀληθείας ἐπιδείκνυσθαι κήρυγμα.",
-            "The Definition": "Ἑπόμενοι τοίνυν τοῖς ἁγίοις πατράσιν, ἕνα καὶ τὸν αὐτὸν ὁμολογεῖν υἱὸν τὸν κύριον ἡμῶν Ἰησοῦν Χριστὸν συμφώνως ἅπαντες ἐκδιδάσκομεν, τέλειον τὸν αὐτὸν ἐν θεότητι καὶ τέλειον τὸν αὐτὸν ἐν ἀνθρωπότητι, θεὸν ἀληθῶς καὶ ἄνθρωπον ἀληθῶς τὸν αὐτόν, ἐκ ψυχῆς λογικῆς καὶ σώματος, ὁμοούσιον τῷ πατρὶ κατὰ τὴν θεότητα καὶ ὁμοούσιον τὸν αὐτὸν ἡμῖν κατὰ τὴν ἀνθρωπότητα, κατὰ πάντα ὅμοιον ἡμῖν χωρὶς ἁμαρτίας· πρὸ αἰώνων μὲν ἐκ τοῦ πατρὸς γεννηθέντα κατὰ τὴν θεότητα, ἐπ' ἐσχάτων δὲ τῶν ἡμερῶν τὸν αὐτὸν δι' ἡμᾶς καὶ διὰ τὴν ἡμετέραν σωτηρίαν ἐκ Μαρίας τῆς παρθένου τῆς θεοτόκου κατὰ τὴν ἀνθρωπότητα, ἕνα καὶ τὸν αὐτὸν Χριστόν, υἱόν, κύριον, μονογενῆ, ἐν δύο φύσεσιν ἀσυγχύτως, ἀτρέπτως, ἀδιαιρέτως, ἀχωρίστως γνωριζόμενον· οὐδαμοῦ τῆς τῶν φύσεων διαφορᾶς ἀνῃρημένης διὰ τὴν ἕνωσιν, σωζομένης δὲ μᾶλλον τῆς ἰδιότητος ἑκατέρας φύσεως καὶ εἰς ἓν πρόσωπον καὶ μίαν ὑπόστασιν συντρεχούσης, οὐκ εἰς δύο πρόσωπα μεριζόμενον ἢ διαιρούμενον, ἀλλ' ἕνα καὶ τὸν αὐτὸν υἱὸν καὶ μονογενῆ θεὸν λόγον, κύριον Ἰησοῦν Χριστόν· καθάπερ ἄνωθεν οἱ προφῆται περὶ αὐτοῦ καὶ αὐτὸς ἡμᾶς ὁ κύριος Ἰησοῦς Χριστὸς ἐξεπαίδευσε καὶ τὸ τῶν πατέρων ἡμῖν παραδέδωκε σύμβολον.",
-            "Prohibitions": "Τούτων τοίνυν μετὰ πάσης πανταχόθεν ἀκριβείας τε καὶ ἐμμελείας διατυπωθέντων ἡμῖν, ὥρισεν ἡ ἁγία καὶ οἰκουμενικὴ σύνοδος, ἑτέραν πίστιν μηδενὶ ἐξεῖναι προφέρειν, ἤγουν συγγράφειν ἢ συντιθέναι ἢ φρονεῖν ἢ διδάσκειν ἑτέρους· τοὺς δὲ τολμῶντας ἢ συντιθέναι πίστιν ἑτέραν, ἤγουν προκομίζειν ἢ διδάσκειν ἢ παραδιδόναι ἕτερον σύμβολον τοῖς ἐθέλουσιν ἐπιστρέφειν εἰς ἐπίγνωσιν τῆς ἀληθείας ἐξ Ἑλληνισμοῦ ἢ ἐξ Ἰουδαϊσμοῦ ἢ γοῦν ἐξ αἱρέσεως οἱασδηποτοῦν, τούτους, εἰ μὲν εἶεν ἐπίσκοποι ἢ κληρικοί, ἀλλοτρίους εἶναι τοὺς ἐπισκόπους τῆς ἐπισκοπῆς καὶ τοὺς κληρικοὺς τοῦ κλήρου, εἰ δὲ μονάζοντες ἢ λαϊκοὶ εἶεν, ἀναθεματίζεσθαι.",
-        },
-    },
-}
+#
+# The aligned lines live in runtime-data/creeds-aligned.json so Lex Web can
+# reuse the same data (issue #12). Each section is a list of {n, orig, eng}
+# pairs: a clause or sentence each, split at the same point in both languages,
+# with n continuous through the document. Joined with single spaces, the
+# English lines are exactly the English section text from the creeds database
+# and the original lines are the full original text, so the split adds line
+# breaks and changes no words. Where word order does not allow a clean split,
+# the clause stays one line in both columns.
+CREED_ALIGNED_FILE = "creeds-aligned.json"
+CREED_ALIGNED_MAX_BYTES = 1024 * 1024
+
+
+def load_creed_originals(paths=None):
+    """Load aligned creed lines as {topic: {"language", "sections": {title: [(orig, eng)]}}}.
+
+    Looks in the active data folder first, so a copy fetched by `lex update`
+    wins, then in the bundled runtime-data/. A missing or malformed file
+    (including one nested deeply enough to exhaust the parser) yields {} so
+    creeds fall back to English-only.
+    """
+    if paths is None:
+        paths = [get_lex_path(CREED_ALIGNED_FILE)]
+        bundled = os.path.join(RUNTIME_DATA_DIR, CREED_ALIGNED_FILE)
+        if os.path.abspath(bundled) != os.path.abspath(paths[0]):
+            paths.append(bundled)
+    for path in paths:
+        try:
+            if not os.path.isfile(path) or os.path.getsize(path) > CREED_ALIGNED_MAX_BYTES:
+                continue
+            with open(path, "r", encoding="utf-8") as fh:
+                raw = json.load(fh)
+            documents = {}
+            for topic, doc in raw["documents"].items():
+                sections = {}
+                expected = 0
+                for title, rows in doc["sections"].items():
+                    pairs = []
+                    for row in rows:
+                        expected += 1
+                        if row["n"] != expected or not isinstance(row["orig"], str) or not isinstance(row["eng"], str):
+                            raise ValueError(f"bad aligned line in {topic}: {title}")
+                        pairs.append((row["orig"], row["eng"]))
+                    sections[str(title)] = pairs
+                documents[str(topic)] = {"language": str(doc["language"]), "sections": sections}
+            return documents
+        except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError, MemoryError):
+            continue
+    return {}
+
+
+CREED_ORIGINALS = load_creed_originals()
+
+CREED_ORIGINAL_MISSING = "[original not yet loaded]"
+
+
+def creed_cell_text(text):
+    """NFC-normalise creed text so combining marks (polytonic Greek accents,
+    breathings) are precomposed and Rich measures each cell correctly."""
+    return unicodedata.normalize("NFC", text or "")
+# Below this terminal width the aligned creed view stacks each original line
+# directly above its English line instead of using side-by-side columns.
+CREED_ALIGNED_MIN_WIDTH = 80
 
 # Topic-level notes for creed texts. These are intentionally separated from the
 # creed body so we can explain textual/traditional variants without altering the
@@ -4713,7 +4741,92 @@ text from the active Bible version when available.
         doc = CREED_ORIGINALS.get(topic)
         if not doc:
             return None, None
-        return doc["sections"].get(section_title), doc["language"]
+        pairs = doc["sections"].get(section_title)
+        if not pairs:
+            return None, doc["language"]
+        return " ".join(original for original, _english in pairs), doc["language"]
+
+    def creed_aligned_sections(self, topic, sections):
+        """Number a bilingual creed's aligned lines continuously through the document.
+
+        Returns [{"title", "lines": [{"n", "original", "english"}]}], or None
+        when the document has no stored original. A section whose English text
+        no longer matches the stored alignment is kept whole under one number,
+        so the reader never sees an original line paired with the wrong English.
+        """
+        doc = CREED_ORIGINALS.get(topic)
+        if not doc:
+            return None
+        aligned = []
+        number = 0
+        for section in sections:
+            body = "\n\n".join(section["body_parts"]).strip()
+            pairs = doc["sections"].get(section["title"]) or []
+            if not body and not pairs:
+                continue
+            lines = []
+            english_joined = " ".join(english for _original, english in pairs)
+            if pairs and (not body or " ".join(body.split()) == english_joined):
+                for original, english in pairs:
+                    number += 1
+                    lines.append({"n": number, "original": original, "english": english})
+            else:
+                number += 1
+                original = " ".join(original for original, _english in pairs) or None
+                lines.append({"n": number, "original": original, "english": body})
+            aligned.append({"title": section["title"], "lines": lines})
+        return aligned
+
+    def render_creed_aligned(self, language, aligned, title=None):
+        """Numbered original/English line pairs: columns, or stacked when narrow.
+
+        The line number is printed on both sides (before the original and
+        before the English) in the wide and the stacked layout.
+        """
+        if console.width >= CREED_ALIGNED_MIN_WIDTH:
+            # One table, no outer box and no vertical rules: columns are
+            # separated by padding only, so polytonic Greek can never push a
+            # border out of line. The number heads both the original and the
+            # English column, so each side is self-labelled; section titles
+            # sit in both text columns, with a blank row between sections.
+            number_width = max((len(str(line["n"])) for section in aligned for line in section["lines"]), default=1)
+            table = Table(
+                title=title, box=box.SIMPLE_HEAD, show_edge=False, expand=True,
+                padding=(0, 1), header_style="bold",
+            )
+            table.add_column("#", style="verse.ref", justify="right", no_wrap=True, width=number_width)
+            table.add_column(language, style="cyan", overflow="fold", ratio=1)
+            table.add_column("#", style="verse.ref", justify="right", no_wrap=True, width=number_width)
+            table.add_column("English", style="text", overflow="fold", ratio=1)
+            for index, section in enumerate(aligned):
+                if index:
+                    table.add_row("", "", "", "")
+                heading = creed_cell_text(section["title"])
+                table.add_row("", Text(heading, style="bold green"), "", Text(heading, style="bold green"))
+                for line in section["lines"]:
+                    table.add_row(
+                        str(line["n"]),
+                        Text(creed_cell_text(line["original"] or CREED_ORIGINAL_MISSING)),
+                        str(line["n"]),
+                        Text(creed_cell_text(line["english"])),
+                    )
+            console.print(table)
+            console.print()
+            return
+        if title:
+            console.print(Text(title, style="bold"))
+        number_width = max((len(str(line["n"])) for section in aligned for line in section["lines"]), default=1)
+        for section in aligned:
+            console.print(Rule(Text(section["title"], style="bold green"), style="ui.border"))
+            grid = Table.grid(padding=(0, 1))
+            grid.add_column(style="verse.ref", justify="right", no_wrap=True, min_width=number_width)
+            grid.add_column(overflow="fold")
+            for index, line in enumerate(section["lines"]):
+                if index:
+                    grid.add_row("", "")
+                grid.add_row(str(line["n"]), Text(creed_cell_text(line["original"] or CREED_ORIGINAL_MISSING), style="cyan"))
+                grid.add_row(str(line["n"]), Text(creed_cell_text(line["english"]), style="text"))
+            console.print(grid)
 
     def display_creed_note(self, topic):
         note = CREED_NOTES.get(topic)
@@ -4725,19 +4838,8 @@ text from the active Bible version when available.
         if not doc:
             return False
         console.print(Panel(f"{topic}\nSource: {self.format_creed_source(topic, sections[0]['source'])}\nOriginal: {doc['language']}", border_style="bold green"))
-        table = Table(title=f"{topic}: English / {doc['language']}", box=box.ROUNDED, expand=True, show_lines=True)
-        table.add_column(doc["language"], style="cyan", overflow="fold", ratio=1)
-        table.add_column("English", style="text", overflow="fold", ratio=1)
-        for section in sections:
-            body = "\n\n".join(section["body_parts"]).strip()
-            orig_body = doc["sections"].get(section["title"])
-            if not body and not orig_body:
-                continue
-
-            left = f"{orig_body or '[not yet loaded]'}"
-            right = f"{body}"
-            table.add_row(left, right)
-        console.print(table)
+        aligned = self.creed_aligned_sections(topic, sections)
+        self.render_creed_aligned(doc["language"], aligned, title=f"{topic}: {doc['language']} / English")
         self.display_creed_note(topic)
         return True
 
@@ -4925,11 +5027,11 @@ text from the active Bible version when available.
             console.clear()
             original, original_language = self.get_creed_original(topic, section["title"])
             if original:
-                table = Table(title=f"{topic}: {section['title']}", box=None)
-                table.add_column(original_language, style="cyan", overflow="fold")
-                table.add_column("English", style="text", overflow="fold")
-                table.add_row(original, body)
-                console.print(table)
+                aligned = [
+                    entry for entry in (self.creed_aligned_sections(topic, sections) or [])
+                    if entry["title"] == section["title"]
+                ]
+                self.render_creed_aligned(original_language, aligned, title=f"{topic}: {section['title']}")
                 if proofs:
                     console.print(Panel(Markdown(proofs), border_style="green"))
             else:
@@ -6926,17 +7028,23 @@ def json_naves(agent, edition, query):
 
 def json_creed_document(agent, topic, source):
     sections = agent.build_creed_sections(topic)
+    aligned = {entry["title"]: entry["lines"] for entry in (agent.creed_aligned_sections(topic, sections) or [])}
     out = []
     for section in sections:
         original, language = agent.get_creed_original(topic, section["title"])
         body = "\n\n".join(section["body_parts"])
-        out.append({
+        entry = {
             "title": section["title"],
             "text": json_markdown_text(body),
             "markdown": body,
             "proofs": list(section["proofs"]),
             "original": {"language": language, "text": original} if original else None,
-        })
+        }
+        # Only the bilingual creeds carry aligned lines; other documents keep
+        # their JSON exactly as before.
+        if section["title"] in aligned:
+            entry["lines"] = aligned[section["title"]]
+        out.append(entry)
     return {
         "topic": topic,
         "source": source,

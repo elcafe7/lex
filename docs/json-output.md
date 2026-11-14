@@ -195,8 +195,13 @@ subject match returns `{"match":"verse","verse":<verse fields>,"subjects":[...]}
 
 - No query → `command:"creed_list"`, `documents:[{id, topic, source, tradition, date, section_count}]`.
 - One matching document → `command:"creed"`, `document:{topic, source, tradition, date,
-  description, note, section_count, sections:[{title, text, markdown, proofs[], original}]}`.
+  description, note, section_count, sections:[{title, text, markdown, proofs[], original, lines?}]}`.
   `original` is `{language, text}` when Lex has the original-language text, else `null`.
+  `lines` is `[{n, original, english}]` for the four bilingual documents (Apostles', Nicene,
+  Athanasian, Chalcedonian): the section split into aligned clause pairs, with `n` counting
+  through the whole document. Other documents (e.g. Westminster) have no `lines` key, so
+  their JSON is unchanged. Joining a section's `english` lines with spaces gives
+  its `text` (whitespace aside) and joining `original` gives `original.text`.
 - Several documents → `command:"creed_matches"`, `matches:[{topic, source, tradition, section_count}]`.
 - No title match → full-text: `command:"creed_search"`, `results:[{topic, title, source, text, proofs[]}]` (up to 8).
 
