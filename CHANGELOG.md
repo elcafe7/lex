@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **Fixed: book scopes in other editions (#32).** `lex search <term> -<book>`
+  now resolves the book to the active edition's own identifier, so
+  `lex search enemy -psalms` works in the ESV and NASB ("Psalm"), every book
+  scope works in Geneva ("Gen", "Ps", ...), and the Vulgate's "I Samuel",
+  "Revelation of John" and the LXX's "1 Samuel (1 Kingdoms)" are found.
+  Deuterocanonical scopes (`-tobit`, `-sirach`, `-1-maccabees`,
+  `-prayer-of-manasseh`, `-psalms-of-solomon`, ...) and the new
+  `-apocrypha` / `-deuterocanon` group cover every book in KJV 1611,
+  Douay-Rheims, Vulgate, Geneva and LXX; any stored book also works by its
+  own name, and LXX names such as `-3-kingdoms` / `-joshua-a` work too. A
+  scope the edition doesn't have is reported instead of silently returning
+  nothing (`--json`: exit 3 `not_found`), and an unknown scope flag such as
+  `-foobar` is reported instead of being searched as a word (`--json`: exit 2
+  `usage`).
+
+- **Creeds: numbered, line-aligned original and English (#12).** The Apostles',
+  Nicene, Athanasian, and Chalcedonian texts now show as numbered clause pairs
+  (#, Latin/Greek, #, English: the number labels both sides) under their section headings, numbered through the
+  whole document, instead of one paragraph per section. Narrow terminals stack
+  each original line above its English. Wording is unchanged: the lines join
+  back to the same English and original text. `lex --json creed` adds a
+  `lines` array per section. The aligned lines live in
+  `runtime-data/creeds-aligned.json` so Lex Web can reuse them.
+
 - **New: `--json` machine-readable output (#16).** One compact JSON document on
   stdout (`schema_version` 1, see `docs/json-output.md`) for `read`, `study`
   (ESV direct, other editions labelled proxy; LXX/Vulgate when their study data

@@ -12,6 +12,7 @@ import os
 import sys
 import re
 import json
+import unicodedata
 import argparse
 import io
 from collections import Counter
@@ -955,6 +956,9 @@ BOOK_SCOPE_ALIASES.update({
     "re": "Revelation",
     "revelations": "Revelation",
     "apocalypse": "Revelation",
+    "revelationofjohn": "Revelation",
+    "revelation-of-john": "Revelation",
+    "esth": "Esther",
     "isaias": "Isaiah",
     "jeremias": "Jeremiah",
     "ezechiel": "Ezekiel",
@@ -973,27 +977,45 @@ BOOK_SCOPE_ALIASES.update({
     "4kings": "2 Kings",
     "3kgs": "1 Kings",
     "4kgs": "2 Kings",
-    "tobit": "Tob",
-    "tob": "Tob",
-    "judith": "Jdt",
-    "jdt": "Jdt",
-    "wisdom": "Wis",
-    "wisdomofsolomon": "Wis",
-    "wis": "Wis",
-    "sirach": "Sir",
-    "ecclesiasticus": "Sir",
-    "sir": "Sir",
-    "baruch": "Bar",
-    "bar": "Bar",
-    "1maccabees": "1Macc",
-    "1macc": "1Macc",
-    "1mac": "1Macc",
-    "firstmaccabees": "1Macc",
-    "2maccabees": "2Macc",
-    "2macc": "2Macc",
-    "2mac": "2Macc",
-    "secondmaccabees": "2Macc",
 })
+
+# Deuterocanonical / apocryphal books, keyed by a canonical English name.
+# Scopes (`lex search ... -tobit`) and references resolve these names to
+# whatever identifier the active edition stores (KJV 1611 "Tobit", Geneva
+# "Tob", Vulgate "I Maccabees", LXX "Tobit BA", ...). See
+# build_scope_book_index(). Names a user may type go in the tuple; the first
+# entry is the canonical name and scope label.
+DEUTEROCANON_SCOPE_BOOKS = (
+    ("Tobit", "Tobias", "Tob", "Tobit BA"),
+    ("Judith", "Jdt", "Judeth"),
+    ("Wisdom of Solomon", "Wisdom", "Wis", "Wisd", "Book of Wisdom", "Wisdom Solomon"),
+    ("Sirach", "Ecclesiasticus", "Sir", "Ecclus", "Wisdom of Sirach", "Ben Sira"),
+    ("Baruch", "Bar"),
+    ("Letter of Jeremiah", "Epistle of Jeremiah", "Epistle of Jeremy", "EpJer", "Letter Jeremiah"),
+    ("1 Maccabees", "I Maccabees", "1 Machabees", "I Machabees", "1 Macc", "1 Mac", "1Ma", "First Maccabees"),
+    ("2 Maccabees", "II Maccabees", "2 Machabees", "II Machabees", "2 Macc", "2 Mac", "2Ma", "Second Maccabees"),
+    ("3 Maccabees", "III Maccabees", "3 Macc", "3 Mac", "3Ma", "Third Maccabees"),
+    ("4 Maccabees", "IV Maccabees", "4 Macc", "4 Mac", "4Ma", "Fourth Maccabees"),
+    ("1 Esdras", "I Esdras", "Esdras A", "Esdras A/I", "3 Esdras", "1 Esd", "Greek Esdras"),
+    ("2 Esdras", "II Esdras", "4 Esdras", "4 Ezra", "2 Esd"),
+    ("Prayer of Manasseh", "Prayer of Manasses", "Manasseh Prayer", "PrMan"),
+    ("Prayer of Azariah", "Song of the Three", "Song of the Three Children",
+     "Song of the Three Young Men", "Song of Three", "PrAzar"),
+    ("Susanna", "Susanna LXX", "Sus"),
+    ("Bel and the Dragon", "Bel", "Bel LXX", "Bel Dragon"),
+    ("Psalm 151", "Additional Psalm", "Ps151"),
+    ("Laodiceans", "Epistle to the Laodiceans", "Laod"),
+    ("Odes",),
+    ("Psalms of Solomon", "Psalm of Solomon", "Pss Sol", "PsSol"),
+)
+DEUTEROCANON_BOOKS = [names[0] for names in DEUTEROCANON_SCOPE_BOOKS]
+for _names in DEUTEROCANON_SCOPE_BOOKS:
+    for _alias in _names:
+        _low = _alias.lower()
+        for _key in (NORM_RE.sub("-", _low).strip("-"), NORM_RE.sub("", _low)):
+            # Never shadow a 66-book alias (e.g. "song", "est").
+            if BOOK_SCOPE_ALIASES.get(_key, _names[0]) == _names[0]:
+                BOOK_SCOPE_ALIASES[_key] = _names[0]
 
 # Alternate labels that map onto whatever name the active edition stored.
 # Used so Douay, LXX, and KJV 1611 deuterocanon names resolve to the DB row.
@@ -1029,46 +1051,142 @@ BOOK_SCOPE_GROUPS = {
     "letters": BIBLE_BOOKS[44:66],
     "pauline": BIBLE_BOOKS[44:57],
     "general-epistles": BIBLE_BOOKS[57:66],
+    "apocrypha": DEUTEROCANON_BOOKS,
+    "deuterocanon": DEUTEROCANON_BOOKS,
+    "deuterocanonical": DEUTEROCANON_BOOKS,
 }
+
+# A single-dash word token in a search query that is not a known scope.
+UNKNOWN_SCOPE_TOKEN_RE = re.compile(r"^-(?!-)[A-Za-z][A-Za-z0-9-]*$")
+
+_ROMAN_BOOK_PREFIX = re.compile(r"^(iv|iii|ii|i)\s+(?=\S)", re.IGNORECASE)
+_ROMAN_VALUES = {"i": "1", "ii": "2", "iii": "3", "iv": "4"}
+
+
+def glob_escape(text):
+    """Escape SQLite GLOB metacharacters (`*`, `?`, `[`) in a literal."""
+    return re.sub(r"([*?\[])", r"[\1]", str(text))
+
+
+def book_compact_key(name):
+    """`1 Samuel` -> `1samuel`; also folds a Roman prefix (`I Samuel`)."""
+    text = str(name or "").strip()
+    match = _ROMAN_BOOK_PREFIX.match(text)
+    if match:
+        text = _ROMAN_VALUES[match.group(1).lower()] + text[match.end():]
+    return NORM_RE.sub("", text.lower())
+
+
+def build_scope_book_index(stored_books):
+    """Map scope book names to the identifiers an edition actually stores.
+
+    ``stored_books`` are the book parts of the edition's references (``esv``
+    stores ``Psalm``, Geneva ``Ps``, the Vulgate ``I Samuel``, the LXX
+    ``1 Samuel (1 Kingdoms)``). Returns ``{"books": {name: [stored, ...]},
+    "stored": {compact key: stored}}`` where ``name`` is a 66-book name from
+    BIBLE_BOOKS or a DEUTEROCANON_BOOKS name present in this edition.
+
+    Resolution order for each book: the edition's own identifier for the
+    canonical name, then any known alias, then the LXX naming table. Exact
+    stored names win, so `2 Esdras` is 4 Ezra where an edition stores it and
+    Esdras B (Ezra) only in the LXX.
+    """
+    stored_books = list(dict.fromkeys(b for b in stored_books if b))
+    stored = {}
+    for book in stored_books:
+        stored.setdefault(book_compact_key(book), book)
+        stored.setdefault(NORM_RE.sub("", book.lower()), book)
+
+    def lookup(names):
+        for name in names:
+            hit = stored.get(book_compact_key(name))
+            if hit:
+                return hit
+        for name in names:
+            low = str(name).lower()
+            target = (LXX_REFERENCE_BOOK_ALIASES.get(NORM_RE.sub("", low))
+                      or LXX_REFERENCE_BOOK_ALIASES.get(NORM_RE.sub("-", low).strip("-")))
+            if target and target in stored_books:
+                return target
+        return None
+
+    books = {}
+    for book in BIBLE_BOOKS:
+        aliases = [alias for alias, target in BOOK_SCOPE_ALIASES.items() if target == book]
+        hit = lookup([book]) or lookup(aliases)
+        if hit:
+            books[book] = [hit]
+    for names in DEUTEROCANON_SCOPE_BOOKS:
+        hit = lookup(names)
+        if hit:
+            books[names[0]] = [hit]
+    return {"books": books, "stored": stored}
 
 # Original-language creed text is only stored for short documents where
 # side-by-side display is useful. Longer confessions stay English-only for now.
-CREED_ORIGINALS = {
-    "The Apostles' Creed": {
-        "language": "Latin",
-        "sections": {
-            "God the Father": "Credo in Deum Patrem omnipotentem, Creatorem caeli et terrae.",
-            "Jesus Christ": "Et in Iesum Christum, Filium eius unicum, Dominum nostrum, qui conceptus est de Spiritu Sancto, natus ex Maria Virgine, passus sub Pontio Pilato, crucifixus, mortuus, et sepultus; descendit ad inferos; tertia die resurrexit a mortuis; ascendit ad caelos; sedet ad dexteram Dei Patris omnipotentis; inde venturus est iudicare vivos et mortuos.",
-            "The Holy Spirit and the Church": "Credo in Spiritum Sanctum, sanctam Ecclesiam catholicam, sanctorum communionem, remissionem peccatorum, carnis resurrectionem, vitam aeternam. Amen.",
-        },
-    },
-    "The Nicene Creed": {
-        "language": "Greek",
-        "sections": {
-            "God the Father": "Πιστεύομεν εἰς ἕνα Θεόν, Πατέρα, παντοκράτορα, ποιητὴν οὐρανοῦ καὶ γῆς, ὁρατῶν τε πάντων καὶ ἀοράτων.",
-            "Jesus Christ the Son": "Καὶ εἰς ἕνα Κύριον Ἰησοῦν Χριστόν, τὸν Υἱὸν τοῦ Θεοῦ τὸν μονογενῆ, τὸν ἐκ τοῦ Πατρὸς γεννηθέντα πρὸ πάντων τῶν αἰώνων· φῶς ἐκ φωτός, Θεὸν ἀληθινὸν ἐκ Θεοῦ ἀληθινοῦ, γεννηθέντα, οὐ ποιηθέντα, ὁμοούσιον τῷ Πατρί, δι᾿ οὗ τὰ πάντα ἐγένετο. Τὸν δι᾿ ἡμᾶς τοὺς ἀνθρώπους καὶ διὰ τὴν ἡμετέραν σωτηρίαν κατελθόντα ἐκ τῶν οὐρανῶν καὶ σαρκωθέντα ἐκ Πνεύματος ἁγίου καὶ Μαρίας τῆς Παρθένου καὶ ἐνανθρωπήσαντα. Σταυρωθέντα τε ὑπὲρ ἡμῶν ἐπὶ Ποντίου Πιλάτου καὶ παθόντα καὶ ταφέντα. Καὶ ἀναστάντα τῇ τρίτῃ ἡμέρᾳ, κατὰ τὰς Γραφάς. Καὶ ἀνελθόντα εἰς τοὺς οὐρανοὺς καὶ καθεζόμενον ἐκ δεξιῶν τοῦ Πατρός. Καὶ πάλιν ἐρχόμενον μετὰ δόξης κρῖναι ζῶντας καὶ νεκρούς, οὗ τῆς βασιλείας οὐκ ἔσται τέλος.",
-            "The Holy Spirit": "Καὶ εἰς τὸ Πνεῦμα τὸ Ἅγιον, τὸ κύριον, τὸ ζωοποιόν, τὸ ἐκ τοῦ Πατρὸς ἐκπορευόμενον, τὸ σὺν Πατρὶ καὶ Υἱῷ συμπροσκυνούμενον καὶ συνδοξαζόμενον, τὸ λαλῆσαν διὰ τῶν προφητῶν.",
-            "The Church and Final Hope": "Εἰς μίαν, ἁγίαν, καθολικὴν καὶ ἀποστολικὴν Ἐκκλησίαν. Ὁμολογοῦμεν ἓν βάπτισμα εἰς ἄφεσιν ἁμαρτιῶν. Προσδοκοῦμεν ἀνάστασιν νεκρῶν καὶ ζωὴν τοῦ μέλλοντος αἰῶνος. Ἀμήν.",
-        },
-    },
-    "Athanasian Creed": {
-        "language": "Latin",
-        "sections": {
-            "Opening": "Quicunque vult salvus esse, ante omnia opus est, ut teneat catholicam fidem: Quam nisi quisque integram inviolatamque servaverit, absque dubio in aeternum peribit.",
-            "The Doctrine of the Trinity": "Fides autem catholica haec est: ut unum Deum in Trinitate, et Trinitatem in unitate veneremur. Neque confundentes personas, neque substantiam separantes. Alia est enim persona Patris alia Filii, alia Spiritus Sancti: Sed Patris, et Filii, et Spiritus Sancti una est divinitas, aequalis gloria, coaeterna maiestas. Qualis Pater, talis Filius, talis Spiritus Sanctus. Increatus Pater, increatus Filius, increatus Spiritus Sanctus. Immensus Pater, immensus Filius, immensus Spiritus Sanctus. Aeternus Pater, aeternus Filius, aeternus Spiritus Sanctus. Et tamen non tres aeterni, sed unus aeternus. Sicut non tres increati, nec tres immensi, sed unus increatus, et unus immensus. Similiter omnipotens Pater, omnipotens Filius, omnipotens Spiritus Sanctus. Et tamen non tres omnipotentes, sed unus omnipotens. Ita Deus Pater, Deus Filius, Deus Spiritus Sanctus. Et tamen non tres Dii, sed unus est Deus. Ita Dominus Pater, Dominus Filius, Dominus Spiritus Sanctus. Et tamen non tres Domini, sed unus est Dominus. Quia, sicut singillatim unamquamque personam Deum ac Dominum confiteri christiana veritate compellimur: ita tres Deos aut Dominos dicere catholica religione prohibemur. Pater a nullo est factus: nec creatus, nec genitus. Filius a Patre solo est: non factus, nec creatus, sed genitus. Spiritus Sanctus a Patre et Filio: non factus, nec creatus, nec genitus, sed procedens. Unus ergo Pater, non tres Patres: unus Filius, non tres Filii: unus Spiritus Sanctus, non tres Spiritus Sancti. Et in hac Trinitate nihil prius aut posterius, nihil maius aut minus: sed totae tres personae coaeternae sibi sunt et coaequales. Ita ut per omnia, sicut iam supra dictum est, et unitas in Trinitate, et Trinitas in unitate veneranda sit. Qui vult ergo salvus esse, ita de Trinitate sentiat.",
-            "The Incarnation of Christ": "Sed necessarium est ad aeternam salutem, ut incarnationem quoque Domini nostri Iesu Christi fideliter credat. Est ergo fides recta ut credamus et confiteamur, quia Dominus noster Iesus Christus, Dei Filius, Deus et homo est. Deus est ex substantia Patris ante saecula genitus: et homo est ex substantia matris in saeculo natus. Perfectus Deus, perfectus homo: ex anima rationabili et humana carne subsistens. Aequalis Patri secundum divinitatem: minor Patre secundum humanitatem. Qui licet Deus sit et homo, non duo tamen, sed unus est Christus. Unus autem non conversione divinitatis in carnem, sed assumptione humanitatis in Deum. Unus omnino, non confusione substantiae, sed unitate personae. Nam sicut anima rationabilis et caro unus est homo: ita Deus et homo unus est Christus. Qui passus est pro salute nostra: descendit ad inferos: tertia die resurrexit a mortuis. Ascendit ad caelos, sedet ad dexteram Dei Patris omnipotentis: inde venturus est iudicare vivos et mortuos. Ad cuius adventum omnes homines resurgere habent cum corporibus suis: et reddituri sunt de factis propriis rationem. Et qui bona egerunt, ibunt in vitam aeternam: qui vero mala, in ignem aeternum.",
-            "Conclusion": "Haec est fides catholica, quam nisi quisque fideliter firmiterque crediderit, salvus esse non poterit.",
-        },
-    },
-    "Chalcedonian Definition": {
-        "language": "Greek",
-        "sections": {
-            "Introduction": "Ἡ ἁγία καὶ μεγάλη καὶ οἰκουμενικὴ σύνοδος, ἡ κατὰ θεοῦ χάριν καὶ θέσπισμα τῶν εὐσεβεστάτων καὶ φιλοχρίστων ἡμῶν βασιλέων Μαρκιανοῦ καὶ Οὐαλεντινιανοῦ Αὐγούστων ἐν Χαλκηδόνι τῇ μητροπόλει τῆς Βιθυνῶν ἐπαρχίας συναχθεῖσα ἐν τῷ μαρτυρίῳ τῆς ἁγίας καὶ καλλινίκου μάρτυρος Εὐφημίας, ὥρισε τὰ ὑποτεταγμένα. Ὁ κύριος ἡμῶν καὶ σωτὴρ Ἰησοῦς Χριστός, τὴν τῆς πίστεως γνῶσιν τοῖς μαθηταῖς βεβαιῶν, ἔφη πρὸς αὐτούς· Εἰρήνην τὴν ἐμὴν δίδωμι ὑμῖν, εἰρήνην τὴν ἐμὴν ἀφίημι ὑμῖν, πρὸς τὸ μηδένα πρὸς τὸν πλησίον διχονοεῖν ἐν τοῖς τῆς εὐσεβείας δόγμασιν, ἀλλ' ἐπίσης τοῖς πᾶσι τὸ τῆς ἀληθείας ἐπιδείκνυσθαι κήρυγμα.",
-            "The Definition": "Ἑπόμενοι τοίνυν τοῖς ἁγίοις πατράσιν, ἕνα καὶ τὸν αὐτὸν ὁμολογεῖν υἱὸν τὸν κύριον ἡμῶν Ἰησοῦν Χριστὸν συμφώνως ἅπαντες ἐκδιδάσκομεν, τέλειον τὸν αὐτὸν ἐν θεότητι καὶ τέλειον τὸν αὐτὸν ἐν ἀνθρωπότητι, θεὸν ἀληθῶς καὶ ἄνθρωπον ἀληθῶς τὸν αὐτόν, ἐκ ψυχῆς λογικῆς καὶ σώματος, ὁμοούσιον τῷ πατρὶ κατὰ τὴν θεότητα καὶ ὁμοούσιον τὸν αὐτὸν ἡμῖν κατὰ τὴν ἀνθρωπότητα, κατὰ πάντα ὅμοιον ἡμῖν χωρὶς ἁμαρτίας· πρὸ αἰώνων μὲν ἐκ τοῦ πατρὸς γεννηθέντα κατὰ τὴν θεότητα, ἐπ' ἐσχάτων δὲ τῶν ἡμερῶν τὸν αὐτὸν δι' ἡμᾶς καὶ διὰ τὴν ἡμετέραν σωτηρίαν ἐκ Μαρίας τῆς παρθένου τῆς θεοτόκου κατὰ τὴν ἀνθρωπότητα, ἕνα καὶ τὸν αὐτὸν Χριστόν, υἱόν, κύριον, μονογενῆ, ἐν δύο φύσεσιν ἀσυγχύτως, ἀτρέπτως, ἀδιαιρέτως, ἀχωρίστως γνωριζόμενον· οὐδαμοῦ τῆς τῶν φύσεων διαφορᾶς ἀνῃρημένης διὰ τὴν ἕνωσιν, σωζομένης δὲ μᾶλλον τῆς ἰδιότητος ἑκατέρας φύσεως καὶ εἰς ἓν πρόσωπον καὶ μίαν ὑπόστασιν συντρεχούσης, οὐκ εἰς δύο πρόσωπα μεριζόμενον ἢ διαιρούμενον, ἀλλ' ἕνα καὶ τὸν αὐτὸν υἱὸν καὶ μονογενῆ θεὸν λόγον, κύριον Ἰησοῦν Χριστόν· καθάπερ ἄνωθεν οἱ προφῆται περὶ αὐτοῦ καὶ αὐτὸς ἡμᾶς ὁ κύριος Ἰησοῦς Χριστὸς ἐξεπαίδευσε καὶ τὸ τῶν πατέρων ἡμῖν παραδέδωκε σύμβολον.",
-            "Prohibitions": "Τούτων τοίνυν μετὰ πάσης πανταχόθεν ἀκριβείας τε καὶ ἐμμελείας διατυπωθέντων ἡμῖν, ὥρισεν ἡ ἁγία καὶ οἰκουμενικὴ σύνοδος, ἑτέραν πίστιν μηδενὶ ἐξεῖναι προφέρειν, ἤγουν συγγράφειν ἢ συντιθέναι ἢ φρονεῖν ἢ διδάσκειν ἑτέρους· τοὺς δὲ τολμῶντας ἢ συντιθέναι πίστιν ἑτέραν, ἤγουν προκομίζειν ἢ διδάσκειν ἢ παραδιδόναι ἕτερον σύμβολον τοῖς ἐθέλουσιν ἐπιστρέφειν εἰς ἐπίγνωσιν τῆς ἀληθείας ἐξ Ἑλληνισμοῦ ἢ ἐξ Ἰουδαϊσμοῦ ἢ γοῦν ἐξ αἱρέσεως οἱασδηποτοῦν, τούτους, εἰ μὲν εἶεν ἐπίσκοποι ἢ κληρικοί, ἀλλοτρίους εἶναι τοὺς ἐπισκόπους τῆς ἐπισκοπῆς καὶ τοὺς κληρικοὺς τοῦ κλήρου, εἰ δὲ μονάζοντες ἢ λαϊκοὶ εἶεν, ἀναθεματίζεσθαι.",
-        },
-    },
-}
+#
+# The aligned lines live in runtime-data/creeds-aligned.json so Lex Web can
+# reuse the same data (issue #12). Each section is a list of {n, orig, eng}
+# pairs: a clause or sentence each, split at the same point in both languages,
+# with n continuous through the document. Joined with single spaces, the
+# English lines are exactly the English section text from the creeds database
+# and the original lines are the full original text, so the split adds line
+# breaks and changes no words. Where word order does not allow a clean split,
+# the clause stays one line in both columns.
+CREED_ALIGNED_FILE = "creeds-aligned.json"
+CREED_ALIGNED_MAX_BYTES = 1024 * 1024
+
+
+def load_creed_originals(paths=None):
+    """Load aligned creed lines as {topic: {"language", "sections": {title: [(orig, eng)]}}}.
+
+    Looks in the active data folder first, so a copy fetched by `lex update`
+    wins, then in the bundled runtime-data/. A missing or malformed file
+    (including one nested deeply enough to exhaust the parser) yields {} so
+    creeds fall back to English-only.
+    """
+    if paths is None:
+        paths = [get_lex_path(CREED_ALIGNED_FILE)]
+        bundled = os.path.join(RUNTIME_DATA_DIR, CREED_ALIGNED_FILE)
+        if os.path.abspath(bundled) != os.path.abspath(paths[0]):
+            paths.append(bundled)
+    for path in paths:
+        try:
+            if not os.path.isfile(path) or os.path.getsize(path) > CREED_ALIGNED_MAX_BYTES:
+                continue
+            with open(path, "r", encoding="utf-8") as fh:
+                raw = json.load(fh)
+            documents = {}
+            for topic, doc in raw["documents"].items():
+                sections = {}
+                expected = 0
+                for title, rows in doc["sections"].items():
+                    pairs = []
+                    for row in rows:
+                        expected += 1
+                        if row["n"] != expected or not isinstance(row["orig"], str) or not isinstance(row["eng"], str):
+                            raise ValueError(f"bad aligned line in {topic}: {title}")
+                        pairs.append((row["orig"], row["eng"]))
+                    sections[str(title)] = pairs
+                documents[str(topic)] = {"language": str(doc["language"]), "sections": sections}
+            return documents
+        except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError, MemoryError):
+            continue
+    return {}
+
+
+CREED_ORIGINALS = load_creed_originals()
+
+CREED_ORIGINAL_MISSING = "[original not yet loaded]"
+
+
+def creed_cell_text(text):
+    """NFC-normalise creed text so combining marks (polytonic Greek accents,
+    breathings) are precomposed and Rich measures each cell correctly."""
+    return unicodedata.normalize("NFC", text or "")
+# Below this terminal width the aligned creed view stacks each original line
+# directly above its English line instead of using side-by-side columns.
+CREED_ALIGNED_MIN_WIDTH = 80
 
 # Topic-level notes for creed texts. These are intentionally separated from the
 # creed body so we can explain textual/traditional variants without altering the
@@ -1635,6 +1753,17 @@ class LexAgent:
                 self.canon_map[key] = db_target
                 self.canon_map[slug] = db_target
 
+        # Edition-aware scope index (issue #32): every scope book name and
+        # alias resolves to the identifier this edition stores. It also fills
+        # canon_map gaps (Vulgate `I Samuel`, Geneva `Tob`) without changing
+        # any mapping that already resolved.
+        self.scope_book_index = build_scope_book_index(self.reverse_canon_map.keys())
+        for name, hits in self.scope_book_index["books"].items():
+            keys = {book_compact_key(name), NORM_RE.sub("-", name.lower()).strip("-")}
+            keys.update(alias for alias, target in BOOK_SCOPE_ALIASES.items() if target == name)
+            for key in keys:
+                self.canon_map.setdefault(key, hits[0])
+
         self.encyclopedia_db = LexDB(ENCYCLOPEDIA_DB_PATH) if os.path.exists(ENCYCLOPEDIA_DB_PATH) else None
         self.cross_refs_db = LexDB(CROSS_REFS_DB_PATH if os.path.exists(CROSS_REFS_DB_PATH) else LEXICON_DB_PATH)
         self.strongs_db = LexDB(STRONGS_DB_PATH if os.path.exists(STRONGS_DB_PATH) else LEXICON_DB_PATH)
@@ -1907,6 +2036,10 @@ class LexAgent:
                 continue
             start_book = BOOK_SCOPE_ALIASES[start_alias]
             end_book = BOOK_SCOPE_ALIASES[end_alias]
+            if start_book not in BIBLE_BOOK_INDEX or end_book not in BIBLE_BOOK_INDEX:
+                # Ranges follow the 66-book order; deuterocanonical books
+                # have no single position across editions.
+                continue
             start_idx = BIBLE_BOOK_INDEX[start_book]
             end_idx = BIBLE_BOOK_INDEX[end_book]
             if start_idx > end_idx:
@@ -1916,7 +2049,49 @@ class LexAgent:
                 "label": f"{start_book}-{end_book}",
                 "books": BIBLE_BOOKS[start_idx:end_idx + 1],
             }
+        # Any other book the active edition stores (`-laodiceans`,
+        # `-joshua-a`, `-psalms-of-solomon`, `-additional-psalm`).
+        index = getattr(self, "scope_book_index", None)
+        if index:
+            stored = index["stored"].get(book_compact_key(scope.replace("-", " ")))
+            if stored:
+                return {
+                    "label": stored,
+                    "books": [stored],
+                }
+        # Septuagint names (`-3-kingdoms`, `-joshua-a`, `-esdras-a`). When the
+        # active edition lacks the book, the scope still parses so search can
+        # say so instead of treating the flag as a search word.
+        target = (LXX_REFERENCE_BOOK_ALIASES.get(scope)
+                  or LXX_REFERENCE_BOOK_ALIASES.get(scope.replace("-", "")))
+        if target:
+            return {
+                "label": target,
+                "books": [target],
+            }
         return None
+
+    def resolve_scope_books(self, scope):
+        """Translate a parsed scope into the active edition's stored books.
+
+        Returns a new scope dict whose ``books`` are reference identifiers
+        that exist in this edition (possibly empty) and whose ``requested``
+        keeps the parsed names. A scope never silently matches a book name
+        the edition does not store.
+        """
+        if not scope:
+            return scope
+        index = getattr(self, "scope_book_index", None) or {"books": {}, "stored": {}}
+        resolved = []
+        for name in scope["books"]:
+            hits = index["books"].get(name)
+            if hits is None:
+                stored = index["stored"].get(book_compact_key(name))
+                hits = [stored] if stored else []
+            for hit in hits:
+                if hit not in resolved:
+                    resolved.append(hit)
+        return {"label": scope["label"], "books": resolved, "requested": list(scope["books"])}
 
     def parse_search_query_and_scope(self, query):
         try:
@@ -1925,10 +2100,15 @@ class LexAgent:
             tokens = query.split()
         kept = []
         scope = None
+        self.last_search_scope_unknown = None
         for token in tokens:
             parsed_scope = self.parse_book_scope(token)
             if parsed_scope:
                 scope = parsed_scope
+            elif UNKNOWN_SCOPE_TOKEN_RE.match(token):
+                # `-foobar`: looks like a scope flag but names no book or
+                # group; never search it as a word or silently drop it.
+                self.last_search_scope_unknown = token
             else:
                 kept.append(token)
         return " ".join(kept).strip(), scope
@@ -2899,6 +3079,22 @@ Jeremiah through Revelation. Book names use lowercase words joined by hyphens:
 *   `-epistles` / `-letters`
 *   `-pauline`
 *   `-general-epistles`
+*   `-apocrypha` / `-deuterocanon` - books outside the 66 that the edition has
+
+## Editions and Deuterocanonical Books
+
+Scopes follow the active edition's own book names, so `-psalms` finds the
+ESV's "Psalm" and Geneva's "Ps". Deuterocanonical books work in editions
+that include them (KJV 1611, Douay-Rheims, Vulgate, Geneva, Greek LXX):
+
+*   `lex -B kj16 search love -tobit`
+*   `lex -B dra search temple -1-maccabees`
+*   `lex -B lxx search κύριος -psalms-of-solomon`
+
+Any book the edition stores also works by its own name, such as
+`-laodiceans` (Vulgate) or `-joshua-a` (LXX). Use `-wisdom-of-solomon` or
+`-wis` for the book of Wisdom; `-wisdom` is the wisdom-literature group.
+A scope the edition doesn't have says so instead of returning nothing.
 
 Free-text search no longer runs from bare input.
 
@@ -4545,7 +4741,92 @@ text from the active Bible version when available.
         doc = CREED_ORIGINALS.get(topic)
         if not doc:
             return None, None
-        return doc["sections"].get(section_title), doc["language"]
+        pairs = doc["sections"].get(section_title)
+        if not pairs:
+            return None, doc["language"]
+        return " ".join(original for original, _english in pairs), doc["language"]
+
+    def creed_aligned_sections(self, topic, sections):
+        """Number a bilingual creed's aligned lines continuously through the document.
+
+        Returns [{"title", "lines": [{"n", "original", "english"}]}], or None
+        when the document has no stored original. A section whose English text
+        no longer matches the stored alignment is kept whole under one number,
+        so the reader never sees an original line paired with the wrong English.
+        """
+        doc = CREED_ORIGINALS.get(topic)
+        if not doc:
+            return None
+        aligned = []
+        number = 0
+        for section in sections:
+            body = "\n\n".join(section["body_parts"]).strip()
+            pairs = doc["sections"].get(section["title"]) or []
+            if not body and not pairs:
+                continue
+            lines = []
+            english_joined = " ".join(english for _original, english in pairs)
+            if pairs and (not body or " ".join(body.split()) == english_joined):
+                for original, english in pairs:
+                    number += 1
+                    lines.append({"n": number, "original": original, "english": english})
+            else:
+                number += 1
+                original = " ".join(original for original, _english in pairs) or None
+                lines.append({"n": number, "original": original, "english": body})
+            aligned.append({"title": section["title"], "lines": lines})
+        return aligned
+
+    def render_creed_aligned(self, language, aligned, title=None):
+        """Numbered original/English line pairs: columns, or stacked when narrow.
+
+        The line number is printed on both sides (before the original and
+        before the English) in the wide and the stacked layout.
+        """
+        if console.width >= CREED_ALIGNED_MIN_WIDTH:
+            # One table, no outer box and no vertical rules: columns are
+            # separated by padding only, so polytonic Greek can never push a
+            # border out of line. The number heads both the original and the
+            # English column, so each side is self-labelled; section titles
+            # sit in both text columns, with a blank row between sections.
+            number_width = max((len(str(line["n"])) for section in aligned for line in section["lines"]), default=1)
+            table = Table(
+                title=title, box=box.SIMPLE_HEAD, show_edge=False, expand=True,
+                padding=(0, 1), header_style="bold",
+            )
+            table.add_column("#", style="verse.ref", justify="right", no_wrap=True, width=number_width)
+            table.add_column(language, style="cyan", overflow="fold", ratio=1)
+            table.add_column("#", style="verse.ref", justify="right", no_wrap=True, width=number_width)
+            table.add_column("English", style="text", overflow="fold", ratio=1)
+            for index, section in enumerate(aligned):
+                if index:
+                    table.add_row("", "", "", "")
+                heading = creed_cell_text(section["title"])
+                table.add_row("", Text(heading, style="bold green"), "", Text(heading, style="bold green"))
+                for line in section["lines"]:
+                    table.add_row(
+                        str(line["n"]),
+                        Text(creed_cell_text(line["original"] or CREED_ORIGINAL_MISSING)),
+                        str(line["n"]),
+                        Text(creed_cell_text(line["english"])),
+                    )
+            console.print(table)
+            console.print()
+            return
+        if title:
+            console.print(Text(title, style="bold"))
+        number_width = max((len(str(line["n"])) for section in aligned for line in section["lines"]), default=1)
+        for section in aligned:
+            console.print(Rule(Text(section["title"], style="bold green"), style="ui.border"))
+            grid = Table.grid(padding=(0, 1))
+            grid.add_column(style="verse.ref", justify="right", no_wrap=True, min_width=number_width)
+            grid.add_column(overflow="fold")
+            for index, line in enumerate(section["lines"]):
+                if index:
+                    grid.add_row("", "")
+                grid.add_row(str(line["n"]), Text(creed_cell_text(line["original"] or CREED_ORIGINAL_MISSING), style="cyan"))
+                grid.add_row(str(line["n"]), Text(creed_cell_text(line["english"]), style="text"))
+            console.print(grid)
 
     def display_creed_note(self, topic):
         note = CREED_NOTES.get(topic)
@@ -4557,19 +4838,8 @@ text from the active Bible version when available.
         if not doc:
             return False
         console.print(Panel(f"{topic}\nSource: {self.format_creed_source(topic, sections[0]['source'])}\nOriginal: {doc['language']}", border_style="bold green"))
-        table = Table(title=f"{topic}: English / {doc['language']}", box=box.ROUNDED, expand=True, show_lines=True)
-        table.add_column(doc["language"], style="cyan", overflow="fold", ratio=1)
-        table.add_column("English", style="text", overflow="fold", ratio=1)
-        for section in sections:
-            body = "\n\n".join(section["body_parts"]).strip()
-            orig_body = doc["sections"].get(section["title"])
-            if not body and not orig_body:
-                continue
-
-            left = f"{orig_body or '[not yet loaded]'}"
-            right = f"{body}"
-            table.add_row(left, right)
-        console.print(table)
+        aligned = self.creed_aligned_sections(topic, sections)
+        self.render_creed_aligned(doc["language"], aligned, title=f"{topic}: {doc['language']} / English")
         self.display_creed_note(topic)
         return True
 
@@ -4757,11 +5027,11 @@ text from the active Bible version when available.
             console.clear()
             original, original_language = self.get_creed_original(topic, section["title"])
             if original:
-                table = Table(title=f"{topic}: {section['title']}", box=None)
-                table.add_column(original_language, style="cyan", overflow="fold")
-                table.add_column("English", style="text", overflow="fold")
-                table.add_row(original, body)
-                console.print(table)
+                aligned = [
+                    entry for entry in (self.creed_aligned_sections(topic, sections) or [])
+                    if entry["title"] == section["title"]
+                ]
+                self.render_creed_aligned(original_language, aligned, title=f"{topic}: {section['title']}")
                 if proofs:
                     console.print(Panel(Markdown(proofs), border_style="green"))
             else:
@@ -4789,8 +5059,12 @@ text from the active Bible version when available.
     def search_scope_clause(self, scope):
         if not scope:
             return "", ()
-        clauses = " OR ".join(["reference GLOB ?"] * len(scope["books"]))
-        params = tuple(f"*:{book}:*" for book in scope["books"])
+        books = scope["books"]
+        if not books:
+            # The scope names no book this edition has: match nothing.
+            return " AND 0", ()
+        clauses = " OR ".join(["reference GLOB ?"] * len(books))
+        params = tuple(f"*:{glob_escape(book)}:*" for book in books)
         return f" AND ({clauses})", params
 
     def text_fts_query(self, fts_query):
@@ -4853,6 +5127,14 @@ text from the active Bible version when available.
 
     def resolve_search(self, query, page=1, limit=10):
         search_query, scope = self.parse_search_query_and_scope(query)
+        scope = self.resolve_scope_books(scope)
+        self.last_search_scope_missing = None
+        if getattr(self, "last_search_scope_unknown", None):
+            return None
+        if scope and not scope["books"]:
+            # e.g. `-tobit` in the KJV, `-romans` in the Greek LXX.
+            self.last_search_scope_missing = scope["label"]
+            return None
         effective_query = search_query
         phrase_query = self.escape_fts_query(effective_query)
         terms_query = self.fts_terms_query(effective_query)
@@ -4941,7 +5223,7 @@ text from the active Bible version when available.
         footer += f"Mode: {state['mode']}{scope_label}  |  Showing {offset + 1}-{shown_end} of {total}"
         query_arg = shlex.quote(query)
         if scope:
-            query_arg = f"{query_arg} -{scope['label'].lower().replace(' ', '-').replace('--', '-')}"
+            query_arg = f"{query_arg} -{NORM_RE.sub('-', scope['label'].lower()).strip('-')}"
         if interactive:
             footer += "  |  Choose an action below"
         elif shown_end < total:
@@ -6585,6 +6867,21 @@ def json_web(agent, edition, query, limit):
 def json_search(agent, edition, query, page, limit):
     state = agent.resolve_search(query, page=page or 1, limit=limit or 10)
     if not state:
+        unknown_scope = getattr(agent, "last_search_scope_unknown", None)
+        if unknown_scope:
+            raise JsonExit(
+                "usage",
+                f"Unknown book scope {unknown_scope}",
+                JSON_EXIT_USAGE,
+                hint="Use a book or group such as -psalms, -nt, -gospels, -apocrypha; see `lex search`.",
+            )
+        missing_scope = getattr(agent, "last_search_scope_missing", None)
+        if missing_scope:
+            raise JsonExit(
+                "not_found",
+                f"Book scope {missing_scope} is not in edition {edition}",
+                JSON_EXIT_NOT_FOUND,
+            )
         raise JsonExit("not_found", f"No scripture search results for: {query}", JSON_EXIT_NOT_FOUND)
     results = []
     for idx, (ref, text) in enumerate(state["results"], start=1):
@@ -6731,17 +7028,23 @@ def json_naves(agent, edition, query):
 
 def json_creed_document(agent, topic, source):
     sections = agent.build_creed_sections(topic)
+    aligned = {entry["title"]: entry["lines"] for entry in (agent.creed_aligned_sections(topic, sections) or [])}
     out = []
     for section in sections:
         original, language = agent.get_creed_original(topic, section["title"])
         body = "\n\n".join(section["body_parts"])
-        out.append({
+        entry = {
             "title": section["title"],
             "text": json_markdown_text(body),
             "markdown": body,
             "proofs": list(section["proofs"]),
             "original": {"language": language, "text": original} if original else None,
-        })
+        }
+        # Only the bilingual creeds carry aligned lines; other documents keep
+        # their JSON exactly as before.
+        if section["title"] in aligned:
+            entry["lines"] = aligned[section["title"]]
+        out.append(entry)
     return {
         "topic": topic,
         "source": source,
@@ -7604,7 +7907,15 @@ def main():
         if not query:
             sys.exit(1)
         if not agent.display_search(query, page=args.page, limit=args.limit or 10):
-            console.print("[warning]No scripture search results found.[/]")
+            unknown_scope = getattr(agent, "last_search_scope_unknown", None)
+            missing_scope = getattr(agent, "last_search_scope_missing", None)
+            if unknown_scope:
+                console.print(f"[warning]Unknown book scope {rich_escape(unknown_scope)}; use a book or group such as -psalms, -nt or -apocrypha (see `lex search`).[/]")
+            elif missing_scope:
+                edition_name = BIBLE_VERSIONS.get(agent.bible_prefix, {}).get("name", agent.bible_prefix)
+                console.print(f"[warning]{rich_escape(missing_scope)} is not in {rich_escape(edition_name)}; try another edition with -B.[/]")
+            else:
+                console.print("[warning]No scripture search results found.[/]")
             sys.exit(1)
         sys.exit(0)
     elif query == "web":
