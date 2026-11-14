@@ -955,6 +955,9 @@ BOOK_SCOPE_ALIASES.update({
     "re": "Revelation",
     "revelations": "Revelation",
     "apocalypse": "Revelation",
+    "revelationofjohn": "Revelation",
+    "revelation-of-john": "Revelation",
+    "esth": "Esther",
     "isaias": "Isaiah",
     "jeremias": "Jeremiah",
     "ezechiel": "Ezekiel",
@@ -973,27 +976,45 @@ BOOK_SCOPE_ALIASES.update({
     "4kings": "2 Kings",
     "3kgs": "1 Kings",
     "4kgs": "2 Kings",
-    "tobit": "Tob",
-    "tob": "Tob",
-    "judith": "Jdt",
-    "jdt": "Jdt",
-    "wisdom": "Wis",
-    "wisdomofsolomon": "Wis",
-    "wis": "Wis",
-    "sirach": "Sir",
-    "ecclesiasticus": "Sir",
-    "sir": "Sir",
-    "baruch": "Bar",
-    "bar": "Bar",
-    "1maccabees": "1Macc",
-    "1macc": "1Macc",
-    "1mac": "1Macc",
-    "firstmaccabees": "1Macc",
-    "2maccabees": "2Macc",
-    "2macc": "2Macc",
-    "2mac": "2Macc",
-    "secondmaccabees": "2Macc",
 })
+
+# Deuterocanonical / apocryphal books, keyed by a canonical English name.
+# Scopes (`lex search ... -tobit`) and references resolve these names to
+# whatever identifier the active edition stores (KJV 1611 "Tobit", Geneva
+# "Tob", Vulgate "I Maccabees", LXX "Tobit BA", ...). See
+# build_scope_book_index(). Names a user may type go in the tuple; the first
+# entry is the canonical name and scope label.
+DEUTEROCANON_SCOPE_BOOKS = (
+    ("Tobit", "Tobias", "Tob", "Tobit BA"),
+    ("Judith", "Jdt", "Judeth"),
+    ("Wisdom of Solomon", "Wisdom", "Wis", "Wisd", "Book of Wisdom", "Wisdom Solomon"),
+    ("Sirach", "Ecclesiasticus", "Sir", "Ecclus", "Wisdom of Sirach", "Ben Sira"),
+    ("Baruch", "Bar"),
+    ("Letter of Jeremiah", "Epistle of Jeremiah", "Epistle of Jeremy", "EpJer", "Letter Jeremiah"),
+    ("1 Maccabees", "I Maccabees", "1 Machabees", "I Machabees", "1 Macc", "1 Mac", "1Ma", "First Maccabees"),
+    ("2 Maccabees", "II Maccabees", "2 Machabees", "II Machabees", "2 Macc", "2 Mac", "2Ma", "Second Maccabees"),
+    ("3 Maccabees", "III Maccabees", "3 Macc", "3 Mac", "3Ma", "Third Maccabees"),
+    ("4 Maccabees", "IV Maccabees", "4 Macc", "4 Mac", "4Ma", "Fourth Maccabees"),
+    ("1 Esdras", "I Esdras", "Esdras A", "Esdras A/I", "3 Esdras", "1 Esd", "Greek Esdras"),
+    ("2 Esdras", "II Esdras", "4 Esdras", "4 Ezra", "2 Esd"),
+    ("Prayer of Manasseh", "Prayer of Manasses", "Manasseh Prayer", "PrMan"),
+    ("Prayer of Azariah", "Song of the Three", "Song of the Three Children",
+     "Song of the Three Young Men", "Song of Three", "PrAzar"),
+    ("Susanna", "Susanna LXX", "Sus"),
+    ("Bel and the Dragon", "Bel", "Bel LXX", "Bel Dragon"),
+    ("Psalm 151", "Additional Psalm", "Ps151"),
+    ("Laodiceans", "Epistle to the Laodiceans", "Laod"),
+    ("Odes",),
+    ("Psalms of Solomon", "Psalm of Solomon", "Pss Sol", "PsSol"),
+)
+DEUTEROCANON_BOOKS = [names[0] for names in DEUTEROCANON_SCOPE_BOOKS]
+for _names in DEUTEROCANON_SCOPE_BOOKS:
+    for _alias in _names:
+        _low = _alias.lower()
+        for _key in (NORM_RE.sub("-", _low).strip("-"), NORM_RE.sub("", _low)):
+            # Never shadow a 66-book alias (e.g. "song", "est").
+            if BOOK_SCOPE_ALIASES.get(_key, _names[0]) == _names[0]:
+                BOOK_SCOPE_ALIASES[_key] = _names[0]
 
 # Alternate labels that map onto whatever name the active edition stored.
 # Used so Douay, LXX, and KJV 1611 deuterocanon names resolve to the DB row.
@@ -1029,7 +1050,76 @@ BOOK_SCOPE_GROUPS = {
     "letters": BIBLE_BOOKS[44:66],
     "pauline": BIBLE_BOOKS[44:57],
     "general-epistles": BIBLE_BOOKS[57:66],
+    "apocrypha": DEUTEROCANON_BOOKS,
+    "deuterocanon": DEUTEROCANON_BOOKS,
+    "deuterocanonical": DEUTEROCANON_BOOKS,
 }
+
+# A single-dash word token in a search query that is not a known scope.
+UNKNOWN_SCOPE_TOKEN_RE = re.compile(r"^-(?!-)[A-Za-z][A-Za-z0-9-]*$")
+
+_ROMAN_BOOK_PREFIX = re.compile(r"^(iv|iii|ii|i)\s+(?=\S)", re.IGNORECASE)
+_ROMAN_VALUES = {"i": "1", "ii": "2", "iii": "3", "iv": "4"}
+
+
+def glob_escape(text):
+    """Escape SQLite GLOB metacharacters (`*`, `?`, `[`) in a literal."""
+    return re.sub(r"([*?\[])", r"[\1]", str(text))
+
+
+def book_compact_key(name):
+    """`1 Samuel` -> `1samuel`; also folds a Roman prefix (`I Samuel`)."""
+    text = str(name or "").strip()
+    match = _ROMAN_BOOK_PREFIX.match(text)
+    if match:
+        text = _ROMAN_VALUES[match.group(1).lower()] + text[match.end():]
+    return NORM_RE.sub("", text.lower())
+
+
+def build_scope_book_index(stored_books):
+    """Map scope book names to the identifiers an edition actually stores.
+
+    ``stored_books`` are the book parts of the edition's references (``esv``
+    stores ``Psalm``, Geneva ``Ps``, the Vulgate ``I Samuel``, the LXX
+    ``1 Samuel (1 Kingdoms)``). Returns ``{"books": {name: [stored, ...]},
+    "stored": {compact key: stored}}`` where ``name`` is a 66-book name from
+    BIBLE_BOOKS or a DEUTEROCANON_BOOKS name present in this edition.
+
+    Resolution order for each book: the edition's own identifier for the
+    canonical name, then any known alias, then the LXX naming table. Exact
+    stored names win, so `2 Esdras` is 4 Ezra where an edition stores it and
+    Esdras B (Ezra) only in the LXX.
+    """
+    stored_books = list(dict.fromkeys(b for b in stored_books if b))
+    stored = {}
+    for book in stored_books:
+        stored.setdefault(book_compact_key(book), book)
+        stored.setdefault(NORM_RE.sub("", book.lower()), book)
+
+    def lookup(names):
+        for name in names:
+            hit = stored.get(book_compact_key(name))
+            if hit:
+                return hit
+        for name in names:
+            low = str(name).lower()
+            target = (LXX_REFERENCE_BOOK_ALIASES.get(NORM_RE.sub("", low))
+                      or LXX_REFERENCE_BOOK_ALIASES.get(NORM_RE.sub("-", low).strip("-")))
+            if target and target in stored_books:
+                return target
+        return None
+
+    books = {}
+    for book in BIBLE_BOOKS:
+        aliases = [alias for alias, target in BOOK_SCOPE_ALIASES.items() if target == book]
+        hit = lookup([book]) or lookup(aliases)
+        if hit:
+            books[book] = [hit]
+    for names in DEUTEROCANON_SCOPE_BOOKS:
+        hit = lookup(names)
+        if hit:
+            books[names[0]] = [hit]
+    return {"books": books, "stored": stored}
 
 # Original-language creed text is only stored for short documents where
 # side-by-side display is useful. Longer confessions stay English-only for now.
@@ -1635,6 +1725,17 @@ class LexAgent:
                 self.canon_map[key] = db_target
                 self.canon_map[slug] = db_target
 
+        # Edition-aware scope index (issue #32): every scope book name and
+        # alias resolves to the identifier this edition stores. It also fills
+        # canon_map gaps (Vulgate `I Samuel`, Geneva `Tob`) without changing
+        # any mapping that already resolved.
+        self.scope_book_index = build_scope_book_index(self.reverse_canon_map.keys())
+        for name, hits in self.scope_book_index["books"].items():
+            keys = {book_compact_key(name), NORM_RE.sub("-", name.lower()).strip("-")}
+            keys.update(alias for alias, target in BOOK_SCOPE_ALIASES.items() if target == name)
+            for key in keys:
+                self.canon_map.setdefault(key, hits[0])
+
         self.encyclopedia_db = LexDB(ENCYCLOPEDIA_DB_PATH) if os.path.exists(ENCYCLOPEDIA_DB_PATH) else None
         self.cross_refs_db = LexDB(CROSS_REFS_DB_PATH if os.path.exists(CROSS_REFS_DB_PATH) else LEXICON_DB_PATH)
         self.strongs_db = LexDB(STRONGS_DB_PATH if os.path.exists(STRONGS_DB_PATH) else LEXICON_DB_PATH)
@@ -1907,6 +2008,10 @@ class LexAgent:
                 continue
             start_book = BOOK_SCOPE_ALIASES[start_alias]
             end_book = BOOK_SCOPE_ALIASES[end_alias]
+            if start_book not in BIBLE_BOOK_INDEX or end_book not in BIBLE_BOOK_INDEX:
+                # Ranges follow the 66-book order; deuterocanonical books
+                # have no single position across editions.
+                continue
             start_idx = BIBLE_BOOK_INDEX[start_book]
             end_idx = BIBLE_BOOK_INDEX[end_book]
             if start_idx > end_idx:
@@ -1916,7 +2021,49 @@ class LexAgent:
                 "label": f"{start_book}-{end_book}",
                 "books": BIBLE_BOOKS[start_idx:end_idx + 1],
             }
+        # Any other book the active edition stores (`-laodiceans`,
+        # `-joshua-a`, `-psalms-of-solomon`, `-additional-psalm`).
+        index = getattr(self, "scope_book_index", None)
+        if index:
+            stored = index["stored"].get(book_compact_key(scope.replace("-", " ")))
+            if stored:
+                return {
+                    "label": stored,
+                    "books": [stored],
+                }
+        # Septuagint names (`-3-kingdoms`, `-joshua-a`, `-esdras-a`). When the
+        # active edition lacks the book, the scope still parses so search can
+        # say so instead of treating the flag as a search word.
+        target = (LXX_REFERENCE_BOOK_ALIASES.get(scope)
+                  or LXX_REFERENCE_BOOK_ALIASES.get(scope.replace("-", "")))
+        if target:
+            return {
+                "label": target,
+                "books": [target],
+            }
         return None
+
+    def resolve_scope_books(self, scope):
+        """Translate a parsed scope into the active edition's stored books.
+
+        Returns a new scope dict whose ``books`` are reference identifiers
+        that exist in this edition (possibly empty) and whose ``requested``
+        keeps the parsed names. A scope never silently matches a book name
+        the edition does not store.
+        """
+        if not scope:
+            return scope
+        index = getattr(self, "scope_book_index", None) or {"books": {}, "stored": {}}
+        resolved = []
+        for name in scope["books"]:
+            hits = index["books"].get(name)
+            if hits is None:
+                stored = index["stored"].get(book_compact_key(name))
+                hits = [stored] if stored else []
+            for hit in hits:
+                if hit not in resolved:
+                    resolved.append(hit)
+        return {"label": scope["label"], "books": resolved, "requested": list(scope["books"])}
 
     def parse_search_query_and_scope(self, query):
         try:
@@ -1925,10 +2072,15 @@ class LexAgent:
             tokens = query.split()
         kept = []
         scope = None
+        self.last_search_scope_unknown = None
         for token in tokens:
             parsed_scope = self.parse_book_scope(token)
             if parsed_scope:
                 scope = parsed_scope
+            elif UNKNOWN_SCOPE_TOKEN_RE.match(token):
+                # `-foobar`: looks like a scope flag but names no book or
+                # group; never search it as a word or silently drop it.
+                self.last_search_scope_unknown = token
             else:
                 kept.append(token)
         return " ".join(kept).strip(), scope
@@ -2899,6 +3051,22 @@ Jeremiah through Revelation. Book names use lowercase words joined by hyphens:
 *   `-epistles` / `-letters`
 *   `-pauline`
 *   `-general-epistles`
+*   `-apocrypha` / `-deuterocanon` - books outside the 66 that the edition has
+
+## Editions and Deuterocanonical Books
+
+Scopes follow the active edition's own book names, so `-psalms` finds the
+ESV's "Psalm" and Geneva's "Ps". Deuterocanonical books work in editions
+that include them (KJV 1611, Douay-Rheims, Vulgate, Geneva, Greek LXX):
+
+*   `lex -B kj16 search love -tobit`
+*   `lex -B dra search temple -1-maccabees`
+*   `lex -B lxx search κύριος -psalms-of-solomon`
+
+Any book the edition stores also works by its own name, such as
+`-laodiceans` (Vulgate) or `-joshua-a` (LXX). Use `-wisdom-of-solomon` or
+`-wis` for the book of Wisdom; `-wisdom` is the wisdom-literature group.
+A scope the edition doesn't have says so instead of returning nothing.
 
 Free-text search no longer runs from bare input.
 
@@ -4789,8 +4957,12 @@ text from the active Bible version when available.
     def search_scope_clause(self, scope):
         if not scope:
             return "", ()
-        clauses = " OR ".join(["reference GLOB ?"] * len(scope["books"]))
-        params = tuple(f"*:{book}:*" for book in scope["books"])
+        books = scope["books"]
+        if not books:
+            # The scope names no book this edition has: match nothing.
+            return " AND 0", ()
+        clauses = " OR ".join(["reference GLOB ?"] * len(books))
+        params = tuple(f"*:{glob_escape(book)}:*" for book in books)
         return f" AND ({clauses})", params
 
     def text_fts_query(self, fts_query):
@@ -4853,6 +5025,14 @@ text from the active Bible version when available.
 
     def resolve_search(self, query, page=1, limit=10):
         search_query, scope = self.parse_search_query_and_scope(query)
+        scope = self.resolve_scope_books(scope)
+        self.last_search_scope_missing = None
+        if getattr(self, "last_search_scope_unknown", None):
+            return None
+        if scope and not scope["books"]:
+            # e.g. `-tobit` in the KJV, `-romans` in the Greek LXX.
+            self.last_search_scope_missing = scope["label"]
+            return None
         effective_query = search_query
         phrase_query = self.escape_fts_query(effective_query)
         terms_query = self.fts_terms_query(effective_query)
@@ -4941,7 +5121,7 @@ text from the active Bible version when available.
         footer += f"Mode: {state['mode']}{scope_label}  |  Showing {offset + 1}-{shown_end} of {total}"
         query_arg = shlex.quote(query)
         if scope:
-            query_arg = f"{query_arg} -{scope['label'].lower().replace(' ', '-').replace('--', '-')}"
+            query_arg = f"{query_arg} -{NORM_RE.sub('-', scope['label'].lower()).strip('-')}"
         if interactive:
             footer += "  |  Choose an action below"
         elif shown_end < total:
@@ -6585,6 +6765,21 @@ def json_web(agent, edition, query, limit):
 def json_search(agent, edition, query, page, limit):
     state = agent.resolve_search(query, page=page or 1, limit=limit or 10)
     if not state:
+        unknown_scope = getattr(agent, "last_search_scope_unknown", None)
+        if unknown_scope:
+            raise JsonExit(
+                "usage",
+                f"Unknown book scope {unknown_scope}",
+                JSON_EXIT_USAGE,
+                hint="Use a book or group such as -psalms, -nt, -gospels, -apocrypha; see `lex search`.",
+            )
+        missing_scope = getattr(agent, "last_search_scope_missing", None)
+        if missing_scope:
+            raise JsonExit(
+                "not_found",
+                f"Book scope {missing_scope} is not in edition {edition}",
+                JSON_EXIT_NOT_FOUND,
+            )
         raise JsonExit("not_found", f"No scripture search results for: {query}", JSON_EXIT_NOT_FOUND)
     results = []
     for idx, (ref, text) in enumerate(state["results"], start=1):
@@ -7604,7 +7799,15 @@ def main():
         if not query:
             sys.exit(1)
         if not agent.display_search(query, page=args.page, limit=args.limit or 10):
-            console.print("[warning]No scripture search results found.[/]")
+            unknown_scope = getattr(agent, "last_search_scope_unknown", None)
+            missing_scope = getattr(agent, "last_search_scope_missing", None)
+            if unknown_scope:
+                console.print(f"[warning]Unknown book scope {rich_escape(unknown_scope)}; use a book or group such as -psalms, -nt or -apocrypha (see `lex search`).[/]")
+            elif missing_scope:
+                edition_name = BIBLE_VERSIONS.get(agent.bible_prefix, {}).get("name", agent.bible_prefix)
+                console.print(f"[warning]{rich_escape(missing_scope)} is not in {rich_escape(edition_name)}; try another edition with -B.[/]")
+            else:
+                console.print("[warning]No scripture search results found.[/]")
             sys.exit(1)
         sys.exit(0)
     elif query == "web":
