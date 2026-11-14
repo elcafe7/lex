@@ -9,6 +9,7 @@ together, and documents without an original display as before.
 Run: python3 -m pytest tests/test_creed_alignment.py
 """
 import importlib.util
+import itertools
 import io
 import json
 import os
@@ -363,15 +364,26 @@ class CreedAlignmentTest(unittest.TestCase):
 
     def test_plain_and_no_color_output_keeps_pairs(self):
         import subprocess
-        env = dict(os.environ, NO_COLOR="1", COLUMNS="60")
-        for args in (["--plain", "creed", "apostles"], ["creed", "apostles"]):
-            with self.subTest(args=args):
+        from rich.cells import cell_len
+        ansi = re.compile(r"\x1b\[[0-9;]*m")
+        # Pin TERM and FORCE_COLOR so the result doesn't depend on the caller's
+        # terminal. Every combination must honour COLUMNS: with FORCE_COLOR set
+        # Rich treats a pipe as a terminal, and under TERM=dumb it would fall
+        # back to 80 columns unless Lex passes an explicit height too.
+        base = {k: v for k, v in os.environ.items() if k not in ("LINES", "FORCE_COLOR", "TERM")}
+        combos = [(term, force) for term in ("dumb", "xterm-256color") for force in (None, "0", "1")]
+        for (term, force), args in itertools.product(combos, (["--plain", "creed", "apostles"], ["creed", "apostles"])):
+            env = dict(base, NO_COLOR="1", COLUMNS="60", TERM=term)
+            if force is not None:
+                env["FORCE_COLOR"] = force
+            with self.subTest(term=term, force_color=force, args=args):
                 out = subprocess.run(
                     [sys.executable, LEX, *args], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120,
                 ).stdout
                 # NO_COLOR drops colours (Rich may keep bold); --plain drops all styling.
                 self.assertIsNone(re.search(r"\x1b\[[0-9;]*(?:3[0-9]|4[0-9]|9[0-7])[;m]", out))
-                out = re.sub(r"\x1b\[[0-9;]*m", "", out)
+                out = ansi.sub("", out)
+                self.assertLessEqual(max(cell_len(l) for l in out.splitlines()), 60)
                 lines = [l.strip() for l in out.splitlines() if l.strip()]
                 i = lines.index(next(l for l in lines if l.startswith("1 Credo in Deum Patrem omnipotentem")))
                 self.assertTrue(lines[i + 1].startswith("1 I believe in God, the Father almighty"), lines[i:i + 2])
@@ -379,7 +391,7 @@ class CreedAlignmentTest(unittest.TestCase):
                     [sys.executable, LEX, *args], cwd=ROOT, env=dict(env, COLUMNS="140"),
                     capture_output=True, text=True, timeout=120,
                 ).stdout
-                self.assertRegex(re.sub(r"\x1b\[[0-9;]*m", "", wide),
+                self.assertRegex(ansi.sub("", wide),
                                  r"(?m)^\W*1\W+Credo in Deum Patrem omnipotentem,\W+1\W+I believe in God")
 
 

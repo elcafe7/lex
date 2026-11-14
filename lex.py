@@ -1551,6 +1551,24 @@ def detect_console_width():
     width = shutil.get_terminal_size((100, 24)).columns
     return max(40, width)
 
+
+def detect_console_height():
+    """Terminal height for the Rich console (LINES, then the tty, else 24).
+
+    Rich only honours an explicit width when the height is explicit too: with
+    TERM=dumb and no height it falls back to 80x25 and ignores COLUMNS.
+    """
+    lines = os.environ.get("LINES", "")
+    if lines.isdigit() and int(lines) > 0:
+        return int(lines)
+    try:
+        height = os.get_terminal_size(sys.stdout.fileno()).lines
+        if height > 0:
+            return height
+    except (OSError, ValueError):
+        pass
+    return max(1, shutil.get_terminal_size((100, 24)).lines)
+
 class BackgroundFillWriter:
     def __init__(self, stream, fill_sequence):
         self.stream = stream
@@ -1610,6 +1628,7 @@ console = Console(
     style=console_base_style,
     no_color=resolve_no_color(sys.argv[1:]),
     width=detect_console_width(),
+    height=detect_console_height(),
     file=BackgroundFillWriter(sys.stdout, line_fill_sequence()),
     emoji=True,
 )
