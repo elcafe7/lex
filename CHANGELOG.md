@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Fix: honour `COLUMNS` under `TERM=dumb`.** With `FORCE_COLOR` set (or any
+  other forced-terminal case) and `TERM=dumb`, Rich ignored Lex's explicit width
+  and drew 80 columns. Lex now passes the terminal height too (`LINES`, the tty,
+  else 24), so `COLUMNS` is honoured. The creed `NO_COLOR`/`--plain` test pins
+  `TERM` and `FORCE_COLOR` so it no longer depends on the caller's terminal.
 - **Fixed: book scopes in other editions (#32).** `lex search <term> -<book>`
   now resolves the book to the active edition's own identifier, so
   `lex search enemy -psalms` works in the ESV and NASB ("Psalm"), every book
