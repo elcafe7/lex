@@ -65,15 +65,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          node <<'NODE'
-          const h = {Accept:'application/vnd.github+json',Authorization:`Bearer ${process.env.GH_TOKEN}`};
+          node --input-type=module <<'NODE'
+          const headers = {Accept:'application/vnd.github+json', Authorization:`Bearer ${process.env.GH_TOKEN}`, 'X-GitHub-Api-Version':'2022-11-28'};
           const url = `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/issues/${process.env.PR_NUMBER}/comments`;
-          const cs = await (await fetch(`${url}?per_page=100`,{headers:h})).json();
-          const c = cs.filter(x=>x.body?.includes('<!-- pr-agent:review:full -->')).sort((a,b)=>Date.parse(b.updated_at)-Date.parse(a.updated_at))[0];
-          const m = c?.body.match(/- Tokens: ([\d,]+) in \/ ([\d,]+) out/);
-          if (!m) process.exit(0);
-          const cost = Number(m[1].replaceAll(',',''))*1.5e-6 + Number(m[2].replaceAll(',',''))*7.5e-6;
-          const line = `- Estimated API cost: $${cost.toFixed(4)} (Gemini 4 Hydrogen Standard; LOW reasoning, non-cached)`;
-          const body = c.body.replace(/- Estimated API cost:.*$/m,line);
-          await fetch(`${url}/${c.id}`,{method:'PATCH',headers:{...h,'Content-Type':'application/json'},body:JSON.stringify({body})});
+          const get = await fetch(`${url}?per_page=100`, {headers});
+          if (!get.ok) throw new Error(`list comments failed: ${get.status}`);
+          const comments = await get.json();
+          const comment = comments.filter(c => c.user?.login === 'github-actions[bot]' && c.body?.includes('<!-- pr-agent:review:full -->')).sort((a,b) => Date.parse(b.updated_at)-Date.parse(a.updated_at))[0];
+          const tokens = comment?.body.match(/- Tokens: ([\d,]+) in \/ ([\d,]+) out/);
+          if (!tokens) throw new Error('PR-Agent token line not found in its GitHub Actions comment');
+          const cost = Number(tokens[1].replaceAll(',','')) * 1.5e-6 + Number(tokens[2].replaceAll(',','')) * 7.5e-6;
+          const body = comment.body.replace(/- Estimated API cost:.*$/m, `- Estimated API cost: $${cost.toFixed(4)} (Gemini 4 Hydrogen Standard; LOW reasoning, non-cached)`);
+          const update = await fetch(`${url}/${comment.id}`, {method:'PATCH', headers:{...headers,'Content-Type':'application/json'}, body:JSON.stringify({body})});
+          if (!update.ok) throw new Error(`update comment failed: ${update.status}`);
           NODE
