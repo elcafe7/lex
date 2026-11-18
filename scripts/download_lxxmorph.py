@@ -11,6 +11,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "runtime-d
 DEFAULT_OUT = os.path.join(ROOT, "sources", "lxxmorph")
 BASE_URL = "https://ccat.sas.upenn.edu/gopher/text/religion/biblical/lxxmorph"
 DEFAULT_MANIFEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lxxmorph.sha256")
+SCRIPTS_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 FILES = [
     "01.Gen.1.mlxx", "02.Gen.2.mlxx", "03.Exod.mlxx", "04.Lev.mlxx",
@@ -51,6 +52,15 @@ def load_checksums(path):
     return checksums
 
 
+def contained_path(parent, path, label):
+    """Resolve a CLI path only when it remains inside its approved directory."""
+    parent = os.path.realpath(parent)
+    candidate = os.path.realpath(path)
+    if os.path.commonpath((parent, candidate)) != parent:
+        raise ValueError(f"{label} must remain under {parent}")
+    return candidate
+
+
 def sha256_file(path):
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
@@ -83,12 +93,14 @@ def main():
     args = parser.parse_args()
 
     try:
-        checksums = load_checksums(args.manifest)
+        manifest = contained_path(SCRIPTS_ROOT, args.manifest, "manifest")
+        output_dir = contained_path(ROOT, args.out, "output directory")
+        checksums = load_checksums(manifest)
     except (OSError, ValueError) as error:
         parser.error(f"cannot load checksum manifest: {error}")
-    os.makedirs(args.out, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
     for filename in FILES:
-        target = os.path.join(args.out, filename)
+        target = contained_path(output_dir, os.path.join(output_dir, filename), "output file")
         expected = checksums[filename]
         if os.path.exists(target):
             if hmac.compare_digest(sha256_file(target), expected) and not args.force:
