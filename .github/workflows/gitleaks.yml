@@ -99,6 +99,11 @@ jobs:
             echo "GITLEAKS_LOG_OPTS=--all" >> "${GITHUB_ENV}"
           fi
 
+      - name: Flag protected-server references for review (non-blocking)
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 scripts/protected_server_reference_check.py "${GITLEAKS_LOG_OPTS}"
+
       - name: Scan (redacted; fails on findings)
         env:
           REPO: ${{ github.repository }}
