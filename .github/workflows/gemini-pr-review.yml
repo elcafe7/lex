@@ -41,10 +41,6 @@ jobs:
           # Keep review calls at Gemini's LOW reasoning level. Google bills
           # thinking as output tokens.
           config.reasoning_effort: 'low'
-          # LiteLLM 1.105.1's bundled catalog predates Hydrogen. This
-          # pricing-only alias has the matching Standard non-cached token rates:
-          # $1.50/M input and $7.50/M output (including thinking).
-          PR_AGENT__LITELLM__BASE_MODELS: '{"gemini/gemini-4-hydrogen":"gemini-3.8-flash-cyber"}'
           # Hydrogen has a 1,048,576-token input limit. This explicit value is
           # required because the action's bundled LiteLLM metadata predates it.
           config.custom_model_max_tokens: '1048576'
@@ -63,3 +59,21 @@ jobs:
             inadequate tests. Cite changed lines and repository evidence. Do not
             propose automatic code changes, run deployments, approve, request
             changes, merge, publish releases, or alter repository settings.
+      - name: Add rate-backed Gemini cost estimate
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node <<'NODE'
+          const h = {Accept:'application/vnd.github+json',Authorization:`Bearer ${process.env.GH_TOKEN}`};
+          const url = `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/issues/${process.env.PR_NUMBER}/comments`;
+          const cs = await (await fetch(`${url}?per_page=100`,{headers:h})).json();
+          const c = cs.filter(x=>x.body?.includes('<!-- pr-agent:review:full -->')).sort((a,b)=>Date.parse(b.updated_at)-Date.parse(a.updated_at))[0];
+          const m = c?.body.match(/- Tokens: ([\d,]+) in \/ ([\d,]+) out/);
+          if (!m) process.exit(0);
+          const cost = Number(m[1].replaceAll(',',''))*1.5e-6 + Number(m[2].replaceAll(',',''))*7.5e-6;
+          const line = `- Estimated API cost: $${cost.toFixed(4)} (Gemini 4 Hydrogen Standard; LOW reasoning, non-cached)`;
+          const body = c.body.replace(/- Estimated API cost:.*$/m,line);
+          await fetch(`${url}/${c.id}`,{method:'PATCH',headers:{...h,'Content-Type':'application/json'},body:JSON.stringify({body})});
+          NODE
