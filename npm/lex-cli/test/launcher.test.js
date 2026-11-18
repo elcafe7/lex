@@ -7,9 +7,9 @@ const launcher = require("../lib/launcher");
 
 test("release URLs use the pinned GitHub release contract", () => {
   const urls = launcher.releaseUrls();
-  assert.equal(urls.archive, "https://github.com/elcafe7/lex/releases/download/v2.6.8/lex-v2.6.8.tar.gz");
-  assert.equal(urls.checksum, "https://github.com/elcafe7/lex/releases/download/v2.6.8/lex-v2.6.8.tar.gz.sha256");
-  assert.equal(launcher.archiveRoot(), "lex-2.6.8");
+  assert.equal(urls.archive, "https://github.com/elcafe7/lex/releases/download/v2.6.9/lex-v2.6.9.tar.gz");
+  assert.equal(urls.checksum, "https://github.com/elcafe7/lex/releases/download/v2.6.9/lex-v2.6.9.tar.gz.sha256");
+  assert.equal(launcher.archiveRoot(), "lex-2.6.9");
 });
 
 test("releaseUrls accepts an explicit tag", () => {
@@ -42,7 +42,7 @@ test("resolveReleaseTag falls back to pinned tag when lookup fails", async () =>
   };
   try {
     const tag = await launcher.resolveReleaseTag();
-    assert.equal(tag, "v2.6.8");
+    assert.equal(tag, "v2.6.9");
   } finally {
     https.get = original;
   }
@@ -83,7 +83,7 @@ test("quiet mode keeps release-tag chatter off stderr", async () => {
   };
   try {
     launcher.setQuiet(true);
-    assert.equal(await launcher.resolveReleaseTag(), "v2.6.8");
+    assert.equal(await launcher.resolveReleaseTag(), "v2.6.9");
     assert.deepEqual(lines, []);
     launcher.setQuiet(false);
     await launcher.resolveReleaseTag();

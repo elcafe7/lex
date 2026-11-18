@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2.6.9 — 2026-11-18
+
+- **Release:** align the GitHub release archive and `@n8te_/lex-cli` launcher
+  after the JSON-output, Bible-edition, security, and launcher updates merged
+  since v2.6.8.
+
 - **Fix: honour `COLUMNS` under `TERM=dumb`.** With `FORCE_COLOR` set (or any
   other forced-terminal case) and `TERM=dumb`, Rich ignored Lex's explicit width
   and drew 80 columns. Lex now passes the terminal height too (`LINES`, the tty,
