@@ -1,20 +1,26 @@
 name: Gemini PR review
 
 on:
-  # Evaluate the workflow from protected main; never check out or execute
-  # pull-request code in this job.
-  pull_request_target:
+  # Fork PRs do not receive Actions secrets. This job never checks out or
+  # executes pull-request code.
+  pull_request:
     types: [labeled]
 
-# The reviewer can read source and write PR/issue comments only. It cannot push,
-# merge, deploy, change Actions settings, or access any deployment host.
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
+
+concurrency:
+  group: gemini-pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 jobs:
   review:
+    name: Review pull request
+    # Comment permissions are scoped to this one job. The reviewer cannot push,
+    # merge, deploy, change Actions settings, or access a deployment host.
+    permissions:
+      issues: write
+      pull-requests: write
     # The repository is public, so make invocation owner-only as well as
     # excluding forks. A review is paid and happens only after the explicit
     # review-this label is added by elcafe7.
