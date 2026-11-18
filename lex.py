@@ -4074,9 +4074,9 @@ text from the active Bible version when available.
         return False
     def display_verse_web(self, query, limit=12):
         ref_norm, book, chap, verse, v_end = self.normalize_ref(query)
-        if not ref_norm or not verse:
+        if not ref_norm:
             return False
-
+        if not verse:
             console.print("[warning]Verse web needs a single verse, e.g. lex web John 3:16[/]")
             return False
         rows = self.bible_db.query(

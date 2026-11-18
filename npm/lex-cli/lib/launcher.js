@@ -344,6 +344,10 @@ function dependenciesInstalled(directory) {
   return result.status === 0;
 }
 
+function childExitCode(status) {
+  return Number.isInteger(status) ? status : 1;
+}
+
 function bootstrap(directory) {
   const venvPath = path.join(directory, ".venv");
   if (!fs.existsSync(pythonPath(directory))) {
@@ -435,7 +439,7 @@ async function main(args) {
         env: { ...process.env, LEX_CLI_SKIP_SELF_UPDATE: "1", LEX_CLI_UPDATED_FROM: metadata.version },
       });
       if (handoff.error) throw handoff.error;
-      process.exitCode = handoff.status === null ? 1 : handoff.status;
+      process.exitCode = childExitCode(handoff.status);
       return;
     }
     env.LEX_CLI_UPDATE_STATUS = cli.status;
@@ -446,7 +450,7 @@ async function main(args) {
   bootstrap(home);
   const result = spawnSync(pythonPath(home), [path.join(home, "lex.py"), ...args], { stdio: "inherit", env });
   if (result.error) throw result.error;
-  process.exitCode = result.status || 0;
+  process.exitCode = childExitCode(result.status);
 }
 
 module.exports = {
@@ -462,6 +466,7 @@ module.exports = {
   validLexHome,
   pythonPath,
   dependenciesInstalled,
+  childExitCode,
   jsonModeRequested,
   normalizeArgs,
   updatedRunEnv,

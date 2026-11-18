@@ -31,6 +31,10 @@ done
 
 api="https://www.virustotal.com/api/v3"
 key="${VT_API_KEY:?VT_API_KEY is not set}"
+[[ "$key" != *$'\n'* && "$key" != *$'\r'* ]] || {
+  echo "::error title=VirusTotal::VT_API_KEY has an unexpected format" >&2
+  exit 1
+}
 min_interval="${VT_MIN_INTERVAL:-15}"
 poll_interval="${VT_POLL_INTERVAL:-20}"
 poll_max="${VT_POLL_MAX:-45}"
@@ -141,14 +145,18 @@ vt_request() {
   local attempt=0
   local backoff="$min_interval"
   local saw_minute_wait=0
-  local headers body code curl_rc class retry_after wait_s
+  local headers body code curl_rc class retry_after wait_s config_key
 
   while :; do
     pace
     headers="$(mktemp)"
     body="$(mktemp)"
     set +e
-    code="$("$curl_cmd" -sS -D "$headers" -o "$body" -w "%{http_code}" -H "x-apikey: ${key}" "$@")"
+    # Keep the API key out of curl's process arguments. The config is supplied
+    # on stdin and contains only this single, escaped header.
+    config_key="${key//\\/\\\\}"
+    config_key="${config_key//\"/\\\"}"
+    code="$(printf 'header = \"x-apikey: %s\"\n' "$config_key" | "$curl_cmd" --config - -sS -D "$headers" -o "$body" -w "%{http_code}" "$@")"
     curl_rc=$?
     set -e
     last_req_at="$(now_s)"
