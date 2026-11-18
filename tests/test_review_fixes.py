@@ -16,6 +16,13 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import download_lxxmorph  # noqa: E402
 
 
+def load_indexer():
+    spec = importlib.util.spec_from_file_location("indexer_review_fixes", ROOT / "indexer.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def load_lex():
     spec = importlib.util.spec_from_file_location("lex_review_fixes", ROOT / "lex.py")
     module = importlib.util.module_from_spec(spec)
@@ -63,3 +70,20 @@ class VerseWebValidationTest(unittest.TestCase):
         with mock.patch.object(lex, "console", lex.Console(file=output, force_terminal=False)):
             self.assertFalse(agent.display_verse_web("John 3"))
         self.assertIn("needs a single verse", output.getvalue())
+
+
+class HistoricalDocumentErrorHandlingTest(unittest.TestCase):
+    def test_invalid_utf8_document_is_logged_and_skipped(self):
+        indexer = load_indexer()
+        with tempfile.TemporaryDirectory() as tmp:
+            docs = pathlib.Path(tmp) / "theolog-ai" / "data" / "historical-documents"
+            docs.mkdir(parents=True)
+            (docs / "bad.json").write_bytes(b"\xff\xfe")
+            conn = __import__("sqlite3").connect(":memory:")
+            conn.execute("CREATE VIRTUAL TABLE dictionary_fts USING fts5(topic, content, source)")
+            output = io.StringIO()
+            with mock.patch.object(indexer, "BASE_DIR", tmp), mock.patch("sys.stderr", output):
+                indexer.load_historical_docs(conn)
+            self.assertIn("Skipping unreadable historical document bad.json", output.getvalue())
+            self.assertEqual(conn.execute("SELECT count(*) FROM dictionary_fts").fetchone()[0], 0)
+            conn.close()

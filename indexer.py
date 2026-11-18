@@ -115,7 +115,7 @@ def load_historical_docs(conn):
                                 entries.append((full_topic, content, "TheologAI"))
                         else:
                             entries.append((title, json.dumps(doc, indent=2), "TheologAI"))
-                except (OSError, json.JSONDecodeError, AttributeError, TypeError) as error:
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError, AttributeError, TypeError) as error:
                     print(f"Skipping unreadable historical document {filename}: {error}", file=sys.stderr)
                     continue
         conn.executemany("INSERT INTO dictionary_fts VALUES (?, ?, ?)", entries)
