@@ -1,0 +1,28 @@
+# coverage.py settings for the Python unit tests (.github/workflows/tests.yml).
+# Branch coverage is on. Many tests run lex.py as a subprocess, so
+# "patch = subprocess" measures those runs too (needs "parallel"; the
+# workflow runs "coverage combine" before reporting).
+[run]
+branch = True
+parallel = True
+patch = subprocess
+source =
+    .
+omit =
+    tests/*
+    fuzz/*
+    runtime-data/*
+    npm/*
+    */site-packages/*
+
+[report]
+skip_empty = True
+precision = 1
+exclude_also =
+    if __name__ == .__main__.:
+
+[xml]
+output = coverage-reports/coverage.xml
+
+[html]
+directory = coverage-reports/html
