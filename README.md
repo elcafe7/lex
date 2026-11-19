@@ -249,7 +249,11 @@ Lex data: 2.6.8 → 2.6.9 (updated)
   no write permission to the npm prefix), it prints the exact `npm install -g ...`
   command to run.
 - **Release downloads:** it downloads the newest release, checks its SHA-256,
-  and unpacks it over the folder, keeping your own files.
+  and unpacks it over the folder, keeping your own files. This is a checksum
+  check only: it confirms the download matches the SHA-256 published beside it
+  on the same release (catching corruption in transit), but it is not a
+  signature or attestation check. To verify where a release came from, see
+  [Release verification](docs/RELEASE_VERIFICATION.md).
 
 </details>
 

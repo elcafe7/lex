@@ -380,7 +380,9 @@ Lex data: 2.6.8 → 2.6.9 (updated)
   upgrade the CLI (for example, no write permission), it prints the exact
   `npm install -g ...` command to run.
 - **Release download:** downloads the newest release, verifies its published
-  SHA-256, and unpacks it over the folder, keeping your own files.
+  SHA-256, and unpacks it over the folder, keeping your own files. This is a
+  checksum check only, not a signature or attestation check; see
+  `docs/RELEASE_VERIFICATION.md` to verify where a release came from.
 
 Data files are verified with hashes from `manifest.json`; only changed files
 are downloaded.

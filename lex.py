@@ -21,6 +21,7 @@ import time
 import html
 import subprocess
 import tempfile
+import secrets
 import tarfile
 import filecmp
 import shutil
@@ -187,14 +188,39 @@ def clean_strongs_definition(raw):
         body = f"{body} (see {', '.join(fills)})"
     return body.strip(), refs
 
-def open_trusted_https(url_or_request, *, timeout=15):
-    """Open only the fixed HTTPS origins used by Lex update/data fetches."""
-    url = url_or_request.full_url if isinstance(url_or_request, urllib.request.Request) else url_or_request
+# GitHub serves release downloads from these hosts after a redirect; they are
+# accepted only as redirect targets, never as the first URL.
+TRUSTED_REDIRECT_HOSTS = TRUSTED_FETCH_HOSTS | {"objects.githubusercontent.com", "release-assets.githubusercontent.com"}
+
+
+def _require_trusted_url(url, allowed_hosts):
     parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.hostname not in TRUSTED_FETCH_HOSTS:
+    if parsed.scheme != "https" or parsed.hostname not in allowed_hosts:
         raise ValueError("Lex refused an untrusted update URL")
-    # Scheme is pinned to https and the host to TRUSTED_FETCH_HOSTS just above.
-    return urllib.request.urlopen(url_or_request, timeout=timeout)  # nosec B310  # reason: https-only, allowlisted hosts checked above
+
+
+class _TrustedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-check every redirect hop: https only, and only an allowlisted host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _require_trusted_url(newurl, TRUSTED_REDIRECT_HOSTS)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _trusted_opener(*extra_handlers):
+    return urllib.request.build_opener(_TrustedRedirectHandler, *extra_handlers)
+
+
+def open_trusted_https(url_or_request, *, timeout=15):
+    """Open only the fixed HTTPS origins used by Lex update/data fetches.
+
+    The first URL must be on TRUSTED_FETCH_HOSTS; every redirect hop is checked
+    again (https, and a host in TRUSTED_REDIRECT_HOSTS).
+    """
+    url = url_or_request.full_url if isinstance(url_or_request, urllib.request.Request) else url_or_request
+    _require_trusted_url(url, TRUSTED_FETCH_HOSTS)
+    # Scheme is pinned to https and the host allowlisted just above, and the opener re-checks each redirect.
+    return _trusted_opener().open(url_or_request, timeout=timeout)  # nosec B310  # reason: https-only, allowlisted hosts checked above and on every redirect
 
 # ---------------------------------------------------------------------------
 # Filesystem boundaries (CodeQL py/path-injection, issues #6/#8)
@@ -473,6 +499,9 @@ RELEASE_LATEST_URL = "https://api.github.com/repos/elcafe7/lex/releases/latest"
 RELEASE_DOWNLOAD_BASE = "https://github.com/elcafe7/lex/releases/download/"
 RELEASE_TAG_PATTERN = re.compile(r"^v\d+\.\d+\.\d+$")
 MAX_RELEASE_BYTES = 1024 * 1024 * 1024
+# Limits on what a release archive may unpack to (the 2.6.9 release is far below both).
+MAX_EXTRACTED_BYTES = 4 * 1024 * 1024 * 1024
+MAX_EXTRACTED_MEMBERS = 20000
 UPDATE_REEXEC_ENV = "LEX_CLI_UPDATE_STATUS"
 
 
@@ -496,11 +525,33 @@ def detect_install_kind(base_dir=None, env=None):
 
 
 def update_backup_dir(now=None):
-    """Folder for files the updater moves aside (in the home folder, never
-    inside the work tree)."""
+    """Create and return a new, unique folder for files the updater moves aside.
+
+    It lives in ~/.lex_backups (mode 0700, never inside the work tree). The name
+    carries the time, the process id and a random suffix, and is created
+    exclusively, so one update can never write into another's backups.
+    """
     root = os.path.expanduser("~/.lex_backups")
+    os.makedirs(root, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(root, 0o700)
+    except OSError:
+        pass  # not ours to change (for example a shared mount); the folder inside is still 0700
     stamp = time.strftime("update-%Y%m%d-%H%M%S", time.localtime(now))
-    return os.path.join(root, stamp)
+    while True:
+        path = os.path.join(root, f"{stamp}-{os.getpid()}-{secrets.token_hex(3)}")
+        try:
+            os.mkdir(path, 0o700)
+            return path
+        except FileExistsError:
+            continue
+
+
+def _drop_if_empty(path):
+    try:
+        os.rmdir(path)  # only succeeds when nothing was backed up
+    except OSError:
+        pass
 
 
 class UpdateRefused(Exception):
@@ -535,8 +586,12 @@ def _code_version_from_text(text):
 def _backup_slot(backup_root, rel):
     """Return ``backup_root/rel`` (confined to the backup folder), creating its parent."""
     destination = safe_join(backup_root, rel)
-    os.makedirs(os.path.dirname(destination), exist_ok=True)
-    return destination
+    os.makedirs(os.path.dirname(destination), mode=0o700, exist_ok=True)
+    candidate, counter = destination, 0
+    while os.path.lexists(candidate):  # never overwrite an existing backup file
+        counter += 1
+        candidate = f"{destination}.{counter}"
+    return candidate
 
 
 def _move_aside(path, backup_root, rel):
@@ -568,6 +623,8 @@ def git_update(console, base_dir=None, env=None, run_setup=None):
             f"Branch {branch} doesn't follow a remote branch. Run `git switch main`, then `lex update`."
         )
     remote = upstream.split("/", 1)[0]
+    if remote.startswith("-"):
+        raise UpdateRefused(f"The remote name {remote!r} is not usable. Run `git switch main`, then `lex update`.")
 
     # Local edits: data files are managed by the updater (an older version
     # rewrote them in place), everything else belongs to the user.
@@ -592,7 +649,7 @@ def git_update(console, base_dir=None, env=None, run_setup=None):
         )
     stale_data = [p for p in changed if p.startswith("runtime-data/")]
 
-    code, _, err = _git_out(base_dir, "fetch", "--tags", "--quiet", remote)
+    code, _, err = _git_out(base_dir, "fetch", "--tags", "--quiet", "--", remote)
     if code != 0:
         raise UpdateRefused(f"Couldn't reach {remote} to check for a new version ({err or 'fetch failed'}).")
     _, head, _ = _git_out(base_dir, "rev-parse", "HEAD")
@@ -631,8 +688,10 @@ def git_update(console, base_dir=None, env=None, run_setup=None):
             original = confine_path(original, [base_dir])
             os.makedirs(os.path.dirname(original), exist_ok=True)
             shutil.move(backup, original)
+        _drop_if_empty(backup_root)
         raise UpdateRefused(f"The fast-forward failed ({err or 'git merge error'}). Your files were put back as they were.")
 
+    _drop_if_empty(backup_root)
     result = {"status": "updated", "old": old_version, "new": new_version, "moved": [b for _, b in moved],
               "backup_dir": backup_root if moved else None, "kind": "git"}
     setup_error = (run_setup or run_setup_script)(console, base_dir)
@@ -721,27 +780,56 @@ def release_update(console, base_dir=None, env=None, opener=None, run_setup=None
         os.makedirs(extract)
         try:
             with tarfile.open(archive, "r:gz") as tar:
-                tar.extractall(extract, filter="data")
+                members = tar.getmembers()
+                if len(members) > MAX_EXTRACTED_MEMBERS:
+                    raise UpdateRefused(f"{archive_name} has too many files, so it was not installed.")
+                if sum(m.size for m in members if m.isfile()) > MAX_EXTRACTED_BYTES:
+                    raise UpdateRefused(f"{archive_name} would unpack to more than expected, so it was not installed.")
+                tar.extractall(extract, members=members, filter="data")
         except (tarfile.TarError, OSError) as exc:
             raise UpdateRefused(f"{archive_name} could not be unpacked safely ({exc}). Nothing was changed.") from None
         root = os.path.join(extract, f"lex-{new_version}")
-        if not os.path.isfile(os.path.join(root, "lex.py")):
-            raise UpdateRefused(f"{archive_name} is not a Lex release. Nothing was changed.")
+        try:
+            with open(os.path.join(root, "lex.py"), encoding="utf-8") as fh:
+                unpacked_version = _code_version_from_text(fh.read())
+        except OSError:
+            raise UpdateRefused(f"{archive_name} is not a Lex release. Nothing was changed.") from None
+        if unpacked_version != new_version:
+            raise UpdateRefused(
+                f"{archive_name} contains Lex {unpacked_version or 'of unknown version'}, not {new_version}, "
+                "so it was not installed."
+            )
         backup_root = update_backup_dir()
-        moved = []
-        for folder, _dirs, files in os.walk(root):
-            for name in files:
-                source = os.path.join(folder, name)
-                rel = os.path.relpath(source, root)
-                target = safe_join(base_dir, rel)
-                if os.path.isfile(target) and filecmp.cmp(source, target, shallow=False):
-                    continue
-                os.makedirs(os.path.dirname(target), exist_ok=True)
-                if os.path.isfile(target) and not rel.startswith("runtime-data" + os.sep):
-                    moved.append(shutil.copy2(target, _backup_slot(backup_root, rel)))
-                staged = target + ".lex-new"
-                shutil.copy2(source, staged)
-                os.replace(staged, target)
+        moved, replaced = [], []  # replaced: (target, backup or None for a new file)
+        try:
+            for folder, _dirs, files in os.walk(root):
+                for name in files:
+                    source = os.path.join(folder, name)
+                    rel = os.path.relpath(source, root)
+                    target = safe_join(base_dir, rel)
+                    if os.path.isfile(target) and filecmp.cmp(source, target, shallow=False):
+                        continue
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    backup = None
+                    if os.path.isfile(target):
+                        backup = shutil.copy2(target, _backup_slot(backup_root, rel))
+                    replaced.append((target, backup))
+                    staged = target + ".lex-new"
+                    shutil.copy2(source, staged)
+                    os.replace(staged, target)
+        except OSError as exc:
+            _roll_back(replaced)
+            _drop_if_empty(backup_root)
+            raise UpdateRefused(
+                f"The update stopped part-way ({exc}). Your files were put back as they were."
+            ) from None
+        # Data files are bulky and re-downloadable; keep backups of code files only.
+        for target, backup in replaced:
+            if backup and os.path.relpath(target, base_dir).startswith("runtime-data" + os.sep):
+                os.remove(backup)
+            elif backup:
+                moved.append(backup)
+        _prune_empty_dirs(backup_root)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     result = {"status": "updated", "old": old_version, "new": new_version, "moved": moved,
@@ -750,6 +838,28 @@ def release_update(console, base_dir=None, env=None, opener=None, run_setup=None
     if setup_error:
         result["warning"] = setup_error
     return result
+
+
+def _roll_back(replaced):
+    """Undo a part-finished release update: put each backup back, delete new files."""
+    for target, backup in reversed(replaced):
+        try:
+            if backup:
+                shutil.copy2(backup, target)
+            elif os.path.isfile(target):
+                os.remove(target)
+            if os.path.exists(target + ".lex-new"):
+                os.remove(target + ".lex-new")
+        except OSError:
+            pass  # best effort: whatever could not be restored is still in the backup folder
+
+
+def _prune_empty_dirs(root):
+    for folder, _dirs, _files in os.walk(root, topdown=False):
+        try:
+            os.rmdir(folder)  # fails (and is skipped) while it still holds a backup
+        except OSError:
+            pass
 
 
 def cli_update_status(latest_data_version, env=None, base_dir=None):

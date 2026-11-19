@@ -418,6 +418,205 @@ class ReleaseInstallTest(unittest.TestCase):
         manager.perform_update.assert_not_called()
 
 
+class RedirectTest(unittest.TestCase):
+    """Every redirect hop must stay on https and an allowlisted host."""
+
+    def fake_https(self, location):
+        import email.message
+        import urllib.request
+        import urllib.response
+
+        class FakeHTTPS(urllib.request.HTTPSHandler):
+            hops = []
+
+            def https_open(handler, req):
+                FakeHTTPS.hops.append(req.full_url)
+                if len(FakeHTTPS.hops) > 1:
+                    response = urllib.response.addinfourl(io.BytesIO(b"final"), email.message.Message(), req.full_url, 200)
+                    response.msg = "OK"
+                    return response
+                headers = email.message.Message()
+                headers["Location"] = location
+                response = urllib.response.addinfourl(io.BytesIO(b""), headers, req.full_url, 302)
+                response.msg = "Found"
+                return response
+
+        FakeHTTPS.hops = []
+        return FakeHTTPS
+
+    def test_redirect_to_http_is_refused(self):
+        handler = self.fake_https("http://objects.githubusercontent.com/x")
+        with self.assertRaises(ValueError):
+            LEXMOD._trusted_opener(handler).open("https://github.com/a")
+        self.assertEqual(len(handler.hops), 1)
+
+    def test_redirect_to_an_unlisted_host_is_refused(self):
+        handler = self.fake_https("https://evil.example.com/x")
+        with self.assertRaises(ValueError):
+            LEXMOD._trusted_opener(handler).open("https://github.com/a")
+        self.assertEqual(handler.hops, ["https://github.com/a"])
+
+    def test_redirect_to_a_lookalike_host_is_refused(self):
+        handler = self.fake_https("https://objects.githubusercontent.com.evil.example/x")
+        with self.assertRaises(ValueError):
+            LEXMOD._trusted_opener(handler).open("https://github.com/a")
+
+    def test_redirect_to_githubs_release_hosts_is_followed(self):
+        for host in ("objects.githubusercontent.com", "release-assets.githubusercontent.com", "github.com"):
+            handler = self.fake_https(f"https://{host}/file")
+            response = LEXMOD._trusted_opener(handler).open("https://github.com/a")
+            self.assertEqual(response.read(), b"final")
+            self.assertEqual(handler.hops[-1], f"https://{host}/file")
+
+    def test_release_hosts_are_not_accepted_as_a_first_url(self):
+        with self.assertRaises(ValueError):
+            LEXMOD.open_trusted_https("https://objects.githubusercontent.com/x")
+        with self.assertRaises(ValueError):
+            LEXMOD.open_trusted_https("http://github.com/x")
+
+    def test_open_trusted_https_uses_the_checking_opener(self):
+        with mock.patch.object(LEXMOD, "_trusted_opener") as factory:
+            LEXMOD.open_trusted_https("https://api.github.com/x", timeout=5)
+        factory.return_value.open.assert_called_once_with("https://api.github.com/x", timeout=5)
+
+
+class ReleaseHardeningTest(ReleaseInstallTest):
+    """Archive size cap, rollback, version check and backup hygiene."""
+
+    def test_oversized_archive_is_refused_before_extracting(self):
+        with mock.patch.object(LEXMOD, "MAX_EXTRACTED_BYTES", 10):
+            with self.assertRaises(LEXMOD.UpdateRefused) as ctx:
+                self.update()
+        self.assertIn("more than expected", str(ctx.exception))
+        self.assertEqual(self.read("lex.py"), lex_py("2.6.8"))
+
+    def test_too_many_members_is_refused(self):
+        with mock.patch.object(LEXMOD, "MAX_EXTRACTED_MEMBERS", 2):
+            with self.assertRaises(LEXMOD.UpdateRefused) as ctx:
+                self.update()
+        self.assertIn("too many files", str(ctx.exception))
+
+    def test_normal_archive_is_still_extracted_with_the_data_filter(self):
+        with mock.patch.object(tarfile.TarFile, "extractall", autospec=True, side_effect=tarfile.TarFile.extractall) as spy:
+            self.update()
+        self.assertEqual(spy.call_args.kwargs["filter"], "data")
+
+    def test_failure_mid_replace_restores_everything_and_refuses(self):
+        real_replace = os.replace
+        calls = {"n": 0}
+
+        def flaky(src, dst):
+            calls["n"] += 1
+            if calls["n"] == 2:  # the second file fails
+                raise OSError("disk full")
+            return real_replace(src, dst)
+
+        with mock.patch.object(LEXMOD.os, "replace", flaky):
+            with self.assertRaises(LEXMOD.UpdateRefused) as ctx:
+                self.update()
+        self.assertIn("put back", str(ctx.exception))
+        self.assertEqual(self.read("lex.py"), lex_py("2.6.8"))
+        self.assertEqual(self.read("runtime-data/lexicon.db"), "lexicon 2.6.8")
+        self.assertEqual(self.read("my-notes.txt"), "keep me")
+        self.assertFalse(os.path.exists(os.path.join(self.install, "runtime-data", "creeds-aligned.json")))
+        leftovers = [n for _, _, fs in os.walk(self.install) for n in fs if n.endswith(".lex-new")]
+        self.assertEqual(leftovers, [])
+
+    def test_version_inside_the_archive_must_match_the_tag(self):
+        payload = self.archive("2.6.9")
+        # a v2.6.10 tag whose tarball actually holds 2.6.9 code
+        src = os.path.join(self.tmp, "mismatch", "lex-2.6.10")
+        os.makedirs(os.path.join(src, "runtime-data"))
+        with open(os.path.join(src, "lex.py"), "w") as fh:
+            fh.write(lex_py("2.6.9"))
+        path = os.path.join(self.tmp, "mismatch.tar.gz")
+        with tarfile.open(path, "w:gz") as tar:
+            tar.add(src, arcname="lex-2.6.10")
+        with open(path, "rb") as fh:
+            payload = fh.read()
+        with self.assertRaises(LEXMOD.UpdateRefused) as ctx:
+            self.update(latest="v2.6.10", payload=payload)
+        self.assertIn("not 2.6.10", str(ctx.exception))
+        self.assertEqual(self.read("lex.py"), lex_py("2.6.8"))
+
+    def test_data_file_backups_are_dropped_after_success_code_backups_kept(self):
+        result, _ = self.update()
+        found = [os.path.relpath(os.path.join(d, f), result["backup_dir"])
+                 for d, _, fs in os.walk(result["backup_dir"]) for f in fs]
+        self.assertEqual(found, ["lex.py"])
+
+
+class BackupHygieneTest(unittest.TestCase):
+    def setUp(self):
+        self.home = tempfile.mkdtemp(prefix="lex-bk-")
+        self.patch = mock.patch.dict(os.environ, {"HOME": self.home})
+        self.patch.start()
+
+    def tearDown(self):
+        self.patch.stop()
+        shutil.rmtree(self.home, ignore_errors=True)
+
+    def test_backup_root_is_private_and_each_run_gets_a_unique_folder(self):
+        first = LEXMOD.update_backup_dir(now=0)
+        second = LEXMOD.update_backup_dir(now=0)  # same second, same pid
+        self.assertNotEqual(first, second)
+        self.assertEqual(os.path.dirname(first), os.path.join(self.home, ".lex_backups"))
+        if os.name != "nt":
+            self.assertEqual(os.stat(os.path.dirname(first)).st_mode & 0o777, 0o700)
+            self.assertEqual(os.stat(first).st_mode & 0o777, 0o700)
+        self.assertIn(str(os.getpid()), os.path.basename(first))
+
+    def test_an_existing_loose_backup_root_is_tightened(self):
+        root = os.path.join(self.home, ".lex_backups")
+        os.makedirs(root, mode=0o755)
+        os.chmod(root, 0o755)
+        LEXMOD.update_backup_dir()
+        if os.name != "nt":
+            self.assertEqual(os.stat(root).st_mode & 0o777, 0o700)
+
+    def test_an_existing_backup_file_is_never_overwritten(self):
+        folder = LEXMOD.update_backup_dir()
+        first = LEXMOD._backup_slot(folder, "runtime-data/a.json")
+        with open(first, "w") as fh:
+            fh.write("first")
+        second = LEXMOD._backup_slot(folder, "runtime-data/a.json")
+        self.assertNotEqual(first, second)
+        with open(second, "w") as fh:
+            fh.write("second")
+        with open(first) as fh:
+            self.assertEqual(fh.read(), "first")
+
+    def test_an_empty_backup_folder_is_not_left_behind(self):
+        folder = LEXMOD.update_backup_dir()
+        LEXMOD._drop_if_empty(folder)
+        self.assertFalse(os.path.exists(folder))
+
+
+@unittest.skipUnless(GIT, "git is required")
+class GitFetchTest(GitInstallTest):
+    def test_fetch_puts_double_dash_before_the_remote(self):
+        self.release_269()
+        seen = []
+        real = LEXMOD._git
+
+        def spy(base_dir, *args, **kwargs):
+            seen.append(args)
+            return real(base_dir, *args, **kwargs)
+
+        with mock.patch.object(LEXMOD, "_git", spy):
+            self.update()
+        fetches = [a for a in seen if a and a[0] == "fetch"]
+        self.assertEqual(len(fetches), 1)
+        self.assertEqual(fetches[0][-2:], ("--", "origin"))
+
+    def test_a_remote_name_that_looks_like_an_option_is_refused(self):
+        self.git(self.install, "config", "branch.main.remote", "-oops")
+        self.git(self.install, "config", "branch.main.merge", "refs/heads/main")
+        with mock.patch.object(LEXMOD, "_git_out", side_effect=[(0, "main", ""), (0, "-oops/main", "")]):
+            with self.assertRaises(LEXMOD.UpdateRefused):
+                self.update()
+
+
 class SummaryAndMarkerTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="lex-marker-")
