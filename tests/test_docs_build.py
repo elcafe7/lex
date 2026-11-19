@@ -70,6 +70,15 @@ class DocsBuildTests(unittest.TestCase):
                     f"{f.relative_to(ROOT)}: broken link {target}",
                 )
 
+    def test_in_page_anchors_match_a_heading(self):
+        for stem, _ in build_docs.PAGES:
+            text = (DOCS / f"{stem}.md").read_text()
+            heads = {
+                build_docs.slugify(h) for h in re.findall(r"(?m)^#{1,4} (.+)$", text)
+            }
+            for anchor in re.findall(r"\]\(#([^)]+)\)", text):
+                self.assertIn(anchor, heads, f"{stem}.md: no heading for #{anchor}")
+
     def test_index_lists_every_page(self):
         index = (DOCS / "README.md").read_text()
         for stem, _ in build_docs.PAGES:

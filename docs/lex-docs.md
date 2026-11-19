@@ -596,7 +596,7 @@ lex -B dra John 3:16
 | `lex` | Open the main landing screen. |
 | `lex help` | Show the full command map. |
 | `lex --help` | Show every flag with a short description. `-help`, `-h` and `--h` do the same, also after a subcommand (`lex study --help`). |
-| `lex --json <command>` | Print one JSON document for scripts and AI tools. See [Using Lex With AI Tools](#using-lex-with-ai-tools). |
+| `lex --json <command>` | Print one JSON document for scripts and AI tools. See [Use Lex with AI tools](#use-lex-with-ai-tools). |
 | `lex --plain <command>` | Print the normal output as plain text: no colour, borders, prompts, or animation. |
 | `lex --version` | Print the plain application version for scripts. |
 | `lex --npm-version` | Print the npm launcher version (npm installs only). |
