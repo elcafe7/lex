@@ -1,0 +1,1366 @@
+Run started:2026-11-19 00:58:50.813937+00:00
+
+Test results:
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:42:4
+41	    normalized = lex.normalize_argv(argv, PARSER)
+42	    assert isinstance(normalized, list)
+43	    assert len(normalized) == len(argv), (argv, normalized)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:43:4
+42	    assert isinstance(normalized, list)
+43	    assert len(normalized) == len(argv), (argv, normalized)
+44	    # Normalizing twice changes nothing.
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:45:4
+44	    # Normalizing twice changes nothing.
+45	    assert lex.normalize_argv(normalized, PARSER) == normalized, (argv, normalized)
+46	    # Nothing after an end-of-options marker is ever rewritten.
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:49:8
+48	        idx = argv.index("--")
+49	        assert normalized[idx:] == argv[idx:], (argv, normalized)
+50	    # Non-option tokens pass through untouched.
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:55:12
+54	        if not before.startswith("-"):
+55	            assert before == after, (before, after)
+56	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:58:4
+57	    protected = lex.protect_search_scope_flags(list(normalized))
+58	    assert len(protected) == len(normalized)
+59	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:60:4
+59	
+60	    assert isinstance(lex.help_requested(normalized), bool)
+61	    assert isinstance(lex.json_mode_requested(normalized), bool)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:61:4
+60	    assert isinstance(lex.help_requested(normalized), bool)
+61	    assert isinstance(lex.json_mode_requested(normalized), bool)
+62	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:67:4
+66	    terms, scope = AGENT.parse_search_query_and_scope(query)
+67	    assert isinstance(terms, str)
+68	    if scope is not None:
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:69:8
+68	    if scope is not None:
+69	        assert isinstance(scope["label"], str) and scope["label"]
+70	        assert scope["books"], scope
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:70:8
+69	        assert isinstance(scope["label"], str) and scope["label"]
+70	        assert scope["books"], scope
+71	        assert all(isinstance(book, str) and book for book in scope["books"]), scope
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:71:8
+70	        assert scope["books"], scope
+71	        assert all(isinstance(book, str) and book for book in scope["books"]), scope
+72	    for token in query.split():
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_argv.py:74:8
+73	        parsed = AGENT.parse_book_scope(token)
+74	        assert parsed is None or parsed["books"], (token, parsed)
+75	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_safe_paths.py:67:8
+66	    else:
+67	        assert inside_base(joined), (name, joined)
+68	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_safe_paths.py:74:8
+73	    else:
+74	        assert inside_base(confined), (name, confined)
+75	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_safe_paths.py:81:8
+80	    else:
+81	        assert inside_base(found) and os.path.isfile(found), (name, found)
+82	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: ./fuzz/fuzz_safe_paths.py:88:8
+87	    else:
+88	        assert inside_base(found_dir) and os.path.isdir(found_dir), (name, found_dir)
+89	
+
+--------------------------------------------------
+>> Issue: [B112:try_except_continue] Try, Except, Continue detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b112_try_except_continue.html
+   Location: ./indexer.py:119:20
+118	                            entries.append((title, json.dumps(doc, indent=2), "TheologAI"))
+119	                    except:
+120	                        continue
+121	        conn.executemany("INSERT INTO dictionary_fts VALUES (?, ?, ?)", entries)
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./lex.py:22:0
+21	import html
+22	import subprocess
+23	import shutil
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./lex.py:1308:19
+1307	    try:
+1308	        exported = subprocess.run(
+1309	            ["defaults", "export", "com.apple.Terminal", "-"],
+1310	            capture_output=True,
+1311	            timeout=0.75,
+1312	            check=False,
+1313	        )
+1314	        if exported.returncode != 0 or not exported.stdout:
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./lex.py:1308:19
+1307	    try:
+1308	        exported = subprocess.run(
+1309	            ["defaults", "export", "com.apple.Terminal", "-"],
+1310	            capture_output=True,
+1311	            timeout=0.75,
+1312	            check=False,
+1313	        )
+1314	        if exported.returncode != 0 or not exported.stdout:
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./lex.py:1339:19
+1338	    try:
+1339	        exported = subprocess.run(
+1340	            ["defaults", "export", "com.googlecode.iterm2", "-"],
+1341	            capture_output=True,
+1342	            timeout=0.75,
+1343	            check=False,
+1344	        )
+1345	        if exported.returncode != 0 or not exported.stdout:
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./lex.py:1339:19
+1338	    try:
+1339	        exported = subprocess.run(
+1340	            ["defaults", "export", "com.googlecode.iterm2", "-"],
+1341	            capture_output=True,
+1342	            timeout=0.75,
+1343	            check=False,
+1344	        )
+1345	        if exported.returncode != 0 or not exported.stdout:
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./lex.py:1386:19
+1385	        try:
+1386	            proc = subprocess.run(
+1387	                [executable, *command[1:]],
+1388	                capture_output=True,
+1389	                text=True,
+1390	                timeout=0.5,
+1391	                check=False,
+1392	            )
+1393	        except (OSError, subprocess.SubprocessError):
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./lex.py:1406:15
+1405	    try:
+1406	        proc = subprocess.run(
+1407	            ["defaults", "read", "-g", "AppleInterfaceStyle"],
+1408	            capture_output=True,
+1409	            text=True,
+1410	            timeout=0.5,
+1411	            check=False,
+1412	        )
+1413	        if proc.returncode == 0 and proc.stdout.strip().lower() == "dark":
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./lex.py:1406:15
+1405	    try:
+1406	        proc = subprocess.run(
+1407	            ["defaults", "read", "-g", "AppleInterfaceStyle"],
+1408	            capture_output=True,
+1409	            text=True,
+1410	            timeout=0.5,
+1411	            check=False,
+1412	        )
+1413	        if proc.returncode == 0 and proc.stdout.strip().lower() == "dark":
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b110_try_except_pass.html
+   Location: ./lex.py:1811:12
+1810	                with open(HISTORY_FILE, "r") as f: return f.read().strip()
+1811	            except: pass
+1812	        return None
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b110_try_except_pass.html
+   Location: ./lex.py:1817:8
+1816	            with open(HISTORY_FILE, "w") as f: f.write(ref)
+1817	        except: pass
+1818	
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b110_try_except_pass.html
+   Location: ./lex.py:1834:8
+1833	                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
+1834	        except Exception:
+1835	            pass
+1836	
+
+--------------------------------------------------
+>> Issue: [B606:start_process_with_no_shell] Starting a process without a shell.
+   Severity: Low   Confidence: Medium
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b606_start_process_with_no_shell.html
+   Location: ./lex.py:5307:16
+5306	            try:
+5307	                os.startfile(path)
+5308	                console.print(f"[success]Saved and opened:[/] {path}")
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./lex.py:5325:12
+5324	        try:
+5325	            subprocess.Popen([*opener, path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+5326	            console.print(f"[success]Saved and opened:[/] {path}")
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b110_try_except_pass.html
+   Location: ./lex.py:6438:12
+6437	                )
+6438	            except: pass
+6439	
+
+--------------------------------------------------
+>> Issue: [B110:try_except_pass] Try, Except, Pass detected.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b110_try_except_pass.html
+   Location: ./lex.py:6475:12
+6474	                    return True
+6475	            except:
+6476	                pass
+6477	            return True
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: '-'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./lex.py:6557:16
+6556	    """Option name without leading dashes or an attached =value, or None."""
+6557	    if token == "-" or not token.startswith("-"):
+6558	        return None
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: '--'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./lex.py:6566:20
+6565	    for token in argv:
+6566	        if token == "--":
+6567	            return False
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: '--'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./lex.py:7301:20
+7300	    for token in argv:
+7301	        if token == "--":
+7302	            return False
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: '--'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./lex.py:7312:20
+7311	            continue
+7312	        if token == "--":
+7313	            seen_end = True
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: '--'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./lex.py:7390:20
+7389	    for idx, token in enumerate(argv):
+7390	        if token == "--":
+7391	            break
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: '--'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./lex.py:7655:20
+7654	    for idx, token in enumerate(argv):
+7655	        if token == "--":
+7656	            out.extend(argv[idx:])
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: '-'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./lex.py:7658:20
+7657	            break
+7658	        if token == "-" or not token.startswith("-") or _NUMERIC_DASH_TOKEN.fullmatch(token):
+7659	            out.append(token)
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: '--'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./lex.py:7675:20
+7674	    for token in argv:
+7675	        if token == "--":
+7676	            return False
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./scripts/download_lxxmorph.py:4:0
+3	import os
+4	import subprocess
+5	
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./scripts/download_lxxmorph.py:45:8
+44	        url = f"{BASE_URL}/{filename}"
+45	        subprocess.run(["curl", "-fsSL", url, "-o", target], check=True)
+46	        print(f"downloaded {filename}")
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./scripts/download_lxxmorph.py:45:8
+44	        url = f"{BASE_URL}/{filename}"
+45	        subprocess.run(["curl", "-fsSL", url, "-o", target], check=True)
+46	        print(f"downloaded {filename}")
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./scripts/protected_server_reference_check.py:6:0
+5	import re
+6	import subprocess
+7	import sys
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./scripts/protected_server_reference_check.py:44:13
+43	
+44	    result = subprocess.run(
+45	        ["git", "diff", "--unified=0", args.range],
+46	        check=False,
+47	        capture_output=True,
+48	        text=True,
+49	    )
+50	    if result.returncode:
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./scripts/protected_server_reference_check.py:44:13
+43	
+44	    result = subprocess.run(
+45	        ["git", "diff", "--unified=0", args.range],
+46	        check=False,
+47	        capture_output=True,
+48	        text=True,
+49	    )
+50	    if result.returncode:
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_bandit_gate.py:10:0
+9	import shutil
+10	import subprocess
+11	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_bandit_gate.py:43:15
+42	        env = dict(os.environ, GITHUB_WORKSPACE=str(ws))
+43	        proc = subprocess.run(
+44	            [sys.executable, str(GATE), "bandit.json", "bandit.md", "--summary-json", "gate.json",
+45	             "--tool-version", "1.9.4", *extra],
+46	            capture_output=True, text=True, check=False, cwd=str(ws), env=env)
+47	        md = (ws / "bandit.md").read_text(encoding="utf-8") if (ws / "bandit.md").exists() else ""
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_bandit_gate.py:126:27
+125	                try:
+126	                    proc = subprocess.run([sys.executable, str(GATE), *args], capture_output=True,
+127	                                          text=True, check=False, cwd=str(ws), env=env)
+128	                except ValueError:  # NUL in argv is refused before the gate runs
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_bandit_gate.py:145:19
+144	            env = dict(os.environ, GITHUB_WORKSPACE=str(ws), TAG="v1.2.3", REPO="o/r")
+145	            proc = subprocess.run(["bash", str(CHECK), "bandit-report"], capture_output=True, text=True,
+146	                                  check=False, cwd=str(ws), env=env)
+147	            out = ws / "bandit-report"
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_bandit_gate.py:145:19
+144	            env = dict(os.environ, GITHUB_WORKSPACE=str(ws), TAG="v1.2.3", REPO="o/r")
+145	            proc = subprocess.run(["bash", str(CHECK), "bandit-report"], capture_output=True, text=True,
+146	                                  check=False, cwd=str(ws), env=env)
+147	            out = ws / "bandit-report"
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_bandit_gate.py:166:14
+165	        proc, _, _ = self.run_check({})
+166	        bad = subprocess.run(["bash", str(CHECK), "-x;id"], capture_output=True, text=True, check=False)
+167	        self.assertEqual(bad.returncode, 2)
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_bandit_gate.py:166:14
+165	        proc, _, _ = self.run_check({})
+166	        bad = subprocess.run(["bash", str(CHECK), "-x;id"], capture_output=True, text=True, check=False)
+167	        self.assertEqual(bad.returncode, 2)
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_book_scopes.py:19:0
+18	import sqlite3
+19	import subprocess
+20	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_book_scopes.py:389:15
+388	        env = dict(os.environ, HOME=self.home, NO_COLOR="1")
+389	        return subprocess.run(
+390	            [sys.executable, LEX, *args], capture_output=True, text=True, env=env, timeout=120,
+391	        )
+392	
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_creed_alignment.py:267:8
+266	        # The npm release archive is `git archive HEAD` and data updates follow manifest.json.
+267	        import subprocess
+268	        if not os.path.isdir(os.path.join(ROOT, ".git")) and not os.path.isfile(os.path.join(ROOT, ".git")):
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_creed_alignment.py:270:18
+269	            self.skipTest("not a git checkout")
+270	        tracked = subprocess.run(
+271	            ["git", "ls-files", "--error-unmatch", "runtime-data/creeds-aligned.json"],
+272	            cwd=ROOT, capture_output=True, text=True,
+273	        )
+274	        self.assertEqual(tracked.returncode, 0, tracked.stderr)
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_creed_alignment.py:270:18
+269	            self.skipTest("not a git checkout")
+270	        tracked = subprocess.run(
+271	            ["git", "ls-files", "--error-unmatch", "runtime-data/creeds-aligned.json"],
+272	            cwd=ROOT, capture_output=True, text=True,
+273	        )
+274	        self.assertEqual(tracked.returncode, 0, tracked.stderr)
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_creed_alignment.py:323:8
+322	    def test_json_cli_for_bilingual_and_westminster(self):
+323	        import subprocess
+324	        env = dict(os.environ, COLUMNS="100", TERM="xterm-256color")
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_creed_alignment.py:334:27
+333	                with self.subTest(query=query, flag=flag):
+334	                    proc = subprocess.run(
+335	                        [sys.executable, LEX, flag, "creed", *query.split()], cwd=ROOT, env=env,
+336	                        capture_output=True, text=True, timeout=120,
+337	                    )
+338	                    self.assertEqual(proc.returncode, 0, proc.stderr)
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_creed_alignment.py:366:8
+365	    def test_plain_and_no_color_output_keeps_pairs(self):
+366	        import subprocess
+367	        from rich.cells import cell_len
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_creed_alignment.py:380:22
+379	            with self.subTest(term=term, force_color=force, args=args):
+380	                out = subprocess.run(
+381	                    [sys.executable, LEX, *args], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120,
+382	                ).stdout
+383	                # NO_COLOR drops colours (Rich may keep bold); --plain drops all styling.
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_creed_alignment.py:390:23
+389	                self.assertTrue(lines[i + 1].startswith("1 I believe in God, the Father almighty"), lines[i:i + 2])
+390	                wide = subprocess.run(
+391	                    [sys.executable, LEX, *args], cwd=ROOT, env=dict(env, COLUMNS="140"),
+392	                    capture_output=True, text=True, timeout=120,
+393	                ).stdout
+394	                self.assertRegex(ansi.sub("", wide),
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_flag_explainers.py:16:0
+15	import shutil
+16	import subprocess
+17	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_flag_explainers.py:86:15
+85	        env.update({"HOME": self.home, "LEX_NO_COLOR": "1", "COLUMNS": "100", "TERM": "dumb"})
+86	        proc = subprocess.run(
+87	            [sys.executable, LEX, *argv],
+88	            cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+89	            capture_output=True, text=True, timeout=120,
+90	        )
+91	        return proc.returncode, ANSI.sub("", proc.stdout + proc.stderr)
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_gitleaks_gate.py:11:0
+10	import shutil
+11	import subprocess
+12	import sys
+
+--------------------------------------------------
+>> Issue: [B107:hardcoded_password_default] Possible hardcoded password: 'A*********************************'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b107_hardcoded_password_default.html
+   Location: ./tests/test_gitleaks_gate.py:22:0
+21	
+22	def finding(rule="generic-api-key", path="scripts/example.py", line=12,
+23	            commit="0123456789abcdef0123456789abcdef01234567",
+24	            secret="A*********************************",
+25	            description="Generic API Key"):
+26	    return {
+27	        "RuleID": rule,
+28	        "Description": description,
+29	        "File": path,
+30	        "StartLine": line,
+31	        "Commit": commit,
+32	        "Fingerprint": f"{commit}:{path}:{rule}:{line}",
+33	        "Match": secret,
+34	        "Secret": secret,
+35	        "Author": "someone",
+36	        "Email": "someone@example.com",
+37	        "Message": "oops, here is the key",
+38	    }
+39	
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_gitleaks_gate.py:47:15
+46	        env = dict(os.environ, GITHUB_WORKSPACE=str(ws))
+47	        proc = subprocess.run(
+48	            [sys.executable, str(GATE), "gitleaks.json", "gitleaks.md",
+49	             "--summary-json", "gate.json", "--tool-version", "8.30.1", *extra],
+50	            capture_output=True, text=True, check=False, cwd=str(ws), env=env)
+51	        md = (ws / "gitleaks.md").read_text(encoding="utf-8") if (ws / "gitleaks.md").exists() else ""
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'AKIAIOSFODNN7EXAMPLE_not_a_real_key'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./tests/test_gitleaks_gate.py:68:17
+67	    def test_finding_fails_and_omits_secret_values(self):
+68	        secret = "AKIAIOSFODNN7EXAMPLE_not_a_real_key"
+69	        proc, md, summary = run_gate([finding(secret=secret)])
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_gitleaks_gate.py:116:19
+115	            env = dict(os.environ, GITHUB_WORKSPACE=str(ws))
+116	            proc = subprocess.run(
+117	                [sys.executable, str(GATE), "missing.json", "gitleaks.md",
+118	                 "--summary-json", "gate.json"],
+119	                capture_output=True, text=True, check=False, cwd=str(ws), env=env)
+120	            self.assertEqual(proc.returncode, 1)
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_gitleaks_gate.py:131:19
+130	            env = dict(os.environ, GITHUB_WORKSPACE=str(ws))
+131	            proc = subprocess.run(
+132	                [sys.executable, str(GATE), str(outside), "gitleaks.md"],
+133	                capture_output=True, text=True, check=False, cwd=str(ws), env=env)
+134	            self.assertEqual(proc.returncode, 2)
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_gitleaks_gate.py:144:15
+143	            run_env.update(env)
+144	        return subprocess.run(
+145	            ["bash", str(CHECK), *args],
+146	            capture_output=True, text=True, check=False,
+147	            cwd=str(cwd or ROOT), env=run_env)
+148	
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_gitleaks_gate.py:144:15
+143	            run_env.update(env)
+144	        return subprocess.run(
+145	            ["bash", str(CHECK), *args],
+146	            capture_output=True, text=True, check=False,
+147	            cwd=str(cwd or ROOT), env=run_env)
+148	
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_interlinear_data.py:20:0
+19	import shutil
+20	import subprocess
+21	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_interlinear_data.py:73:15
+72	        env.update({"HOME": self.home, "LEX_NO_COLOR": "1", "COLUMNS": "200", "TERM": "dumb"})
+73	        proc = subprocess.run(
+74	            [sys.executable, lex_path, "study", ref, "--no-animate"],
+75	            cwd=os.path.dirname(lex_path), env=env, input="q\n",
+76	            capture_output=True, text=True, timeout=120,
+77	        )
+78	        out = ANSI.sub("", proc.stdout + proc.stderr)
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_json_output.py:16:0
+15	import sqlite3
+16	import subprocess
+17	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_json_output.py:65:15
+64	        env.update({"HOME": self.home, "COLUMNS": "100", "TERM": "xterm-256color"})
+65	        proc = subprocess.run(
+66	            [sys.executable, LEX, "--json", *argv],
+67	            cwd=ROOT, env=env, input=stdin_text,
+68	            capture_output=True, text=True, timeout=120,
+69	        )
+70	        return proc.returncode, proc.stdout, proc.stderr
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_json_output.py:298:15
+297	        cmd = f"{sys.executable} {LEX} --json study John 3:16"
+298	        proc = subprocess.run(["script", "-qec", cmd, "/dev/null"], cwd=ROOT, env=env,
+299	                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+300	        self.assertEqual(proc.returncode, 0, proc.stdout[-500:])
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_json_output.py:298:15
+297	        cmd = f"{sys.executable} {LEX} --json study John 3:16"
+298	        proc = subprocess.run(["script", "-qec", cmd, "/dev/null"], cwd=ROOT, env=env,
+299	                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+300	        self.assertEqual(proc.returncode, 0, proc.stdout[-500:])
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_json_output.py:403:23
+402	            for number in self.NUMBERS:
+403	                proc = subprocess.run([sys.executable, LEX, "strongs", number], cwd=ROOT, env=env,
+404	                                      input="q\n", capture_output=True, text=True, timeout=120)
+405	                out = proc.stdout + proc.stderr
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_lex_command_check.py:13:0
+12	import stat
+13	import subprocess
+14	import tempfile
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_lex_command_check.py:51:15
+50	        env = {"PATH": path, "HOME": os.path.join(self.tmp, "home")}
+51	        proc = subprocess.run([BASH, CHECK, *args], env=env, capture_output=True, text=True, timeout=30)
+52	        return proc.returncode, proc.stdout + proc.stderr
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_lex_command_check.py:102:23
+101	            with self.subTest(argv=argv):
+102	                proc = subprocess.run([BASH, SETUP, *argv], env=env, capture_output=True, text=True, timeout=30)
+103	                self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_option_aliases.py:14:0
+13	import shutil
+14	import subprocess
+15	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_option_aliases.py:155:15
+154	            full_env.update(env)
+155	        proc = subprocess.run(
+156	            [sys.executable, LEX, *argv],
+157	            cwd=ROOT,
+158	            env=full_env,
+159	            capture_output=True,
+160	            text=True,
+161	        )
+162	        return proc.returncode, proc.stdout, proc.stderr
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_osv_gate.py:7:0
+6	import shutil
+7	import subprocess
+8	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_osv_gate.py:26:11
+25	    """Run the gate with GITHUB_WORKSPACE (and cwd) set to workspace."""
+26	    return subprocess.run(
+27	        [sys.executable, str(GATE), *args],
+28	        capture_output=True, text=True, check=False,
+29	        cwd=str(workspace), env=gate_env(workspace),
+30	    )
+31	
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_osv_gate.py:189:15
+188	        env.pop("GITHUB_WORKSPACE", None)
+189	        proc = subprocess.run([sys.executable, str(GATE), "../outside/scan.json", "r.md"],
+190	                              capture_output=True, text=True, check=False, cwd=str(self.ws), env=env)
+191	        self.assertEqual(proc.returncode, 2)
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_osv_gate.py:192:15
+191	        self.assertEqual(proc.returncode, 2)
+192	        proc = subprocess.run([sys.executable, str(GATE), "scan.json", "r.md"],
+193	                              capture_output=True, text=True, check=False, cwd=str(self.ws), env=env)
+194	        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_plain_output.py:5:0
+4	import shutil
+5	import subprocess
+6	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_plain_output.py:31:15
+30	    def run_plain(self, *argv, stdin_text="1\nq\n"):
+31	        proc = subprocess.run([sys.executable, LEX, *argv], cwd=ROOT, env=self.env(), input=stdin_text,
+32	                              capture_output=True, text=True, timeout=120)
+33	        return proc.returncode, proc.stdout, proc.stderr
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_plain_output.py:68:15
+67	        cmd = f"{sys.executable} {LEX} --plain creed"
+68	        proc = subprocess.run(["script", "-qec", cmd, "/dev/null"], cwd=ROOT, env=self.env(),
+69	                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+70	        self.assertEqual(proc.returncode, 0)
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_plain_output.py:68:15
+67	        cmd = f"{sys.executable} {LEX} --plain creed"
+68	        proc = subprocess.run(["script", "-qec", cmd, "/dev/null"], cwd=ROOT, env=self.env(),
+69	                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
+70	        self.assertEqual(proc.returncode, 0)
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_prompt_input.py:15:0
+14	import shutil
+15	import subprocess
+16	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_prompt_input.py:56:15
+55	        stdin_kwargs = {"stdin": stdin} if stdin is not None else {"input": "n\nq\n"}
+56	        proc = subprocess.run(
+57	            [sys.executable, LEX, *argv], cwd=ROOT, env=self.env(),
+58	            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+59	            text=True, timeout=120, **stdin_kwargs,
+60	        )
+61	        return proc.returncode, ANSI.sub("", proc.stdout)
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_prompt_input.py:86:23
+85	                master, slave = pty.openpty()
+86	                proc = subprocess.Popen(
+87	                    [sys.executable, LEX, "study", "John", "1:1", "--no-animate"],
+88	                    cwd=ROOT, env=self.env(), stdin=slave, stdout=slave, stderr=slave,
+89	                    preexec_fn=make_controlling_tty,
+90	                )
+91	                os.close(slave)
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_release_scripts.py:3:0
+2	
+3	import subprocess
+4	import tempfile
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_release_scripts.py:36:11
+35	def run_script(script, *args):
+36	    return subprocess.run(
+37	        ["bash", str(script), *args],
+38	        capture_output=True,
+39	        text=True,
+40	        check=False,
+41	        env={
+42	            "PATH": "/usr/bin:/bin",
+43	            "HOME": SCRIPT_HOME,
+44	            # Force failure if validation is skipped and gh is reached.
+45	            "GH_TOKEN": "test-token-should-not-be-used",
+46	            "GH_REPO": "elcafe7/test",
+47	            "RUN_URL": "https://example.test/run",
+48	            "FAILED_JOBS": "build-scan: failure",
+49	        },
+50	    )
+51	
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_release_scripts.py:36:11
+35	def run_script(script, *args):
+36	    return subprocess.run(
+37	        ["bash", str(script), *args],
+38	        capture_output=True,
+39	        text=True,
+40	        check=False,
+41	        env={
+42	            "PATH": "/usr/bin:/bin",
+43	            "HOME": SCRIPT_HOME,
+44	            # Force failure if validation is skipped and gh is reached.
+45	            "GH_TOKEN": "test-token-should-not-be-used",
+46	            "GH_REPO": "elcafe7/test",
+47	            "RUN_URL": "https://example.test/run",
+48	            "FAILED_JOBS": "build-scan: failure",
+49	        },
+50	    )
+51	
+
+--------------------------------------------------
+>> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'test-token-should-not-be-used'
+   Severity: Low   Confidence: Medium
+   CWE: CWE-259 (https://cwe.mitre.org/data/definitions/259.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html
+   Location: ./tests/test_release_scripts.py:45:12
+44	            # Force failure if validation is skipped and gh is reached.
+45	            "GH_TOKEN": "test-token-should-not-be-used",
+46	            "GH_REPO": "elcafe7/test",
+47	            "RUN_URL": "https://example.test/run",
+48	            "FAILED_JOBS": "build-scan: failure",
+49	        },
+50	    )
+51	
+52	
+53	class ReleaseScriptTagTests(unittest.TestCase):
+54	    def test_blocked_rejects_malicious_tags(self):
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_security_report.py:6:0
+5	import os
+6	import subprocess
+7	import tempfile
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_security_report.py:79:11
+78	    base.update(env or {})
+79	    return subprocess.run(["bash", str(script), *args], capture_output=True, text=True,
+80	                          check=False, env=base, cwd=cwd)
+81	
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_security_report.py:79:11
+78	    base.update(env or {})
+79	    return subprocess.run(["bash", str(script), *args], capture_output=True, text=True,
+80	                          check=False, env=base, cwd=cwd)
+81	
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_security_report.py:693:8
+692	        work = tmp / "work"
+693	        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+694	        subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True, capture_output=True)
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_security_report.py:693:8
+692	        work = tmp / "work"
+693	        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+694	        subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True, capture_output=True)
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_security_report.py:694:8
+693	        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+694	        subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True, capture_output=True)
+695	        (work / "README.md").write_text(README)
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_security_report.py:694:8
+693	        subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+694	        subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True, capture_output=True)
+695	        (work / "README.md").write_text(README)
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_security_report.py:701:12
+700	        for args in (["add", "."], ["commit", "-q", "-m", "init"], ["push", "-q", "origin", "HEAD:main"]):
+701	            subprocess.run(["git", *ident, *args], cwd=work, check=True, capture_output=True)
+702	        return art, origin, work
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_security_report.py:701:12
+700	        for args in (["add", "."], ["commit", "-q", "-m", "init"], ["push", "-q", "origin", "HEAD:main"]):
+701	            subprocess.run(["git", *ident, *args], cwd=work, check=True, capture_output=True)
+702	        return art, origin, work
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: ./tests/test_security_report.py:715:15
+714	    def _git_out(self, origin, *args):
+715	        return subprocess.run(["git", "--git-dir", str(origin), *args],
+716	                              capture_output=True, text=True, check=True).stdout
+717	
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_security_report.py:715:15
+714	    def _git_out(self, origin, *args):
+715	        return subprocess.run(["git", "--git-dir", str(origin), *args],
+716	                              capture_output=True, text=True, check=True).stdout
+717	
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_strongs_markup.py:16:0
+15	import shutil
+16	import subprocess
+17	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_strongs_markup.py:54:15
+53	        env.update({"HOME": self.home, "LEX_NO_COLOR": "1", "COLUMNS": "100", "TERM": "dumb"})
+54	        proc = subprocess.run(
+55	            [sys.executable, LEX, *argv],
+56	            cwd=ROOT, env=env, input=stdin_text,
+57	            capture_output=True, text=True, timeout=120,
+58	        )
+59	        return proc.returncode, ANSI.sub("", proc.stdout + proc.stderr)
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: ./tests/test_update_versions.py:18:0
+17	import shutil
+18	import subprocess
+19	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: ./tests/test_update_versions.py:174:15
+173	    def run_lex(self, *argv):
+174	        return subprocess.run([sys.executable, LEX, *argv], env=self.env, capture_output=True, text=True, timeout=60)
+175	
+
+--------------------------------------------------
+
+Code scanned:
+	Total lines of code: 14334
+	Total lines skipped (#nosec): 0
+	Total potential issues skipped due to specifically being disabled (e.g., #nosec BXXX): 8
+
+Run metrics:
+	Total issues (by severity):
+		Undefined: 0
+		Low: 116
+		Medium: 0
+		High: 0
+	Total issues (by confidence):
+		Undefined: 0
+		Low: 0
+		Medium: 12
+		High: 104
+Files skipped (0):

@@ -14,6 +14,7 @@ its report stays a workflow artifact and the "Release blocked" issue has the fin
 
 | Date (UTC) | Release | Result | Report |
 |---|---|---|---|
+| 2026-11-19 01:03:28 UTC | `v2.6.9` | pass | [summary](reports/v2.6.9_20261119T010328Z/summary.md) |
 | 2026-11-09 21:31:02 UTC | `v2.6.8` | pass | [summary](reports/v2.6.8_20261109T213102Z/summary.md) |
 
 Setup the maintainer does by hand (OpenSSF Best Practices, Socket.dev):
