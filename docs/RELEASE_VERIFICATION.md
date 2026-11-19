@@ -167,7 +167,9 @@ OSV-only. The README VirusTotal badge (and any in-repo download page) always
 links to the newest published scan at
 [`security/reports/virustotal-latest.md`](../security/reports/virustotal-latest.md),
 a stable pointer that `update_security_index.sh` rewrites after every clean
-release.
+release. The same script rewrites the line under the badges ("Latest virus scan
+report (VirusTotal): <tag>, <UTC time>") between the `virustotal-badge` markers,
+so it always names the version and time of the scan that file holds.
 
 Free public API limits: 4 requests/minute, 500/day, 15,500/month. The check
 paces every request (upload-URL lookup, upload, and poll) at least 15

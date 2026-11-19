@@ -31,8 +31,10 @@ MALICIOUS_TAGS = (
 README = (
     "# Demo\n\n"
     "<!-- virustotal-badge:start -->\n"
-    "[![VirusTotal](https://img.shields.io/badge/VirusTotal-pending-lightgrey)]"
-    "(security/reports/virustotal-latest.md)\n"
+    '<a href="security/reports/virustotal-latest.md"><img alt="VirusTotal" '
+    'src="https://img.shields.io/badge/VirusTotal-pending-lightgrey" height="32"></a>\n'
+    "<br>\n"
+    "[Latest virus scan report (VirusTotal): none yet](security/reports/virustotal-latest.md)\n"
     "<!-- virustotal-badge:end -->\n\n"
     "## Security reports\n\n"
     "<!-- security-reports:start -->\nplaceholder\n<!-- security-reports:end -->\n\nTail.\n"
@@ -683,6 +685,42 @@ class IndexAndCommitTests(unittest.TestCase):
             self.assertIn("demo-v1.2.3.tar.gz", latest_vt)
             self.assertIn("VirusTotal-clean-brightgreen", r)
             self.assertIn("security/reports/virustotal-latest.md", r)
+
+    def test_virustotal_link_line_tracks_version_and_timestamp(self):
+        """The badge block (32px badge + 'Latest virus scan report' line) is rewritten
+        on every index run with the tag and UTC time of the report it points at."""
+        line = ("[Latest virus scan report (VirusTotal): {tag}, {when}]"
+                "(security/reports/virustotal-latest.md)")
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            dist, vt, sc = make_inputs(tmp)
+            sec = tmp / "security"
+            readme = tmp / "README.md"
+            readme.write_text(README)
+            self.assertEqual(run(INDEX, str(sec), str(readme)).returncode, 0)
+            r = readme.read_text()
+            self.assertIn("VirusTotal): none yet](security/reports/virustotal-latest.md)", r)
+            self.assertIn('height="32"', r)
+            for tag, ts, when in (("v1.2.3", "20261101T000000Z", "2026-11-01 00:00:00 UTC"),
+                                  ("v1.2.4", "20261109T205501Z", "2026-11-09 20:55:01 UTC")):
+                p = run(WRITER, str(sec / "reports"), env=writer_env(tag, dist, vt, sc, ts=ts))
+                self.assertEqual(p.returncode, 0, p.stderr)
+                self.assertEqual(run(INDEX, str(sec), str(readme)).returncode, 0)
+                r = readme.read_text()
+                self.assertIn(line.format(tag=tag, when=when), r)
+                self.assertEqual(r.count("Latest virus scan report"), 1)
+                self.assertIn('<img alt="VirusTotal" src="https://img.shields.io/badge/'
+                              'VirusTotal-clean-brightgreen" height="32">', r)
+            # Markers survive, the text around them is untouched, and a re-run is a no-op.
+            self.assertTrue(r.startswith("# Demo\n\n<!-- virustotal-badge:start -->\n"))
+            self.assertIn("<!-- virustotal-badge:end -->\n\n## Security reports", r)
+            before = r
+            self.assertEqual(run(INDEX, str(sec), str(readme)).returncode, 0)
+            self.assertEqual(readme.read_text(), before)
+            # The line is derived from the same folder whose report is copied to
+            # virustotal-latest.md, so the two can never disagree.
+            latest_vt = (sec / "reports" / "virustotal-latest.md").read_text()
+            self.assertIn("From the clean release of `v1.2.4` on 2026-11-09 20:55:01 UTC", latest_vt)
 
     def _repo_with_artifact(self, tmp: Path):
         dist, vt, sc = make_inputs(tmp)

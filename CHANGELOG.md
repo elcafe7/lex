@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Docs rewritten around tasks.** `docs/` now has a plain-language page for each
+  thing a reader wants to do (get started, read a passage, look up a word, search,
+  study mode, creeds, using Lex with AI tools via `--json`, troubleshooting and FAQ,
+  full command reference), indexed by `docs/README.md`. `docs/lex-docs.md` and
+  `docs/lex-docs.html` are now generated from those pages by
+  `scripts/build_docs.py`, and `tests/test_docs_build.py` fails if they drift.
+- **README refreshed:** a "Start here" path first, a "Using Lex with AI tools"
+  section, a Docs link under the badges, 32px badges, and a "Latest virus scan"
+  line (version and UTC time) that `scripts/update_security_index.sh` rewrites on
+  every release. Screenshots and the banner are regenerated from the current CLI.
+
 ## 2.6.9 — 2026-11-18
 
 - **Release:** align the GitHub release archive and `@n8te_/lex-cli` launcher
