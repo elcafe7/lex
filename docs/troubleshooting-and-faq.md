@@ -23,6 +23,43 @@ type -a lex
 | A script or AI tool gets stuck or can't read the output | Use `lex --json ...`. It never prompts and prints one JSON document. Errors come back as JSON on stderr with exit code 2, 3, or 4. |
 | A dictionary entry is missing | The local ISBE encyclopedia import is incomplete. It currently covers only Volume II (Clement to Heresh). |
 
+## When a command fails
+
+Lex tells you why in plain words and, when it can, suggests the command you probably meant. The message goes to the error stream (stderr), the exit code stays non-zero, and colour follows `NO_COLOR` and `TERM=dumb`.
+
+```sh
+lex John 22:1
+lex Jhon 3:16
+lex -B kjb John 3:16
+lex Tobit 1:1
+```
+
+```text
+lex: Couldn't find "John 22:1" in KJV.
+  John has 21 chapters in the KJV; chapter 22 doesn't exist.
+  Did you mean:
+    lex John 21
+
+lex: Couldn't find "Tobit 1:1" in KJV.
+  Tobit isn't in the KJV; it's one of the Apocrypha books. Editions that have it: kj16, gen, dra, lxx, vulg.
+  Did you mean:
+    lex -B kj16 Tobit 1:1
+```
+
+What Lex checks for you:
+
+| You typed | Lex says |
+|---|---|
+| A misspelt flag or option, such as `--jsno` or `-ligth` (one or two dashes both work, and so do the help aliases `--help`, `-help`, `-h`, `--h`) | The closest real options: `lex --json John 3:16` |
+| A misspelt command, such as `strong G3056` | `lex strongs G3056` |
+| A misspelt book, such as `Jhon 3:16` or `Genisis 1:1` | The nearest book names: `lex John 3:16` |
+| A reference Lex can't read, such as `jn 3:16:2` or `john 3 verse 16` | The likely intended form: `lex John 3:16` |
+| An unknown Bible code, such as `-B kjb` | The closest codes: `lex -B kjv John 3:16` |
+| A chapter or verse that isn't in that Bible | How many chapters or verses the book really has, for example `John 3 has 36 verses in the KJV; verse 99 doesn't exist.` |
+| A book the Bible you chose doesn't contain | Which installed editions do have it, for example `lex -B kj16 Tobit 1:1` |
+
+With `--json` the same information comes back as `{"error": {"code", "message", "reason", "suggestions"}}`; see [Use Lex with AI tools](use-lex-with-ai-tools.md).
+
 ## Frequently asked questions
 
 **Does Lex need the internet?** Only to install and to update. Reading, searching, and studying all work offline.

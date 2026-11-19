@@ -218,6 +218,12 @@ stderr, one line:
 {"schema_version":1,"lex_version":"2.6.6","error":{"code":"not_found","message":"...","hint":"..."}}
 ```
 
+Every error also carries `reason` (the failure in plain words, for example `John has 21 chapters in the KJV; chapter 22 doesn't exist.`) and `suggestions` (a list of corrected commands, possibly empty), so an agent can retry without guessing:
+
+```json
+{"schema_version":1,"lex_version":"2.6.9","error":{"code":"not_found","message":"No verse or chapter found for: Tobit 1:1","reason":"Tobit isn't in the KJV; it's one of the Apocrypha books. Editions that have it: kj16, gen, dra, lxx, vulg.","suggestions":["lex --json -B kj16 Tobit 1:1","lex --json -B gen Tobit 1:1","lex --json -B dra Tobit 1:1"]}}
+```
+
 `hint` is optional; `unknown_edition` also includes `available` (edition ids) and `unsupported_in_json` includes `supported` (commands).
 
 | exit | `code` | when |

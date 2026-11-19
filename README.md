@@ -367,6 +367,25 @@ lex -B lxx Gen 1:1   # Read from the Septuagint
 lex -B dra John 3:16 # Read Douay-Rheims 1899
 ```
 
+### When a command fails
+Lex explains why in plain words and suggests the command you probably meant (on stderr, with a non-zero exit code; `--json` returns `{"error": {"code", "message", "reason", "suggestions"}}`).
+
+```text
+$ lex John 22:1
+lex: Couldn't find "John 22:1" in KJV.
+  John has 21 chapters in the KJV; chapter 22 doesn't exist.
+  Did you mean:
+    lex John 21
+
+$ lex --jsno John 3:16
+lex: unrecognized arguments: --jsno
+  `--jsno` is not an option Lex knows. Options take one or two dashes (`--json` and `-json` both work).
+  Did you mean:
+    lex --json John 3:16
+```
+
+It catches misspelt flags, commands and book names, references like `jn 3:16:2`, unknown `-B` codes, chapters and verses a book doesn't have, and books missing from the Bible you chose (it points to editions that have them, e.g. `lex -B kj16 Tobit 1:1`).
+
 ### Study Mode (`-i` or `study`)
 Study mode shows a verse and its surrounding verses, then the original Greek or Hebrew word by word, what each word means, related topics, and cross-references to other verses. It is the main workbench. It renders the selected-version verse context first,
 then source text, interlinear rows, lexicon notes, topical associations, and TSK
