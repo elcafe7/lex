@@ -495,10 +495,10 @@ def detect_install_kind(base_dir=None, env=None):
     return "release"
 
 
-def update_backup_dir(env=None, now=None):
-    """Folder for files the updater moves aside (never inside the work tree)."""
-    env = os.environ if env is None else env
-    root = env.get("LEX_BACKUP_DIR") or os.path.expanduser("~/.lex_backups")
+def update_backup_dir(now=None):
+    """Folder for files the updater moves aside (in the home folder, never
+    inside the work tree)."""
+    root = os.path.expanduser("~/.lex_backups")
     stamp = time.strftime("update-%Y%m%d-%H%M%S", time.localtime(now))
     return os.path.join(root, stamp)
 
@@ -532,10 +532,16 @@ def _code_version_from_text(text):
     return match.group(1) if match else None
 
 
+def _backup_slot(backup_root, rel):
+    """Return ``backup_root/rel`` (confined to the backup folder), creating its parent."""
+    destination = safe_join(backup_root, rel)
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    return destination
+
+
 def _move_aside(path, backup_root, rel):
     """Move ``path`` to ``backup_root/rel`` and return the backup path."""
-    destination = os.path.join(backup_root, rel)
-    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    destination = _backup_slot(backup_root, rel)
     shutil.move(path, destination)
     return destination
 
@@ -603,7 +609,7 @@ def git_update(console, base_dir=None, env=None, run_setup=None):
     new_version = _code_version_from_text(new_lex) or old_version
 
     # Make room: move aside anything that would stop the fast-forward.
-    backup_root = update_backup_dir(env)
+    backup_root = update_backup_dir()
     moved = []  # (original, backup) pairs, so a failed pull can put them back
     _, upstream_tree, _ = _git_out(base_dir, "ls-tree", "-r", "--name-only", "-z", tip)
     upstream_files = set(p for p in upstream_tree.split("\0") if p)
@@ -622,6 +628,7 @@ def git_update(console, base_dir=None, env=None, run_setup=None):
     code, _, err = _git_out(base_dir, "merge", "--ff-only", "--quiet", tip)
     if code != 0:
         for original, backup in moved:
+            original = confine_path(original, [base_dir])
             os.makedirs(os.path.dirname(original), exist_ok=True)
             shutil.move(backup, original)
         raise UpdateRefused(f"The fast-forward failed ({err or 'git merge error'}). Your files were put back as they were.")
@@ -720,7 +727,7 @@ def release_update(console, base_dir=None, env=None, opener=None, run_setup=None
         root = os.path.join(extract, f"lex-{new_version}")
         if not os.path.isfile(os.path.join(root, "lex.py")):
             raise UpdateRefused(f"{archive_name} is not a Lex release. Nothing was changed.")
-        backup_root = update_backup_dir(env)
+        backup_root = update_backup_dir()
         moved = []
         for folder, _dirs, files in os.walk(root):
             for name in files:
@@ -743,12 +750,6 @@ def release_update(console, base_dir=None, env=None, opener=None, run_setup=None
     if setup_error:
         result["warning"] = setup_error
     return result
-
-
-def _backup_slot(backup_root, rel):
-    destination = os.path.join(backup_root, rel)
-    os.makedirs(os.path.dirname(destination), exist_ok=True)
-    return destination
 
 
 def cli_update_status(latest_data_version, env=None, base_dir=None):

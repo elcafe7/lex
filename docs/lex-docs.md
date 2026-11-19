@@ -542,7 +542,7 @@ Lex CLI:  2.6.8 → 2.6.9 (updated)
 Lex data: 2.6.8 → 2.6.9 (updated)
 ```
 
-- **Git clone:** `lex update` fast-forwards the clone for you (the same as `git pull --ff-only`), runs `./setup.sh` to refresh dependencies, then refreshes the data with the new code. If you have local changes to Lex's own files it stops before changing anything and tells you which ones; commit or stash them and run it again. Files that would block the pull (an old downloaded copy of a data file, for example) are moved to `~/.lex_backups/` first. Set `LEX_BACKUP_DIR` to keep backups somewhere else.
+- **Git clone:** `lex update` fast-forwards the clone for you (the same as `git pull --ff-only`), runs `./setup.sh` to refresh dependencies, then refreshes the data with the new code. If you have local changes to Lex's own files it stops before changing anything and tells you which ones; commit or stash them and run it again. Files that would block the pull (an old downloaded copy of a data file, for example) are moved to `~/.lex_backups/` first.
 - **npm install:** it upgrades `@n8te_/lex-cli` when a newer version is published, then refreshes the data. If it can't upgrade the CLI (for example, no write permission to the npm prefix), it prints the exact `npm install -g ...` command to run.
 - **Release download (an unpacked `lex-vX.Y.Z.tar.gz`):** it downloads the newest release, checks its published SHA-256, and unpacks it over the folder. Your own files are left alone and replaced code files are kept in `~/.lex_backups/`.
 

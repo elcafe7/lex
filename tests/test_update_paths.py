@@ -80,7 +80,9 @@ class GitInstallTest(unittest.TestCase):
         self.env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                     "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
                     "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull,
-                    "LEX_BACKUP_DIR": os.path.join(self.tmp, "backups")}
+                    "HOME": os.path.join(self.tmp, "home")}
+        self.home = mock.patch.dict(os.environ, {"HOME": self.env["HOME"]})
+        self.home.start()
         self.upstream = os.path.join(self.tmp, "upstream")
         self.install = os.path.join(self.tmp, "lex")
         os.makedirs(os.path.join(self.upstream, "runtime-data"))
@@ -95,6 +97,7 @@ class GitInstallTest(unittest.TestCase):
 
     def tearDown(self):
         self.version.stop()
+        self.home.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def git(self, cwd, *args, check=True):
@@ -302,13 +305,16 @@ class ReleaseInstallTest(unittest.TestCase):
                           "my-notes.txt": "keep me"}.items():
             with open(os.path.join(self.install, rel), "w") as fh:
                 fh.write(text)
-        self.env = {"LEX_BACKUP_DIR": os.path.join(self.tmp, "backups")}
+        self.env = {}
+        self.home = mock.patch.dict(os.environ, {"HOME": os.path.join(self.tmp, "home")})
+        self.home.start()
         self.requested = []
         self.version = mock.patch.object(LEXMOD, "VERSION", "2.6.8")
         self.version.start()
 
     def tearDown(self):
         self.version.stop()
+        self.home.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def archive(self, version="2.6.9"):
