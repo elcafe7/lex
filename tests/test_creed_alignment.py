@@ -116,13 +116,13 @@ class CreedAlignmentTest(unittest.TestCase):
         self.assertRegex(out, r"#\s+│?\s*Greek\s+│?\s*#\s+│?\s*English")
         for title in self.lex.CREED_ORIGINALS[topic]["sections"]:
             self.assertIn(title, out)
-        row = next(l for l in out.splitlines() if re.match(r"^\W*1\W", l))
+        row = next(row_text for row_text in out.splitlines() if re.match(r"^\W*1\W", row_text))
         # The number labels both sides: before the Greek and again before the English.
         self.assertRegex(row, r"^\W*1\W+Πιστεύομεν.*\W1\W+We believe in one God")
         for line in self.aligned(topic)[0]["lines"]:
             self.assertTrue(any(
-                re.search(rf"^\W*{line['n']}\W.*\W{line['n']}\W+{re.escape(line['english'].split()[0])}", l)
-                for l in out.splitlines()
+                re.search(rf"^\W*{line['n']}\W.*\W{line['n']}\W+{re.escape(line['english'].split()[0])}", row_text)
+                for row_text in out.splitlines()
             ), line)
 
     def test_narrow_view_stacks_each_pair(self):
@@ -159,9 +159,9 @@ class CreedAlignmentTest(unittest.TestCase):
                                                     self.agent.build_creed_sections(topic)))
                     lines = out.splitlines()
                     language = self.lex.CREED_ORIGINALS[topic]["language"]
-                    head = next(i for i, l in enumerate(lines) if re.match(rf"^\s*#\s+{language}\s+#\s+English", l))
+                    head = next(i for i, row_text in enumerate(lines) if re.match(rf"^\s*#\s+{language}\s+#\s+English", row_text))
                     end = next((i for i in range(head, len(lines)) if lines[i].lstrip().startswith("╭")), len(lines))
-                    table = [l for l in lines[head:end] if l.strip()]
+                    table = [row_text for row_text in lines[head:end] if row_text.strip()]
                     self.assertGreater(len(table), 10)
                     header = table[0]
                     hashes = [m.start() for m in re.finditer("#", header)]
@@ -203,7 +203,7 @@ class CreedAlignmentTest(unittest.TestCase):
         topic = "The Nicene Creed"
         out = self.render(140, self.agent.display_creed_document, topic, self.agent.build_creed_sections(topic))
         for title in self.lex.CREED_ORIGINALS[topic]["sections"]:
-            self.assertTrue(any(l.count(title) == 2 for l in out.splitlines()), title)
+            self.assertTrue(any(row_text.count(title) == 2 for row_text in out.splitlines()), title)
 
     def test_missing_original_line_keeps_its_number(self):
         aligned = [{"title": "Part", "lines": [{"n": 7, "original": None, "english": "Only English here."}]}]
@@ -233,8 +233,8 @@ class CreedAlignmentTest(unittest.TestCase):
         numbers = [line["n"] for section in doc["sections"] for line in section["lines"]]
         self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
         first = doc["sections"][0]
-        self.assertEqual(squash(" ".join(l["english"] for l in first["lines"])), squash(first["markdown"]))
-        self.assertEqual(squash(" ".join(l["original"] for l in first["lines"])), squash(first["original"]["text"]))
+        self.assertEqual(squash(" ".join(entry["english"] for entry in first["lines"])), squash(first["markdown"]))
+        self.assertEqual(squash(" ".join(entry["original"] for entry in first["lines"])), squash(first["original"]["text"]))
         other = self.lex.json_creed_document(self.agent, "Westminster Shorter Catechism", "")
         self.assertNotIn("lines", other["sections"][0])
 
@@ -357,8 +357,8 @@ class CreedAlignmentTest(unittest.TestCase):
                             self.assertEqual(set(line), {"n", "original", "english"})
                             self.assertTrue(line["original"].strip() and line["english"].strip())
                         numbers += [line["n"] for line in lines]
-                        self.assertEqual(squash(" ".join(l["english"] for l in lines)), squash(section["markdown"]))
-                        self.assertEqual(squash(" ".join(l["original"] for l in lines)), squash(section["original"]["text"]))
+                        self.assertEqual(squash(" ".join(entry["english"] for entry in lines)), squash(section["markdown"]))
+                        self.assertEqual(squash(" ".join(entry["original"] for entry in lines)), squash(section["original"]["text"]))
                     self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
             self.assertEqual(outputs[0], outputs[1], query)
 
@@ -383,9 +383,9 @@ class CreedAlignmentTest(unittest.TestCase):
                 # NO_COLOR drops colours (Rich may keep bold); --plain drops all styling.
                 self.assertIsNone(re.search(r"\x1b\[[0-9;]*(?:3[0-9]|4[0-9]|9[0-7])[;m]", out))
                 out = ansi.sub("", out)
-                self.assertLessEqual(max(cell_len(l) for l in out.splitlines()), 60)
-                lines = [l.strip() for l in out.splitlines() if l.strip()]
-                i = lines.index(next(l for l in lines if l.startswith("1 Credo in Deum Patrem omnipotentem")))
+                self.assertLessEqual(max(cell_len(row_text) for row_text in out.splitlines()), 60)
+                lines = [row_text.strip() for row_text in out.splitlines() if row_text.strip()]
+                i = lines.index(next(row_text for row_text in lines if row_text.startswith("1 Credo in Deum Patrem omnipotentem")))
                 self.assertTrue(lines[i + 1].startswith("1 I believe in God, the Father almighty"), lines[i:i + 2])
                 wide = subprocess.run(
                     [sys.executable, LEX, *args], cwd=ROOT, env=dict(env, COLUMNS="140"),
