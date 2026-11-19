@@ -7064,10 +7064,27 @@ def _compact(text):
     return NORM_RE.sub("", str(text or "").lower())
 
 
-def command_line(args_text, json_mode=False):
-    """A runnable suggestion; in --json mode it keeps --json unless the text already has it."""
-    has_json = any(_option_name(t) == "json" for t in args_text.split())
-    return ("lex --json " if json_mode and not has_json else "lex ") + args_text.strip()
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def strip_control(text):
+    """Remove terminal control characters (C0, DEL, C1) so echoed input can't inject escapes."""
+    text = re.sub(r"[\t\n\r]+", " ", str(text))
+    return _CONTROL_CHARS_RE.sub("", text)
+
+
+def command_line(args, json_mode=False):
+    """A suggested command, shell-quoted so it is safe to paste.
+
+    ``args`` is a list of argv tokens, or a string split on whitespace. Every
+    token goes through shlex.quote, so user text such as ``$(touch x)`` comes out
+    inert. In --json mode it keeps --json unless the tokens already have it.
+    """
+    tokens = args.split() if isinstance(args, str) else list(args)
+    tokens = [strip_control(t) for t in tokens]
+    has_json = any(_option_name(t) == "json" for t in tokens)
+    prefix = ["lex", "--json"] if json_mode and not has_json else ["lex"]
+    return shlex.join(prefix + [t for t in tokens if t])
 
 
 def stderr_color_enabled():
@@ -7081,6 +7098,8 @@ def emit_friendly_error(message, reason=None, suggestions=(), json_mode=False):
     """Print a plain-words error to stderr (text mode). Never prints to stdout."""
     color = stderr_color_enabled()
     red, bold, dim, off = ("\x1b[1;31m", "\x1b[1m", "\x1b[2m", "\x1b[0m") if color else ("", "", "", "")
+    message = strip_control(message)
+    reason = strip_control(reason) if reason else reason
     lines = [f"{red}lex:{off} {message}"]
     if reason and reason != message:
         lines.append(f"  {reason}")
@@ -7148,8 +7167,7 @@ def interpret_usage_error(parser, message):
         suggestions = []
         first = next(iter(fix_for), None)
         for alt in (fix_for[first] if first else [])[:3]:
-            swapped = [alt if t == first else (fix_for[t][0] if t in fix_for else t) for t in argv]
-            suggestions.append(" ".join(swapped))
+            suggestions.append([alt if t == first else (fix_for[t][0] if t in fix_for else t) for t in argv])
         return message, " ".join(dict.fromkeys(reasons)), suggestions + extras
     match = re.match(r"argument ([^:]+): invalid choice: '([^']*)' \(choose from (.*)\)$", message)
     if match:
@@ -7475,6 +7493,10 @@ def json_error_payload(code, message, hint=None, **extra):
     error.update(extra)
     error.setdefault("reason", message)
     error.setdefault("suggestions", [])
+    for key in ("message", "hint", "reason"):
+        if isinstance(error.get(key), str):
+            error[key] = strip_control(error[key])
+    error["suggestions"] = [strip_control(s) for s in error["suggestions"]]
     return {"schema_version": JSON_SCHEMA_VERSION, "lex_version": VERSION, "error": error}
 
 def json_dumps(payload):

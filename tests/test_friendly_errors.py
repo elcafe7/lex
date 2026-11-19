@@ -14,6 +14,7 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -106,7 +107,7 @@ class FriendlyErrorCliTest(unittest.TestCase):
     def test_search_scope_used_as_option(self):
         err = self.fails("-nt", code=2)
         self.assertIn("search scope", err)
-        self.assertIn("lex search <words> -nt", err)
+        self.assertIn("lex search '<words>' -nt", err)
 
     def test_unknown_search_scope_suggests_nearest(self):
         err = self.fails("search", "grace", "-jhon")
@@ -223,6 +224,63 @@ class FriendlyErrorCliTest(unittest.TestCase):
         err = self.fails("--plain", "John", "22:1")
         self.assertIn("chapter 22 doesn't exist", err)
 
+    # --- security: quoting and control characters --------------------------
+    def suggestion_lines(self, err):
+        return [line.strip() for line in err.splitlines() if line.strip().startswith("lex ") and not line.startswith("lex:")]
+
+    def test_suggestions_quote_shell_metacharacters(self):
+        payload = "$(touch /tmp/lex-friendly-pwned)"
+        err = self.fails("--jsn", payload, code=2)
+        lines = self.suggestion_lines(err)
+        self.assertTrue(lines, err)
+        for line in lines:
+            self.assertEqual(shlex.split(line)[:2], ["lex", "--json"])
+            self.assertIn(payload, shlex.split(line))  # kept as one inert argument
+            # Running the suggestion through a shell must not execute the substitution.
+            marker = os.path.join(self.home, "pwned")
+            line = line.replace("/tmp/lex-friendly-pwned", marker)
+            subprocess.run(["sh", "-c", "echo " + line], capture_output=True, check=True)
+            self.assertFalse(os.path.exists(marker))
+
+    def test_suggestions_quote_backticks_semicolons_and_quotes(self):
+        err = self.fails("--limt", "`id`", "it's", code=2)
+        for line in self.suggestion_lines(err):
+            self.assertEqual(shlex.join(shlex.split(line)), line)
+            self.assertNotIn(" `id`", line)
+        err = self.fails("--jsn", "a;b", "'; rm -rf ~ #", code=2)
+        for line in self.suggestion_lines(err):
+            self.assertEqual(shlex.join(shlex.split(line)), line)
+            self.assertIn("'a;b'", line)
+
+    def test_json_suggestions_are_quoted_too(self):
+        error = self.fails_json("--jsn", "$(touch x)", code=2)
+        self.assertTrue(error["suggestions"])
+        for s in error["suggestions"]:
+            self.assertEqual(shlex.split(s)[:2], ["lex", "--json"])
+            self.assertEqual(shlex.join(shlex.split(s)), s)
+            self.assertNotIn(" $(touch", s)
+
+    def test_control_characters_are_stripped_from_text_errors(self):
+        for argv, code in [
+            (("Jhon\x1b[31m\x9b2J", "3:16\x07\x7f"), 1),
+            (("--jsn\x1b]0;pwned\x07", "John"), 2),
+            (("Nowhere\x1b[2J", "1:1"), 1),
+            (("-B", "kj\x1bb", "John", "3:16"), 1),
+            (("John", "99\x1b[1m:1"), 1),
+        ]:
+            err = self.fails(*argv, code=code)
+            self.assertIsNone(re.search(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]", err), repr(err))
+
+    def test_control_characters_are_stripped_from_json_errors(self):
+        for argv, code in [(("Jhon\x1b[31m", "3:16"), 3), (("--jsn\x1b[2J", "John"), 2), (("-B", "kj\x1bb", "John"), 2)]:
+            status, out, err = self.run_lex("--json", *argv)
+            self.assertEqual(status, code, err)
+            self.assertNotRegex(err, r"[\x00-\x1f\x7f-\x9f]\S*(?<!\n)$|\x7f")
+            error = json.loads(err)["error"]
+            strings = [error["message"], error["reason"], *error["suggestions"]]
+            for text in strings:
+                self.assertIsNone(re.search(r"[\x00-\x1f\x7f-\x9f]", text), repr(text))
+
     # --- --json ----------------------------------------------------------
     def test_json_chapter_out_of_range(self):
         error = self.fails_json("John", "22:1", code=3)
@@ -308,6 +366,26 @@ class FriendlyErrorUnitTest(unittest.TestCase):
         self.assertNotIn("\x1b[", self._emit(True, {"TERM": "xterm-256color", "NO_COLOR": "1"}))
         self.assertNotIn("\x1b[", self._emit(True, {"TERM": "xterm-256color", "LEX_NO_COLOR": "1"}))
         self.assertNotIn("\x1b[", self._emit(True, {"TERM": "dumb"}))
+
+    def test_strip_control_and_command_line_quoting(self):
+        self.assertEqual(self.lex.strip_control("a\x1b[31mb\x00c\x7fd\x9be\nf"), "a[31mbcde f")
+        self.assertEqual(self.lex.command_line(["--limit", "a b"]), "lex --limit 'a b'")
+        self.assertEqual(self.lex.command_line("x;y $(z)", json_mode=True), "lex --json 'x;y' '$(z)'")
+
+    def test_emit_strips_control_characters(self):
+        class Capture(io.StringIO):
+            def isatty(self):
+                return False
+        saved = sys.stderr
+        sys.stderr = Capture()
+        try:
+            self.lex.emit_friendly_error("bad \x1b[2Jmsg", "why\x07", ["John\x1b[0m 3:16"])
+            text = sys.stderr.getvalue()
+        finally:
+            sys.stderr = saved
+        self.assertNotIn("\x1b", text)
+        self.assertNotIn("\x07", text)
+        self.assertIn("lex 'John[0m' 3:16", text)
 
     def test_message_shape(self):
         text = self._emit(False, {"TERM": "dumb"})
