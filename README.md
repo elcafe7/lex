@@ -1,19 +1,35 @@
 # Lex | The Elegant Bible Terminal 📖
 
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/elcafe7/lex/badge)](https://scorecard.dev/viewer/?uri=github.com/elcafe7/lex)
+<a href="https://scorecard.dev/viewer/?uri=github.com/elcafe7/lex"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/elcafe7/lex/badge" height="32"></a>
+<a href="https://www.bestpractices.dev/projects/16506"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/16506/badge" height="32"></a>
 <!-- virustotal-badge:start -->
-[![VirusTotal](https://img.shields.io/badge/VirusTotal-clean-brightgreen)](security/reports/virustotal-latest.md)
+<a href="security/reports/virustotal-latest.md"><img alt="VirusTotal" src="https://img.shields.io/badge/VirusTotal-clean-brightgreen" height="32"></a>
+<br>
+[Latest virus scan report (VirusTotal): v2.6.9, 2026-11-19 01:03:28 UTC](security/reports/virustotal-latest.md)
 <!-- virustotal-badge:end -->
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16506/badge)](https://www.bestpractices.dev/projects/16506)
+<p><strong>📖 <a href="docs/README.md">Docs</a></strong> · <a href="https://apocalypse.press/lex/docs/">apocalypse.press/lex/docs</a> · <a href="docs/get-started.md">Get started in 2 minutes</a></p>
+
 <!-- Socket.dev badge slot: set SOCKET_URL and uncomment (security/MANUAL-STEPS.md)
 [![Socket](https://socket.dev/api/badge/npm/package/@n8te_/lex-cli)](SOCKET_URL)
 -->
 
 ![Lex Banner](docs/images/banner.png)
 
-**A local-first Bible study terminal for reading, searching, studying, and exporting Scripture work.**
+**Read, search, and study the Bible from your computer's terminal. Offline, fast, and free.**
 
-Lex is a high-signal CLI tool for the modern student of Scripture. It keeps your study fast, offline, and beautiful. By combining multiple Bible versions, interlinear study, Strong's & STEPBible lexicons, the Treasury of Scripture Knowledge, and historical creeds into a single terminal interface, Lex transforms your shell into a distraction-free theological workbench.
+## 🌱 New here? Start here
+
+**What is Lex?** Lex is a free Bible program you use by typing. You open your computer's *terminal* (the Terminal app on a Mac, or any terminal window on Linux), type a verse like `lex John 3:16`, and the verse appears. It works with no internet connection and needs no account.
+
+**How to start (about five minutes):**
+
+1. **Install it.** You need [Node.js](https://nodejs.org) 18 or newer and Python 3.12 or newer on your computer. Then type `npm install -g @n8te_/lex-cli`. The first run downloads the Bible data (several hundred MB), so give it a minute. Prefer not to use npm? See [Installation](#-installation).
+2. **Read a verse.** `lex John 3:16` (short names like `jn` and `rom` work too). Add `-B kjv` to read the King James Version instead.
+3. **Search.** `lex search "kingdom of god"`
+4. **Go deeper.** `lex study John 1:1` shows the original Greek or Hebrew word by word, with what each word means.
+5. **Stuck?** Type `lex help` for a list of everything Lex can do.
+
+Lex puts several Bible versions, interlinear study (the original Greek and Hebrew, word by word), Strong's and STEPBible word studies, the Treasury of Scripture Knowledge, and the historical creeds in one place, and it keeps working on a plane.
 
 ```bash
 lex study John 1:1
@@ -21,12 +37,13 @@ lex naves grace
 lex web Romans 1:1
 ```
 
-Current version: `2.6.8`
+Current version: `2.6.9`
 
 ## 📚 Documentation
-- **Lex CLI Docs (web):** [apocalypse.press/lex/docs](https://apocalypse.press/lex/docs/) - the full user and developer reference for 2.6.5.
-- **Download as Markdown:** [lex-docs.md](https://apocalypse.press/lex/docs/lex-docs.md)
-- **In this repo:** [docs/lex-docs.md](docs/lex-docs.md) (Markdown) and [docs/lex-docs.html](docs/lex-docs.html) (offline HTML copy)
+Organised around what you want to do, with a screenshot or sample output for each:
+- **On the web:** [apocalypse.press/lex/docs](https://apocalypse.press/lex/docs/)
+- **On GitHub:** [docs/README.md](docs/README.md) is the index. Pages: [Get started](docs/get-started.md) · [Read a passage](docs/read-a-passage.md) · [Look up a word](docs/look-up-a-word.md) · [Search the Bible](docs/search-the-bible.md) · [Study mode](docs/study-mode.md) · [Creeds and confessions](docs/creeds-and-confessions.md) · [Use Lex with AI tools](docs/use-lex-with-ai-tools.md) · [Troubleshooting and FAQ](docs/troubleshooting-and-faq.md) · [Full command reference](docs/full-command-reference.md)
+- **Everything in one file:** [lex-docs.md](https://apocalypse.press/lex/docs/lex-docs.md) (download), or [docs/lex-docs.md](docs/lex-docs.md) and [docs/lex-docs.html](docs/lex-docs.html) in this repo.
 
 
 ---
@@ -45,13 +62,14 @@ Current version: `2.6.8`
 
 | Feature | Description |
 | :--- | :--- |
-| **Multi-Version** | ESV, KJV (1769 & 1611), NASB '95, Geneva 1599, Douay-Rheims 1899, Septuagint (LXX), and Vulgate. |
+| **Multi-Version** | ESV, KJV (1769 & 1611), NASB '95, Geneva 1599, Douay-Rheims 1899, Septuagint (LXX), and Vulgate. Pick one for a single command with `-B` (for example `lex -B dra John 3:16`). |
 | **Unified Nave's** | Look up topics (e.g., `lex naves grace`) or find topical associations for any verse (e.g., `lex naves John 3:16`). |
 | **Interlinear Study** | Source text, transliteration, and lexicon notes in a surgically precise terminal view. |
 | **Verse Web** | Visualize local cross-reference connections ranked by relevance with instant previews. |
-| **Historical Creeds** | Instant access to the Nicene Creed, Westminster Confession, and other major historical documents. |
+| **Historical Creeds** | The Apostles', Nicene, Athanasian and Chalcedonian creeds, shown line by line with the original Latin or Greek beside the English, plus the Westminster Confession and other major documents. |
 | **Modern Aesthetics** | Auto-detecting light/dark themes with high-contrast, "Blueprint Technical" or "Studio Light" palettes. |
 | **Export Engine** | Generate `.docx`/`.pdf` study packets and search results, plus read-mode PNG/PPTX and verse-slide PPTX exports. |
+| **Works with AI tools** | Add `--json` and Lex prints clean, labelled results that scripts and AI assistants can read. See [Using Lex with AI tools](#-using-lex-with-ai-tools). |
 | **Zero Web Dependency** | Runs against local SQLite/JSON stores. Fast, private, and works on a plane. |
 
 ---
@@ -135,9 +153,9 @@ If you are installing from a GitHub release archive instead of `git clone`, use
 the release checksum sidecar before unpacking:
 
 ```bash
-curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.8/lex-v2.6.8.tar.gz
-curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.8/lex-v2.6.8.tar.gz.sha256
-shasum -a 256 -c lex-v2.6.8.tar.gz.sha256
+curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.9/lex-v2.6.9.tar.gz
+curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.9/lex-v2.6.9.tar.gz.sha256
+shasum -a 256 -c lex-v2.6.9.tar.gz.sha256
 ```
 
 ### Alternative: npm launcher
@@ -306,7 +324,7 @@ lex -B dra John 3:16 # Read Douay-Rheims 1899
 ```
 
 ### Study Mode (`-i` or `study`)
-This is the main workbench. It renders the selected-version verse context first,
+Study mode shows a verse and its surrounding verses, then the original Greek or Hebrew word by word, what each word means, related topics, and cross-references to other verses. It is the main workbench. It renders the selected-version verse context first,
 then source text, interlinear rows, lexicon notes, topical associations, and TSK
 cross-references. English-version OT study stays Masoretic-oriented through the
 local ESV Hebrew/Aramaic interlinear packet. Septuagint and Vulgate study modes
@@ -338,13 +356,18 @@ lex search "kingdom of god"
 lex search covenant -nt        # Search only the New Testament
 lex search beast -major        # Search only Major Prophets
 lex search "holy spirit" -paul  # Search only Pauline Epistles
+lex search enemy -psalms       # Search only the book of Psalms
+lex search wisdom -apocrypha -B dra   # Search the deuterocanonical books (Douay-Rheims)
 lex search covenant --page 2 --limit 20
 ```
 
 Search results include footer commands for the next page and for increasing the
 number of results per page. Use explicit book/group scopes such as `-jeremiah`
 or `-nt`; a bare book name in the query is treated as text to search for, not
-metadata to match.
+metadata to match. Scopes work in every Bible version, using that version's own book
+names (`-psalms` finds "Psalm" in the ESV and "Ps" in Geneva). `-apocrypha` (also `-deuterocanon`) and books such as `-tobit`, `-sirach` and `-1-maccabees` work in the
+editions that include them. If a version doesn't have a book, Lex tells you instead of
+returning nothing.
 
 ---
 
@@ -399,10 +422,17 @@ lex creed nicene
 lex creed westminster
 ```
 
+The Apostles', Nicene, Athanasian and Chalcedonian creeds show as numbered lines,
+the Latin or Greek on the left and the English on the right, so you can follow
+along clause by clause. On a narrow window, each original line sits above its
+English.
+
 ---
 
 ## 🤖 Scripts, Agents & Pipes
-`--json` prints one JSON document (schema: [docs/json-output.md](docs/json-output.md)).
+Two switches make Lex friendlier to scripts, logs, and other programs. `--json` prints one
+machine-readable JSON document (schema: [docs/json-output.md](docs/json-output.md); see
+[Using Lex with AI tools](#-using-lex-with-ai-tools) below for a plain-words guide).
 `--plain` prints the normal output as plain text. Neither ever prompts, and `--json`
 never changes your saved Bible, theme, or history.
 
@@ -422,6 +452,201 @@ JSON errors go to stderr as `{"error":{"code":...}}` with exit code 2 (usage),
 also accept one dash (`-json`, `-plain`); single-letter flags also accept two
 (`--h`, `--B kjv`). Search scopes such as `-nt` and attached values such as
 `-Bkjv` are unchanged.
+
+Output width follows your terminal. In logs or CI, set `COLUMNS` (for example
+`COLUMNS=100 lex John 3:16`); Lex honours it even when `TERM=dumb`. `NO_COLOR=1` (or
+`LEX_NO_COLOR=1`) turns colour off.
+
+---
+
+
+## 🤖 Using Lex with AI tools
+Lex can also talk to other programs, not just to you. Add `--json` (or `-json`) to almost any Lex command and it prints its answer in a form that computers read easily. That makes it a good fit for AI assistants, scripts, and spreadsheets.
+
+### What is JSON?
+
+JSON is a plain-text way to write down information so a computer can read it without guessing. Every piece of information has a label. The normal Lex screen is made for your eyes, with colours, boxes, and menus. `--json` output is made for programs: one line of labelled text, no colours, no boxes, no menus, and nothing to press. The verse is always under the label `text`, the reference under `ref`, the book under `book`, and so on.
+
+`--json` never asks you a question and never changes your saved Bible, theme, or history, so it is safe to run again and again from a script.
+
+### Try it
+
+```sh
+lex --json John 3:16 | jq .
+```
+
+That prints the one-line answer spread out so it is easy to read (the `jq .` part does the spreading; see the next section). This is the real output from Lex 2.6.9:
+
+```json
+{
+  "schema_version": 1,
+  "lex_version": "2.6.9",
+  "command": "read",
+  "edition": "esv",
+  "edition_name": "English Standard Version",
+  "query": "John 3:16",
+  "passages": [
+    {
+      "query": "John 3:16",
+      "ref": "John 3:16",
+      "book": "John",
+      "chapter": 3,
+      "verse_start": 16,
+      "verse_end": 16,
+      "verses": [
+        {
+          "ref": "John 3:16",
+          "key": "esv:John:3:16",
+          "book": "John",
+          "chapter": 3,
+          "verse": 16,
+          "text": "“For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life."
+        }
+      ]
+    }
+  ],
+  "not_found": []
+}
+```
+
+Everything about the answer is labelled: which Bible was used (`edition`), the passage, and each verse with its book, chapter, number, and `text`. Verses you asked for that Lex could not find are listed under `not_found`.
+
+### Pick out just what you want with jq
+
+[jq](https://jqlang.org) is a free tool that picks pieces out of JSON. The `|` symbol (a "pipe") hands the output of one command to the next one. Install jq with your package manager (for example `brew install jq` on a Mac or `sudo apt install jq` on Ubuntu).
+
+```sh
+# Just the words of the verse
+lex --json John 3:16 | jq -r '.passages[0].verses[0].text'
+```
+
+Output:
+
+```text
+“For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life.
+```
+
+```sh
+# A search, one result per line: reference and text
+lex --json search covenant -nt --limit 3 | jq -r '.results[] | "\(.ref): \(.text)"'
+```
+
+Output:
+
+```text
+Hebrews 7:22: This makes Jesus the guarantor of a better covenant.
+Hebrews 9:18: Therefore not even the first covenant was inaugurated without blood.
+Hebrews 9:15: Therefore he is the mediator of a new covenant, so that those who are called may receive the promised eternal inheritance, since a death has occurred that redeems them from the transgressions committed under the first covenant.
+```
+
+```sh
+# How many matches in all, and which verses are on this page
+lex --json search covenant -nt --limit 2 | jq -c '{total, page_count, refs: [.results[].ref]}'
+```
+
+Output:
+
+```text
+{"total":32,"page_count":16,"refs":["Hebrews 7:22","Hebrews 9:18"]}
+```
+
+A search answer looks like this (the long list of New Testament books under `scope` is left out here with `jq 'del(.scope.books)'`; everything else is exactly what Lex printed):
+
+```json
+{
+  "schema_version": 1,
+  "lex_version": "2.6.9",
+  "command": "search",
+  "edition": "esv",
+  "edition_name": "English Standard Version",
+  "query": "covenant",
+  "effective_query": "covenant",
+  "corrections": [],
+  "mode": "term",
+  "scope": {
+    "label": "nt"
+  },
+  "page": 1,
+  "limit": 2,
+  "page_count": 16,
+  "total": 32,
+  "results": [
+    {
+      "rank": 1,
+      "ref": "Hebrews 7:22",
+      "key": "esv:Hebrews:7:22",
+      "book": "Hebrews",
+      "chapter": 7,
+      "verse": 22,
+      "text": "This makes Jesus the guarantor of a better covenant."
+    },
+    {
+      "rank": 2,
+      "ref": "Hebrews 9:18",
+      "key": "esv:Hebrews:9:18",
+      "book": "Hebrews",
+      "chapter": 9,
+      "verse": 18,
+      "text": "Therefore not even the first covenant was inaugurated without blood."
+    }
+  ]
+}
+```
+
+Word studies work the same way. This picks the main details from a Strong's entry (`lex --json strongs G3056 | jq '.entries[0] | {number,language,lemma,pronunciation,brief}'`):
+
+```json
+{
+  "number": "G3056",
+  "language": "greek",
+  "lemma": "λόγος",
+  "pronunciation": "log'-os",
+  "brief": "something said (including the thought); by implication, a topic (subject of discourse), also reasoning (the mental faculty) or motive; by extension, a computation; specially, (with the article in John) the Divine Expression (i.e. Christ)"
+}
+```
+
+The full entry also has `brief_refs`, `definition`, and `usage` (the verses where the word appears).
+
+### Let an AI assistant use Lex
+
+Any AI tool that can run commands for you can use Lex: coding assistants such as Cursor or Claude Code, ChatGPT or Claude tools that have a "run a command" or terminal option, and local models (for example through Ollama or LM Studio) inside an agent app that can run commands. There is nothing to install on the AI side and no key to paste in. Lex is just a command it runs, and Lex itself needs no internet.
+
+The simplest way is to tell the assistant how to use it. Paste something like this into its instructions (or just into the chat):
+
+```text
+You can look up Scripture with the `lex` command on this computer. Always add
+--json so you get structured output. Examples:
+  lex --json John 3:16                  read a verse
+  lex --json -B kjv John 3:16           read it in the King James Version
+  lex --json search "kingdom of god"    search the Bible
+  lex --json strongs G3056              look up a Greek or Hebrew word
+  lex --json study John 1:1             original-language study data
+Read the "text" fields and quote them exactly. If a command fails, the error
+is JSON on stderr with a "code" and a "hint"; fix the command and try again.
+```
+
+Why bother? The assistant gets the real text from your own Bible data, with the book, chapter, and verse labelled, instead of quoting from memory.
+
+### Good to know
+
+- `--json` works with reading (`lex --json Romans 8:28`), `study`, `strongs`, `web`, `search`, `define`, `commentary`, `naves` / `topic`, `creed`, and `history`.
+- Pick a Bible for one command with `-B` (`lex --json -B dra John 3:16`). The answer's `edition` field says which one was used. `-v` (which changes your saved Bible) is refused in JSON mode.
+- If something goes wrong, the error is printed to stderr as JSON and Lex exits with a number: `2` for a mistake in the command, `3` for "not found", and `4` for missing data. Success is `0`. For example, `lex --json Nowhere 9:9` exits with `3` and prints:
+
+```json
+{
+  "schema_version": 1,
+  "lex_version": "2.6.9",
+  "error": {
+    "code": "not_found",
+    "message": "No verse or chapter found for: Nowhere 9:9",
+    "hint": "Check the reference, or use `lex --json search <terms>` for words and `lex --json strongs <number>` for Strong's."
+  }
+}
+```
+
+- The full list of fields for every command is in the [JSON output reference](https://github.com/elcafe7/lex/blob/main/docs/json-output.md). New fields can be added in version 1 of the format, but existing ones will not be renamed or removed without bumping `schema_version`.
+- Want a clean, no-colour version for people instead? `lex --plain study John 1:1` prints the normal output as plain text.
 
 ---
 

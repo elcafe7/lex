@@ -1,6 +1,6 @@
 # `lex --json` — machine-readable output (schema v1)
 
-Status: proposed for merge (issue #16, PR #17).
+Status: stable, schema version 1 (added in Lex 2.6.9; issue #16).
 
 `--json` (also `-json`) gives scripts and AI agents a stable, parseable result
 instead of the Rich terminal UI. Put it anywhere before `--`:

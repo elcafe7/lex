@@ -5,7 +5,10 @@
 #   <!-- security-reports:start --> and <!-- security-reports:end -->,
 # copy the newest published VirusTotal report to
 # security/reports/virustotal-latest.md, and refresh the README VirusTotal
-# badge between <!-- virustotal-badge:start --> and <!-- virustotal-badge:end -->.
+# badge and its "Latest virus scan report (VirusTotal): <tag>, <UTC timestamp>"
+# link line between <!-- virustotal-badge:start --> and <!-- virustotal-badge:end -->.
+# The tag and timestamp come from the same report folder whose virustotal.md is
+# copied to virustotal-latest.md, so the line always names the version scanned.
 #
 # Usage: update_security_index.sh [security-dir] [main-readme]
 #        (defaults: security README.md)
@@ -132,7 +135,8 @@ if [ -n "$vt_src" ]; then
     echo
     cat "$vt_src"
   } > "$latest_md"
-  vt_badge='[![VirusTotal](https://img.shields.io/badge/VirusTotal-clean-brightgreen)](security/reports/virustotal-latest.md)'
+  vt_img='VirusTotal-clean-brightgreen'
+  vt_label="Latest virus scan report (VirusTotal): ${vt_tag}, $(human "$vt_ts")"
 else
   {
     echo "# VirusTotal (latest published scan)"
@@ -141,13 +145,20 @@ else
     echo "updated automatically after every clean, VirusTotal-enabled release."
     echo "The README VirusTotal badge always points here."
   } > "$latest_md"
-  vt_badge='[![VirusTotal](https://img.shields.io/badge/VirusTotal-pending-lightgrey)](security/reports/virustotal-latest.md)'
+  vt_img='VirusTotal-pending-lightgrey'
+  vt_label="Latest virus scan report (VirusTotal): none yet"
 fi
+# Badge image 32px tall plus the version/date link line right under the badge row.
+# $vt_tag and $vt_ts passed valid_entry() (no markup characters) before they got
+# here, and the image name is one of two fixed literals, so nothing can inject markup.
+vt_badge="<a href=\"security/reports/virustotal-latest.md\"><img alt=\"VirusTotal\" src=\"https://img.shields.io/badge/${vt_img}\" height=\"32\"></a>
+<br>
+[${vt_label}](security/reports/virustotal-latest.md)"
 
 if [ -f "$readme" ] && grep -q '^<!-- virustotal-badge:start -->$' "$readme" \
    && grep -q '^<!-- virustotal-badge:end -->$' "$readme"; then
-  awk -v block="$vt_badge" '
-    $0 == "<!-- virustotal-badge:start -->" { print; print block; skip = 1; next }
+  VT_BLOCK="$vt_badge" awk '
+    $0 == "<!-- virustotal-badge:start -->" { print; print ENVIRON["VT_BLOCK"]; skip = 1; next }
     $0 == "<!-- virustotal-badge:end -->"   { skip = 0 }
     !skip { print }
   ' "$readme" > "$tmp/readme-vt"
