@@ -1,4 +1,15 @@
-# Lex | The Elegant Bible Terminal 📖
+<div align="center">
+
+# Lex
+
+**The elegant Bible terminal** 📖
+Read, search, and study the Bible from your computer's terminal. Offline, fast, and free.
+
+### ⬇ `npm install -g @n8te_/lex-cli`
+
+<sub>needs Node.js 18+ and Python 3.12+ · free · no account · works with no internet · <a href="#-installation">other ways to install</a></sub>
+
+[**Start here**](#-new-here-start-here) · [Read a verse](docs/read-a-passage.md) · [Study mode](docs/study-mode.md) · [Use with AI tools](#-using-lex-with-ai-tools)
 
 <a href="https://scorecard.dev/viewer/?uri=github.com/elcafe7/lex"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/elcafe7/lex/badge" height="32"></a>
 <a href="https://www.bestpractices.dev/projects/16506"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/16506/badge" height="32"></a>
@@ -13,9 +24,13 @@
 [![Socket](https://socket.dev/api/badge/npm/package/@n8te_/lex-cli)](SOCKET_URL)
 -->
 
-![Lex Banner](docs/images/banner.png)
+<sub>A project of <a href="https://jesuspeoplesf.com">Jesus People SF</a> &amp; <a href="https://apocalypse.press">Apocalypse Press</a> · <a href="https://jesuspeoplesf.com/donate/">Donate</a></sub>
 
-**Read, search, and study the Bible from your computer's terminal. Offline, fast, and free.**
+<img src="docs/images/banner.png" alt="Lex, the elegant Bible terminal" width="340">
+
+</div>
+
+---
 
 ## 🌱 New here? Start here
 
@@ -31,11 +46,18 @@
 
 Lex puts several Bible versions, interlinear study (the original Greek and Hebrew, word by word), Strong's and STEPBible word studies, the Treasury of Scripture Knowledge, and the historical creeds in one place, and it keeps working on a plane.
 
-```bash
-lex study John 1:1
-lex naves grace
-lex web Romans 1:1
-```
+### ⌨️ Things to try
+
+| I want to… | Type this |
+| :--- | :--- |
+| Read a verse | `lex John 3:16` |
+| Read it in the King James Version | `lex -B kjv John 3:16` |
+| Search the Bible | `lex search "kingdom of god"` |
+| See the original Greek or Hebrew, word by word | `lex study John 1:1` |
+| Look up a topic | `lex naves grace` |
+| See which verses connect to a verse | `lex web Romans 1:1` |
+| Look up a Greek or Hebrew word | `lex strongs G3056` |
+| Give an AI assistant clean, labelled output | `lex --json John 3:16` |
 
 Current version: `2.6.9`
 
@@ -125,6 +147,9 @@ flex itself is untouched and still runs as `flex`.
 
 #### Verify Git checkout data
 
+<details>
+<summary><b>Check your install's data files</b></summary>
+
 For a Git install, the runtime data files are checked against the hashes in the
 checked-in `manifest.json`:
 
@@ -157,6 +182,8 @@ curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.9/lex-v2.6.9.tar.
 curl -LO https://github.com/elcafe7/lex/releases/download/v2.6.9/lex-v2.6.9.tar.gz.sha256
 shasum -a 256 -c lex-v2.6.9.tar.gz.sha256
 ```
+
+</details>
 
 ### Alternative: npm launcher
 
@@ -198,6 +225,9 @@ See [If `lex` runs the flex lexer instead](#if-lex-runs-the-flex-lexer-instead).
 
 ### Updating
 
+<details>
+<summary><b>Show the update steps</b></summary>
+
 **Update both code and dependencies**
 ```bash
 git pull
@@ -223,9 +253,14 @@ In a git clone, `lex update` only updates data and won't overwrite your local
 code changes. If your code is older than the data, it prints the `git pull`
 command to run.
 
+</details>
+
 ---
 
 ## ✅ Verification
+
+<details>
+<summary><b>Show how to check a release (checksums, build proof, SBOM)</b></summary>
 
 Each release starting with the first one built by
 [`.github/workflows/release.yml`](.github/workflows/release.yml) is built,
@@ -288,9 +323,14 @@ sidecar.
 Maintainer notes (repo settings, VirusTotal, badge data):
 [docs/RELEASE_VERIFICATION.md](docs/RELEASE_VERIFICATION.md).
 
+</details>
+
 ---
 
 ## 🔒 Security reports
+
+<details>
+<summary><b>Show the security reports</b></summary>
 
 Every clean release also opens a PR that adds a dated report folder,
 `security/reports/<tag>_<UTC timestamp>/`, with a `summary.md` (each check,
@@ -306,6 +346,8 @@ newest published VirusTotal Markdown report:
 <!-- security-reports:start -->
 Latest: `v2.6.9` on 2026-11-19 01:03:28 UTC, result **pass** ([summary](security/reports/v2.6.9_20261119T010328Z/summary.md)). All runs: [security/README.md](security/README.md).
 <!-- security-reports:end -->
+
+</details>
 
 ---
 
@@ -477,6 +519,9 @@ lex --json John 3:16 | jq .
 
 That prints the one-line answer spread out so it is easy to read (the `jq .` part does the spreading; see the next section). This is the real output from Lex 2.6.9:
 
+<details>
+<summary><b>See the full answer</b></summary>
+
 ```json
 {
   "schema_version": 1,
@@ -509,13 +554,21 @@ That prints the one-line answer spread out so it is easy to read (the `jq .` par
 }
 ```
 
+</details>
+
 Everything about the answer is labelled: which Bible was used (`edition`), the passage, and each verse with its book, chapter, number, and `text`. Verses you asked for that Lex could not find are listed under `not_found`.
 
 ### Pick out just what you want with jq
 
+<details>
+<summary><b>Show the jq examples</b></summary>
+
 [jq](https://jqlang.org) is a free tool that picks pieces out of JSON. The `|` symbol (a "pipe") hands the output of one command to the next one. Install jq with your package manager (for example `brew install jq` on a Mac or `sudo apt install jq` on Ubuntu).
 
 ```sh
+
+</details>
+
 # Just the words of the verse
 lex --json John 3:16 | jq -r '.passages[0].verses[0].text'
 ```
@@ -662,6 +715,10 @@ lex -auto              # Revert to automatic detection
 ---
 
 ## 🗃️ Data Sources
+
+<details>
+<summary><b>Show the data sources</b></summary>
+
 Lex is built on the shoulders of giants. Data is sourced from:
 - ESV-derived Bible database
 - Douay-Rheims 1899 American Edition (eBible.org engDRA, public domain)
@@ -670,6 +727,8 @@ Lex is built on the shoulders of giants. Data is sourced from:
 - STEPBible & Strong's Lexicon data
 - Easton's Bible Dictionary & ISBE
 - TheologAI Creedal Database
+
+</details>
 
 ---
 
@@ -685,4 +744,5 @@ Lex is built on the shoulders of giants. Data is sourced from:
 Lex code is MIT licensed. Bible data and Lexicon content are subject to their respective upstream licenses. See [LICENSING.md](docs/LICENSING.md) for details.
 
 ---
-*Created with care for the Church and the Terminal.*
+
+<div align="center"><sub>Created with care for the Church and the Terminal.</sub></div>
