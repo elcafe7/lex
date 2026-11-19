@@ -1,0 +1,102 @@
+# Unit tests with coverage: the Python suite (python3 -m unittest discover
+# -s tests) under coverage.py with branch coverage, and the npm launcher
+# suite (npm test in npm/lex-cli) with Node's built-in coverage.
+#
+# Runs on every pull request and every push to main (issue #38, OpenSSF
+# Best Practices test_continuous_integration and test_most). A failing test
+# fails the job. There is no minimum coverage threshold yet; the numbers are
+# printed in the job log and in the job summary, and the Python XML and HTML
+# reports are uploaded as the coverage-reports artifact.
+#
+# coverage.py is installed from the hash-pinned
+# .github/requirements/coverage-requirements.txt (pip --require-hashes).
+# Settings are in .coveragerc.
+#
+# Free tools only. Every action is pinned to a full commit SHA.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python unit tests (coverage)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install coverage.py (hash-pinned) and Lex's dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/test-venv"
+          "$RUNNER_TEMP/test-venv/bin/python" -m pip install --quiet --require-hashes --no-deps \
+            -r .github/requirements/coverage-requirements.txt
+          "$RUNNER_TEMP/test-venv/bin/python" -m pip install --quiet -r requirements.txt
+
+      - name: Run the unit tests under coverage (branch coverage)
+        run: |
+          "$RUNNER_TEMP/test-venv/bin/python" -m coverage run -m unittest discover -s tests
+
+      - name: Coverage report
+        run: |
+          "$RUNNER_TEMP/test-venv/bin/python" -m coverage combine
+          "$RUNNER_TEMP/test-venv/bin/python" -m coverage report --show-missing | tee coverage.txt
+          "$RUNNER_TEMP/test-venv/bin/python" -m coverage xml
+          "$RUNNER_TEMP/test-venv/bin/python" -m coverage html
+          {
+            echo "### Python branch coverage"
+            echo
+            echo '```'
+            tail -n 3 coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-reports
+          path: coverage-reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  npm:
+    name: npm launcher tests (coverage)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: npm test (with Node's built-in coverage)
+        working-directory: npm/lex-cli
+        run: npm test -- --experimental-test-coverage
