@@ -568,8 +568,8 @@ class BackupHygieneTest(unittest.TestCase):
 
     def test_an_existing_loose_backup_root_is_tightened(self):
         root = os.path.join(self.home, ".lex_backups")
-        os.makedirs(root, mode=0o755)
-        os.chmod(root, 0o755)
+        os.makedirs(root, mode=0o740)
+        os.chmod(root, 0o740)
         LEXMOD.update_backup_dir()
         if os.name != "nt":
             self.assertEqual(os.stat(root).st_mode & 0o777, 0o700)
