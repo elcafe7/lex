@@ -2,7 +2,7 @@
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/elcafe7/lex/badge)](https://scorecard.dev/viewer/?uri=github.com/elcafe7/lex)
 <!-- virustotal-badge:start -->
-[![VirusTotal](https://img.shields.io/badge/VirusTotal-pending-lightgrey)](security/reports/virustotal-latest.md)
+[![VirusTotal](https://img.shields.io/badge/VirusTotal-clean-brightgreen)](security/reports/virustotal-latest.md)
 <!-- virustotal-badge:end -->
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16506/badge)](https://www.bestpractices.dev/projects/16506)
 <!-- Socket.dev badge slot: set SOCKET_URL and uncomment (security/MANUAL-STEPS.md)
@@ -286,7 +286,7 @@ newest published VirusTotal Markdown report:
 [security/reports/virustotal-latest.md](security/reports/virustotal-latest.md).
 
 <!-- security-reports:start -->
-Latest: `v2.6.8` on 2026-11-09 21:31:02 UTC, result **pass** ([summary](security/reports/v2.6.8_20261109T213102Z/summary.md)). All runs: [security/README.md](security/README.md).
+Latest: `v2.6.9` on 2026-11-19 01:03:28 UTC, result **pass** ([summary](security/reports/v2.6.9_20261119T010328Z/summary.md)). All runs: [security/README.md](security/README.md).
 <!-- security-reports:end -->
 
 ---
