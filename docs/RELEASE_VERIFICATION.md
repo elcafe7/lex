@@ -32,9 +32,9 @@ version, a fix after a blocked release means a new patch version.
      every release file) and `lex-v<VERSION>.sbom.sigstore.json` (SBOM
      attestation for the archive). They are made after `SHA256SUMS` is
      attested, so they are not in it; each bundle is signed on its own.
-- **workflow_dispatch**: dry run of steps 1–3 (build-scan, bandit and
-  gitleaks). Files are kept as a 14-day workflow artifact. It never attests,
-  publishes or opens issues.
+- **workflow_dispatch**: dry run of steps 1–4 (build-scan, bandit, gitleaks,
+  and virustotal when enabled). Files are kept as a 14-day workflow artifact.
+  It never attests, publishes or opens issues.
 - **Gate**: any advisory with CVSS 7.0 or higher fails the release. Scored
   advisories below 7.0 also hold it, so a published report and badge always
   say 0 known vulnerabilities. Advisories with no CVSS score don't block;
@@ -162,10 +162,18 @@ anyway). It needs **both**:
 | On, any engine says malicious, or an analysis doesn't finish in 15 min | fails | **no**, "Release blocked" issue | "FLAGGED / not finished" |
 
 The report, release notes and job summary only call VirusTotal clean or
-scanned when `virustotal.md` has real result rows; `verification.json` and
-the README badge are OSV-only and never mention VirusTotal.
+scanned when `virustotal.md` has real result rows. `verification.json` is
+OSV-only. The README VirusTotal badge (and any in-repo download page) always
+links to the newest published scan at
+[`security/reports/virustotal-latest.md`](../security/reports/virustotal-latest.md),
+a stable pointer that `update_security_index.sh` rewrites after every clean
+release.
 
-Free public API limits: 4 requests/minute, 500/day.
+Free public API limits: 4 requests/minute, 500/day, 15,500/month. The check
+paces every request (upload-URL lookup, upload, and poll) at least 15
+seconds apart, retries HTTP 429 rate limits with backoff, and fails closed
+with a clear message if the daily or monthly quota is exhausted. The Markdown
+report includes a count of lookups, uploads, polls, retries and the total.
 
 ## Badge data (`verification.json`)
 
@@ -227,10 +235,11 @@ osv-scanner scan source -L <sbom>.cdx.json        # re-scan against today's OSV 
 After a clean publish, the `security-report-commit` job commits
 `security/reports/<tag>_<YYYYMMDDTHHMMSSZ>/` (UTC) with `[skip ci]` on a new
 branch `reports/<tag>_<YYYYMMDDTHHMMSSZ>`, rebuilds `security/README.md` (all
-runs, newest first), `security/latest.json` and the README "Security reports"
-block on that branch, and opens a PR to the default branch. It never pushes to
-the default branch (the "Protect main" ruleset requires a PR). Merging the PR
-publishes the report in the index.
+runs, newest first), `security/latest.json`, the README "Security reports"
+block, and (when VirusTotal ran) `security/reports/virustotal-latest.md` plus
+the README VirusTotal badge on that branch, and opens a PR to the default
+branch. It never pushes to the default branch (the "Protect main" ruleset
+requires a PR). Merging the PR publishes the report in the index.
 
 | File | From |
 |---|---|
@@ -242,6 +251,7 @@ publishes the report in the index.
 | `SHA256SUMS` | Checksums, re-verified when the report is written |
 | `attestation.md` | Build-provenance attestation link and `gh attestation verify` command |
 | `virustotal.md`, `virustotal-links.txt` | VirusTotal table and permalinks (only when VirusTotal is on) |
+| `../virustotal-latest.md` | Stable copy of the newest published `virustotal.md`; the README VirusTotal badge links here |
 | `scorecard.json` | The latest published OpenSSF Scorecard result (api.scorecard.dev) |
 | `socket.md`, `openssf-best-practices.md` | Only when `vars.SOCKET_URL` / `vars.BESTPRACTICES_PROJECT_ID` are set |
 | `verification.json`, `report.json` | Badge data and the index entry |

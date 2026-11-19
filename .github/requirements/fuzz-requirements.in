@@ -1,0 +1,8 @@
+# Fuzzing tools for .github/workflows/fuzz.yml and fuzz/ (issue #36).
+# atheris: coverage-guided Python fuzzer (libFuzzer). rich: imported by lex.py.
+# Compile the hash-locked file with:
+#   uv pip compile --python-version 3.12 --generate-hashes --universal \
+#     .github/requirements/fuzz-requirements.in \
+#     -o .github/requirements/fuzz-requirements.txt
+atheris
+rich

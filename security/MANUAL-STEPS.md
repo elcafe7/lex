@@ -2,22 +2,24 @@
 
 The release workflow already writes and commits a security report for every
 clean release (see [README.md](README.md)). Two outside services need an
-account that only you can create. Nothing here has been signed up for or
-configured by an agent. Until you do these, the reports say "not configured"
-for both, and the README badges stay commented out.
+account that only you can create. The OpenSSF Best Practices project is
+registered (see below); Socket.dev is still pending. Until Socket is
+configured, reports say "not configured" for it, and its README badge stays
+commented out.
 
 ## 1. OpenSSF Best Practices badge (bestpractices.dev)
 
-1. On your own device, go to <https://www.bestpractices.dev/en/projects/new>
-   and sign in with GitHub as `elcafe7`.
-2. Add the project `https://github.com/elcafe7/lex` and fill in the questionnaire
-   (the release-verification docs answer most of the security questions).
-3. Note the numeric project id from the project URL
-   (`https://www.bestpractices.dev/projects/<ID>`).
-4. In GitHub: **Settings > Secrets and variables > Actions > Variables >
-   New repository variable**: `BESTPRACTICES_PROJECT_ID` = `<ID>` (digits only).
-5. In the main README, uncomment the "OpenSSF Best Practices" badge line and
-   replace `PROJECT_ID` with the id.
+Lex is registered as project
+[16506](https://www.bestpractices.dev/projects/16506). The README badge
+points at that id.
+
+If it is not set yet, add a repository variable in GitHub:
+**Settings > Secrets and variables > Actions > Variables >
+New repository variable**: `BESTPRACTICES_PROJECT_ID` = `16506`.
+
+The badge reaches "passing" only after the remaining passing-level
+criteria on that form are filled or met. Do not treat issue #38 as done
+until the badge shows passing.
 
 ## 2. Socket.dev
 
@@ -53,3 +55,37 @@ written into the report.
 - `ENABLE_VIRUSTOTAL` = `true` plus the `VT_API_KEY` secret turns on the
   VirusTotal check and its links in the report. Add the secret first:
   `ENABLE_VIRUSTOTAL` = `true` without `VT_API_KEY` blocks every release.
+
+## 4. Scorecard token for Branch-Protection (optional)
+
+The Scorecard workflow uses a repo secret `SCORECARD_TOKEN` when it exists, so
+it can read every branch protection setting (issue #37). Without it the
+workflow still runs on the default token. The token is read-only and only
+reaches this one repo. Create it yourself on your own device. Never paste the
+value anywhere except the GitHub secret form below.
+
+1. Open <https://github.com/settings/personal-access-tokens/new> (signed in
+   as `elcafe7`).
+2. **Token name:** `OpenSSF Scorecard - elcafe7/lex`.
+   **Expiration:** Custom, one year from today (the maximum). GitHub emails
+   you before it expires; repeat these steps then.
+3. **Resource owner:** `elcafe7`. **Repository access:** *Only select
+   repositories* > `elcafe7/lex`.
+4. **Repository permissions:** set **Administration** to **Read-only**.
+   **Metadata** switches to **Read-only** automatically. Leave every other
+   permission at **No access**, and leave all account permissions at
+   **No access**.
+5. Click **Generate token** and copy it.
+6. Open <https://github.com/elcafe7/lex/settings/secrets/actions/new>.
+   **Name:** `SCORECARD_TOKEN`. **Secret:** paste the token. Click
+   **Add secret**.
+7. Run the Scorecard workflow once by hand: **Actions > Scorecard > Run
+   workflow** on `main` (or wait for Monday's run).
+
+To check: the run's "Run Scorecard" step passes, and the Branch-Protection
+alert in Code scanning shows the newest details. To undo: delete the secret
+and revoke the token at <https://github.com/settings/personal-access-tokens>.
+The workflow then falls back to the default token.
+
+What the token can and can't fix, and the accepted Code-Review risk:
+[docs/SCORECARD.md](../docs/SCORECARD.md).

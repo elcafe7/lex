@@ -28,7 +28,15 @@ MALICIOUS_TAGS = (
     "",
 )
 
-README = "# Demo\n\n## Security reports\n\n<!-- security-reports:start -->\nplaceholder\n<!-- security-reports:end -->\n\nTail.\n"
+README = (
+    "# Demo\n\n"
+    "<!-- virustotal-badge:start -->\n"
+    "[![VirusTotal](https://img.shields.io/badge/VirusTotal-pending-lightgrey)]"
+    "(security/reports/virustotal-latest.md)\n"
+    "<!-- virustotal-badge:end -->\n\n"
+    "## Security reports\n\n"
+    "<!-- security-reports:start -->\nplaceholder\n<!-- security-reports:end -->\n\nTail.\n"
+)
 
 
 def make_inputs(tmp: Path):
@@ -390,6 +398,16 @@ class WorkflowVirusTotalGuardTests(unittest.TestCase):
         cls.wf = yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text())
         cls.jobs = cls.wf["jobs"]
 
+    def test_vt_runs_on_dispatch_when_enabled(self):
+        cond = " ".join(self.jobs["virustotal"]["if"].split())
+        self.assertIn("vars.ENABLE_VIRUSTOTAL == 'true'", cond)
+        self.assertIn("github.event.repository.visibility == 'public'", cond)
+        self.assertNotIn("github.event_name == 'push'", cond)
+        rel = " ".join(self.jobs["release"]["if"].split())
+        self.assertIn("github.event_name == 'push'", rel)
+        blocked = " ".join(self.jobs["blocked"]["if"].split())
+        self.assertIn("github.event_name == 'push'", blocked)
+
     def test_vt_step_fails_closed_without_key(self):
         step = next(s for s in self.jobs["virustotal"]["steps"] if s.get("id") == "vt")
         script = step["run"]
@@ -641,6 +659,9 @@ class IndexAndCommitTests(unittest.TestCase):
             self.assertEqual(p.returncode, 0, p.stderr)
             self.assertIn("Latest: none yet", (tmp / "README.md").read_text())
             self.assertEqual(json.loads((sec / "latest.json").read_text())["result"], "none")
+            self.assertIn("No clean release has published a VirusTotal report yet",
+                          (sec / "reports" / "virustotal-latest.md").read_text())
+            self.assertIn("VirusTotal-pending-lightgrey", (tmp / "README.md").read_text())
             for ts in ("20261101T000000Z", "20261109T205501Z"):
                 run(WRITER, str(sec / "reports"), env=writer_env("v1.2.3", dist, vt, sc, ts=ts))
             bad = sec / "reports" / "evil_20991231T000000Z"
@@ -657,6 +678,11 @@ class IndexAndCommitTests(unittest.TestCase):
             r = (tmp / "README.md").read_text()
             self.assertIn("2026-11-09 20:55:01 UTC", r)
             self.assertTrue(r.endswith("<!-- security-reports:end -->\n\nTail.\n"))
+            latest_vt = (sec / "reports" / "virustotal-latest.md").read_text()
+            self.assertIn("From the clean release of `v1.2.3` on 2026-11-09 20:55:01 UTC", latest_vt)
+            self.assertIn("demo-v1.2.3.tar.gz", latest_vt)
+            self.assertIn("VirusTotal-clean-brightgreen", r)
+            self.assertIn("security/reports/virustotal-latest.md", r)
 
     def _repo_with_artifact(self, tmp: Path):
         dist, vt, sc = make_inputs(tmp)
@@ -718,6 +744,7 @@ class IndexAndCommitTests(unittest.TestCase):
                 files = self._git_out(origin, "ls-tree", "-r", "--name-only", side)
                 self.assertIn("security/reports/v1.2.3_20261109T205501Z/summary.md", files)
                 self.assertIn("security/latest.json", files)
+                self.assertIn("security/reports/virustotal-latest.md", files)
                 args = (tmp / "gh-args").read_text().split("\n")
                 self.assertEqual(args[:2], ["pr", "create"])
                 self.assertIn(side, args)
@@ -733,6 +760,218 @@ class IndexAndCommitTests(unittest.TestCase):
                 self.assertEqual(p2.returncode, 0, p2.stderr)
                 self.assertIn("already exists", p2.stdout)
 
+
+
+
+MOCK_CURL = r"""#!/usr/bin/env python3
+import json, os, pathlib, sys
+
+args = sys.argv[1:]
+out = hdr = None
+url = args[-1]
+i = 0
+form = None
+while i < len(args):
+    a = args[i]
+    if a == "-o":
+        out = args[i + 1]; i += 2
+    elif a == "-D":
+        hdr = args[i + 1]; i += 2
+    elif a in ("-w", "-H", "-F"):
+        if a == "-F":
+            form = args[i + 1]
+        i += 2
+    elif a.startswith("-"):
+        i += 1
+    else:
+        i += 1
+
+log = pathlib.Path(os.environ["VT_MOCK_LOG"])
+state = pathlib.Path(os.environ["VT_MOCK_STATE"])
+n = int(state.read_text() or "0") + 1
+state.write_text(str(n))
+log.write_text(log.read_text() + f"{n} {url} form={form is not None}\n")
+
+responses = json.loads(pathlib.Path(os.environ["VT_MOCK_RESPONSES"]).read_text())
+entry = responses[min(n, len(responses)) - 1]
+body = entry.get("body", "")
+if not isinstance(body, str):
+    body = json.dumps(body)
+code = str(entry.get("code", 200))
+retry_after = entry.get("retry_after")
+if out:
+    pathlib.Path(out).write_text(body)
+if hdr:
+    nl = chr(13) + chr(10)
+    header = "HTTP/1.1 {0}{1}Content-Type: application/json{1}".format(code, nl)
+    if retry_after is not None:
+        header += "Retry-After: {0}{1}".format(retry_after, nl)
+    header += nl
+    pathlib.Path(hdr).write_text(header)
+sys.stdout.write(code)
+"""
+
+
+def _completed(mal=0, sus=0, und=70, analysis="anid"):
+    return {
+        "code": 200,
+        "body": {"data": {"id": analysis,
+                          "attributes": {"status": "completed",
+                                         "stats": {"malicious": mal, "suspicious": sus, "undetected": und}}}},
+    }
+
+
+class VirusTotalCheckPacingTests(unittest.TestCase):
+    """virustotal_check.sh paces requests, retries 429s, and fails closed on quota."""
+
+    def _run(self, tmp: Path, files, responses, extra=None):
+        bindir = tmp / "bin"
+        bindir.mkdir()
+        curl = bindir / "curl"
+        curl.write_text(MOCK_CURL)
+        curl.chmod(0o755)
+        sleeper = bindir / "vt-sleep"
+        sleeper.write_text(f"#!/bin/sh\necho \"$1\" >> \"{tmp}/sleeps\"\n")
+        sleeper.chmod(0o755)
+        (tmp / "mock-log").write_text("")
+        (tmp / "mock-state").write_text("0")
+        (tmp / "mock-responses").write_text(json.dumps(responses))
+        env = {
+            "PATH": f"{bindir}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+            "VT_API_KEY": "dummy-not-a-key",
+            "VT_CURL": str(curl),
+            "VT_SLEEP": str(sleeper),
+            "VT_MIN_INTERVAL": "15",
+            "VT_POLL_INTERVAL": "20",
+            "VT_POLL_MAX": "5",
+            "VT_RETRY_MAX": "4",
+            "VT_QUOTA_WAIT": "60",
+            "VT_MOCK_LOG": str(tmp / "mock-log"),
+            "VT_MOCK_STATE": str(tmp / "mock-state"),
+            "VT_MOCK_RESPONSES": str(tmp / "mock-responses"),
+        }
+        env.update(extra or {})
+        report = tmp / "r.md"
+        p = run(ROOT / "scripts" / "virustotal_check.sh", str(report), *files, env=env)
+        out = (p.stdout or "") + (p.stderr or "")
+        self.assertNotIn("dummy-not-a-key", out)
+        if report.exists():
+            self.assertNotIn("dummy-not-a-key", report.read_text())
+        sleeps = (tmp / "sleeps").read_text().split() if (tmp / "sleeps").exists() else []
+        log = (tmp / "mock-log").read_text()
+        return p, report, sleeps, log
+
+    def test_clean_scan_paces_upload_and_poll(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            f = tmp / "lex-v1.2.3.tar.gz"
+            f.write_bytes(b"archive")
+            p, report, sleeps, log = self._run(
+                tmp, [str(f)],
+                [{"code": 200, "body": {"data": {"id": "anid"}}}, _completed()],
+            )
+            self.assertEqual(p.returncode, 0, p.stderr + p.stdout)
+            text = report.read_text()
+            self.assertIn("| lex-v1.2.3.tar.gz | 0 | 0 | 70 | clean |", text)
+            self.assertIn("- lookups (upload URL): 0", text)
+            self.assertIn("- uploads: 1", text)
+            self.assertIn("- polls: 1", text)
+            self.assertIn("- retries (HTTP 429 or transient errors): 0", text)
+            self.assertIn("- total: 2", text)
+            self.assertIn("20", sleeps)
+            # After the upload, pace or poll-interval must wait at least 15s.
+            self.assertTrue(any(int(s) >= 15 for s in sleeps), sleeps)
+            self.assertIn("/files", log)
+            self.assertIn("/analyses/anid", log)
+
+    def test_upload_url_is_paced_before_upload(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            f = tmp / "lex-v1.2.3.tar.gz"
+            f.write_bytes(b"archive")
+            p, report, sleeps, log = self._run(
+                tmp, [str(f)],
+                [
+                    {"code": 200, "body": {"data": "https://www.virustotal.com/api/v3/files"}},
+                    {"code": 200, "body": {"data": {"id": "anid"}}},
+                    _completed(),
+                ],
+                extra={"VT_DIRECT_UPLOAD_MAX": "0"},
+            )
+            self.assertEqual(p.returncode, 0, p.stderr + p.stdout)
+            text = report.read_text()
+            self.assertIn("- lookups (upload URL): 1", text)
+            self.assertIn("- uploads: 1", text)
+            self.assertIn("- polls: 1", text)
+            self.assertIn("- total: 3", text)
+            # lookup -> upload and upload -> poll must both request a >=15s wait
+            waited = [int(s) for s in sleeps if int(s) >= 15]
+            self.assertGreaterEqual(len(waited), 2, sleeps)
+            self.assertIn("/files/upload_url", log)
+
+    def test_429_rate_limit_retries_then_succeeds(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            f = tmp / "lex-v1.2.3.tar.gz"
+            f.write_bytes(b"archive")
+            p, report, sleeps, log = self._run(
+                tmp, [str(f)],
+                [
+                    {"code": 429, "body": {"error": {"code": "TooManyRequestsError", "message": "Too many requests."}},
+                     "retry_after": 15},
+                    {"code": 200, "body": {"data": {"id": "anid"}}},
+                    _completed(),
+                ],
+            )
+            self.assertEqual(p.returncode, 0, p.stderr + p.stdout)
+            text = report.read_text()
+            self.assertIn("| lex-v1.2.3.tar.gz | 0 | 0 | 70 | clean |", text)
+            self.assertIn("- uploads: 2", text)
+            self.assertIn("- retries (HTTP 429 or transient errors): 1", text)
+            self.assertIn("- total: 3", text)
+            self.assertIn("15", sleeps)
+            self.assertIn("HTTP 429", p.stdout + p.stderr)
+
+    def test_daily_quota_fails_closed(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            f = tmp / "lex-v1.2.3.tar.gz"
+            f.write_bytes(b"archive")
+            p, report, sleeps, log = self._run(
+                tmp, [str(f)],
+                [{"code": 429, "body": {"error": {"code": "QuotaExceededError",
+                                                   "message": "Daily quota exceeded (500 per day)."}}}],
+            )
+            self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+            combined = (p.stdout or "") + (p.stderr or "") + (report.read_text() if report.exists() else "")
+            self.assertIn("quota exhausted", combined)
+            self.assertIn("500", combined)
+            self.assertIn("15,500", combined)
+            self.assertIn("nothing will be published", combined.lower())
+            self.assertIn("- total: 1", report.read_text())
+            # Must not retry a clearly daily/monthly quota.
+            self.assertEqual((tmp / "mock-state").read_text(), "1")
+
+    def test_ambiguous_quota_after_minute_wait_is_exhaustion(self):
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            f = tmp / "lex-v1.2.3.tar.gz"
+            f.write_bytes(b"archive")
+            p, report, sleeps, log = self._run(
+                tmp, [str(f)],
+                [
+                    {"code": 429, "body": {"error": {"code": "QuotaExceededError",
+                                                      "message": "You have exceeded one of your quotas (minute, daily or monthly)."}}},
+                    {"code": 429, "body": {"error": {"code": "QuotaExceededError",
+                                                      "message": "You have exceeded one of your quotas (minute, daily or monthly)."}}},
+                ],
+            )
+            self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+            text = report.read_text()
+            self.assertIn("quota exhausted", (p.stdout or "") + (p.stderr or "") + text)
+            self.assertIn("60", sleeps)
+            self.assertIn("- total: 2", text)
+            self.assertIn("- retries (HTTP 429 or transient errors): 1", text)
 
 if __name__ == "__main__":
     unittest.main()

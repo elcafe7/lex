@@ -46,3 +46,11 @@ Every release is scanned and attested before it's published. See
 [docs/RELEASE_VERIFICATION.md](docs/RELEASE_VERIFICATION.md) for how to check
 a download, and [security/README.md](security/README.md) for the report from
 each release.
+
+## Known limits
+
+Lex has one maintainer, so pull requests can't be approved by a second
+person. OpenSSF Scorecard's Code-Review check (and part of Branch-Protection)
+can't pass for that reason. This is an accepted, documented risk with
+compensating controls (protected `main`, required pull requests, automated
+scans, release gates). See [docs/SCORECARD.md](docs/SCORECARD.md).

@@ -24,7 +24,8 @@
 #      parallel with build-scan and bandit; also runs on PRs, pushes to main
 #      and weekly via gitleaks.yml.
 #   4. virustotal: optional, only if vars.ENABLE_VIRUSTOTAL == 'true' AND the
-#      VT_API_KEY secret is set, and only on a public repo.
+#      VT_API_KEY secret is set, and only on a public repo. Also runs on the
+#      workflow_dispatch dry run (still never publishes).
 #   5. release: re-verifies SHA256SUMS, attests, publishes the release with
 #      the scan report and verification.json (badge data).
 #   6. security-report-commit: after a clean publish only, commits the
@@ -39,8 +40,8 @@
 # issue "Release blocked: <tag> security check failed" (assigned to elcafe7)
 # with the findings and a fix prompt. A later clean run publishes and closes it.
 #
-# workflow_dispatch: dry run of steps 1–3 only (build-scan, bandit, gitleaks).
-# Never attests, publishes or opens issues.
+# workflow_dispatch: dry run of steps 1–4 (build-scan, bandit, gitleaks, and
+# virustotal when enabled). Never attests, publishes or opens issues.
 #
 # Free tools only. Every action is pinned to a full commit SHA.
 name: Release (verified)
@@ -375,7 +376,7 @@ jobs:
   virustotal:
     name: VirusTotal (optional)
     needs: build-scan
-    if: github.event_name == 'push' && vars.ENABLE_VIRUSTOTAL == 'true' && github.event.repository.visibility == 'public'
+    if: vars.ENABLE_VIRUSTOTAL == 'true' && github.event.repository.visibility == 'public'
     runs-on: ubuntu-24.04
     permissions:
       contents: read

@@ -1,0 +1,58 @@
+name: Gemini PR review
+
+on:
+  # Fork PRs do not receive Actions secrets. This job never checks out or
+  # executes pull-request code.
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gemini-pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    name: Review pull request
+    # Comment permissions are scoped to this one job. The reviewer cannot push,
+    # merge, deploy, change Actions settings, or access a deployment host.
+    permissions:
+      issues: write
+      pull-requests: write
+    # The repository is public, so make invocation owner-only as well as
+    # excluding forks. A review is paid and happens only after the explicit
+    # review-this label is added by elcafe7.
+    if: >-
+      github.event.label.name == 'review-this' &&
+      github.event.sender.login == 'elcafe7' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Review this pull request with Gemini
+        uses: the-pr-agent/pr-agent@efdde4afe14aa401a3889012c7f3e9ef3081a430 # v0.49.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          config.model: gemini/gemini-4-hydrogen
+          config.fallback_models: '[]'
+          # Hydrogen has a 1,048,576-token input limit. This explicit value is
+          # required because the action's bundled LiteLLM metadata predates it.
+          config.custom_model_max_tokens: '1048576'
+          config.max_model_tokens: '1048576'
+          config.output_run_details: 'true'
+          config.output_run_cost: 'true'
+          github_action_config.auto_review: 'true'
+          github_action_config.pr_actions: '["labeled"]'
+          github_action_config.fail_on_command_errors: 'true'
+          github_action_config.auto_describe: 'false'
+          github_action_config.auto_improve: 'false'
+          GOOGLE_AI_STUDIO.GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          pr_reviewer.extra_instructions: >-
+            Review only. Identify concrete regressions, security-boundary errors,
+            unsafe data handling, missing failure paths, CLI contract breaks, and
+            inadequate tests. Cite changed lines and repository evidence. Do not
+            propose automatic code changes, run deployments, approve, request
+            changes, merge, publish releases, or alter repository settings.

@@ -1,0 +1,13 @@
+# Build-time dependencies for scripts/build_windows.sh (PyInstaller one-file
+# lex.exe). The app's runtime dependencies (pyproject.toml) are included so
+# the frozen executable bundles them. Compile the hash-locked file with:
+#   uv pip compile --python-version 3.12 --generate-hashes --universal \
+#     .github/requirements/windows-build-requirements.in \
+#     -o .github/requirements/windows-build-requirements.txt
+pyinstaller
+rich
+python-docx
+reportlab
+python-pptx
+Pillow>=13
+defusedxml

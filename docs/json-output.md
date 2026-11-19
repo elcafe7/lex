@@ -149,8 +149,12 @@ Whole chapters have `verse_start`/`verse_end` set to the chapter's range. Exit 3
 - `corrections` lists spelling fixes applied (`{"from":"grase","to":"grace"}`);
   `effective_query` is what was searched.
 - `scope` is `null` for the whole Bible; otherwise the scope flag (`-nt`, `-ot`, `-gospels`,
-  a book…) and the books searched.
-- `--page N`, `--limit N` (default 10). No results is exit 3 `not_found`.
+  a book…) and the books searched, as the active edition stores them (ESV
+  `"Psalm"`, Geneva `"Ps"`), matching the `book` field of each result.
+- `--page N`, `--limit N` (default 10). No results is exit 3 `not_found`; so is
+  a book scope the edition doesn't have (`"Book scope Tobit is not in edition kjv"`).
+  An unrecognised scope flag (`-foobar`) is exit 2 `usage`
+  (`"Unknown book scope -foobar"`, with a `hint`).
 
 ### `define` — `lex --json define <term>` (also `-d <term>`)
 
@@ -191,8 +195,13 @@ subject match returns `{"match":"verse","verse":<verse fields>,"subjects":[...]}
 
 - No query → `command:"creed_list"`, `documents:[{id, topic, source, tradition, date, section_count}]`.
 - One matching document → `command:"creed"`, `document:{topic, source, tradition, date,
-  description, note, section_count, sections:[{title, text, markdown, proofs[], original}]}`.
+  description, note, section_count, sections:[{title, text, markdown, proofs[], original, lines?}]}`.
   `original` is `{language, text}` when Lex has the original-language text, else `null`.
+  `lines` is `[{n, original, english}]` for the four bilingual documents (Apostles', Nicene,
+  Athanasian, Chalcedonian): the section split into aligned clause pairs, with `n` counting
+  through the whole document. Other documents (e.g. Westminster) have no `lines` key, so
+  their JSON is unchanged. Joining a section's `english` lines with spaces gives
+  its `text` (whitespace aside) and joining `original` gives `original.text`.
 - Several documents → `command:"creed_matches"`, `matches:[{topic, source, tradition, section_count}]`.
 - No title match → full-text: `command:"creed_search"`, `results:[{topic, title, source, text, proofs[]}]` (up to 8).
 

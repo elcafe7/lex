@@ -208,7 +208,9 @@ This section covers the Lex 2.6.5 command surface. Optional flags can usually ap
 
 Search looks at verse text only, and likely misspellings are corrected and shown in the result footer. A bare book name in the query is searched as text, so use a scope such as `-john` to search within a book.
 
-Supported group scopes include `-ot`, `-old-testament`, `-nt`, `-new-testament`, `-law`, `-pentateuch`, `-torah`, `-history`, `-wisdom`, `-poetry`, `-major`, `-major-prophets`, `-minor`, `-minor-prophets`, `-prophets`, `-gospels`, `-epistles`, `-letters`, `-pauline`, and `-general-epistles`.
+Supported group scopes include `-ot`, `-old-testament`, `-nt`, `-new-testament`, `-law`, `-pentateuch`, `-torah`, `-history`, `-wisdom`, `-poetry`, `-major`, `-major-prophets`, `-minor`, `-minor-prophets`, `-prophets`, `-gospels`, `-epistles`, `-letters`, `-pauline`, `-general-epistles`, and `-apocrypha` / `-deuterocanon`.
+
+Scopes resolve to the active edition's own book names (ESV "Psalm", Geneva "Ps", Vulgate "I Samuel", LXX "1 Samuel (1 Kingdoms)"). Deuterocanonical scopes such as `-tobit`, `-sirach`, and `-1-maccabees` work in editions that include those books, and any stored book works by its own name (`-laodiceans`, `-joshua-a`). `-wisdom` is the group; use `-wisdom-of-solomon` or `-wis` for the book. A scope the edition lacks is reported rather than returning nothing.
 
 ### Verse Web
 

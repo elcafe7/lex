@@ -1,0 +1,84 @@
+# Fuzzing: Atheris (libFuzzer for Python) harnesses in fuzz/ (issue #36).
+#   fuzz_argv.py        argv normalizer, help/json detection, search scopes
+#   fuzz_safe_paths.py  path-boundary helpers in lex.py and scripts/safe_paths.py
+#
+# Runs briefly on pull requests that touch the fuzzed code, on pushes to main,
+# longer weekly, and on demand. Any crash, uncaught exception or broken
+# invariant fails the job; the crashing input is kept as an artifact.
+# Atheris is installed from the hash-pinned
+# .github/requirements/fuzz-requirements.txt (pip --require-hashes).
+#
+# Free tools only. Every action is pinned to a full commit SHA.
+name: Fuzz
+
+on:
+  pull_request:
+    paths:
+      - "lex.py"
+      - "scripts/safe_paths.py"
+      - "fuzz/**"
+      - ".github/requirements/fuzz-requirements.txt"
+      - ".github/workflows/fuzz.yml"
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 10 * * 1"  # Mondays 10:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: Atheris (${{ matrix.target }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [argv, safe_paths]
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Atheris (hash-pinned)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/fuzz-venv"
+          "$RUNNER_TEMP/fuzz-venv/bin/python" -m pip install --quiet --require-hashes --no-deps \
+            -r .github/requirements/fuzz-requirements.txt
+
+      - name: Fuzz
+        env:
+          TARGET: ${{ matrix.target }}
+          # 60 s per target on PRs and pushes, 10 min on the weekly/manual run.
+          SECONDS_TO_RUN: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '600' || '60' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/corpus" fuzz-artifacts
+          cp -R "fuzz/corpus/$TARGET/." "$RUNNER_TEMP/corpus/"
+          "$RUNNER_TEMP/fuzz-venv/bin/python" "fuzz/fuzz_${TARGET}.py" \
+            "$RUNNER_TEMP/corpus" \
+            -max_total_time="$SECONDS_TO_RUN" \
+            -artifact_prefix=fuzz-artifacts/ \
+            -print_final_stats=1
+
+      - name: Keep crashing inputs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-crash-${{ matrix.target }}
+          path: fuzz-artifacts/
+          if-no-files-found: ignore
+          retention-days: 30
