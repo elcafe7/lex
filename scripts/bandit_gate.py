@@ -33,7 +33,6 @@ current directory), with the same rules as osv_gate.py. Standard library only.
 import argparse
 import collections
 import json
-import os
 import re
 import sys
 

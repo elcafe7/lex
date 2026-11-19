@@ -1,7 +1,6 @@
 import sqlite3
 import json
 import os
-import sys
 import re
 
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtime-data")
@@ -116,7 +115,7 @@ def load_historical_docs(conn):
                                 entries.append((full_topic, content, "TheologAI"))
                         else:
                             entries.append((title, json.dumps(doc, indent=2), "TheologAI"))
-                    except:
+                    except Exception:
                         continue
         conn.executemany("INSERT INTO dictionary_fts VALUES (?, ?, ?)", entries)
         print("Indexed Historical Documents with FTS5.")

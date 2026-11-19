@@ -450,7 +450,7 @@ Lex is built on the shoulders of giants. Data is sourced from:
 
 ## 💬 Issues and contributing
 
-- **Questions, bugs and ideas:** open an issue in the [issue tracker](https://github.com/elcafe7/lex/issues).
+- **Questions, bugs and ideas:** open an issue in the [issue tracker](https://github.com/elcafe7/lex/issues). Add the `question` label for questions.
 - **Code and docs:** pull requests against `main` are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) has the steps, the checks to run, and the requirements for a change to be accepted.
 - **Security problems:** please don't open a public issue. See [SECURITY.md](SECURITY.md) to report privately.
 

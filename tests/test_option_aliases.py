@@ -7,6 +7,7 @@ and search scopes are left alone.
 
 Run: python3 -m unittest tests.test_option_aliases
 """
+import importlib.util
 import json
 import os
 import re
@@ -21,7 +22,6 @@ LEX = os.path.join(ROOT, "lex.py")
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
 # Import lex.py as a module without running main.
-import importlib.util
 _spec = importlib.util.spec_from_file_location("lex_aliases_under_test", LEX)
 lex = importlib.util.module_from_spec(_spec)
 # lex.py runs side-effecting imports only; main is behind a name check.

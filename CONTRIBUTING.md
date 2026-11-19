@@ -11,8 +11,9 @@ Use the [GitHub issue tracker](https://github.com/elcafe7/lex/issues):
   what you did, what you expected, and what happened instead. Include your OS
   and the Lex version (`lex --version`).
 - **Enhancement:** open an issue describing what you'd like and why.
-- **Question:** open an issue; please search
+- **Question:** open an issue and add the `question` label; please search
   [existing issues](https://github.com/elcafe7/lex/issues?q=is%3Aissue) first.
+  There's no separate forum.
 
 **Security problems:** do not open a public issue. Report them privately by
 following [SECURITY.md](SECURITY.md).
@@ -29,8 +30,9 @@ following [SECURITY.md](SECURITY.md).
    requests are welcome.
 
 `main` is protected and is pull-request only. Every change, including the
-maintainer's, goes in through a pull request. The maintainer reviews each
-pull request and may ask for changes before merging.
+maintainer's, goes in through a pull request that passes the required checks.
+The maintainer reviews each pull request and may ask for changes before
+merging.
 
 ## Setting up
 
@@ -45,6 +47,7 @@ Python 3.12 or newer is required. For the npm launcher, Node.js 18 or newer.
 
 ```sh
 python3 -m unittest discover -s tests
+ruff check .                               # lint (rules in pyproject.toml)
 python3 -m py_compile ./lex.py
 python3 ./lex.py --version
 python3 ./lex.py read John 3:16
@@ -66,6 +69,11 @@ Every pull request and every push to `main` runs these GitHub Actions
 workflows. They must pass before a pull request can be merged (where they are
 required checks):
 
+- **Lint (Ruff)** (Python code-quality lint):
+  [`.github/workflows/lint.yml`](.github/workflows/lint.yml). Any finding
+  fails the job. The rule set is in `pyproject.toml`. A proven false
+  positive needs an inline `# noqa: XXXX  # reason: ...` comment, explained
+  in the pull request.
 - **Bandit** (Python security analysis):
   [`.github/workflows/bandit.yml`](.github/workflows/bandit.yml). Medium or
   high findings fail the job. Low findings are reported. A proven false
@@ -97,14 +105,12 @@ Bandit, Gitleaks, and (when configured) VirusTotal before a release is
 published. [OpenSSF Scorecard](.github/workflows/scorecard.yml) runs on a
 weekly schedule.
 
-There is no project-wide Python linter (Ruff, flake8, pylint, or mypy)
-configured in CI on `main`, so there is no general "treat compiler/linter
-warnings as errors" rule to follow today. Bandit medium/high findings and
-Gitleaks findings do fail CI.
-
 ## Requirements for contributions
 
 - Python 3.12 or newer. Follow the style of the code around your change.
+- `ruff check .` must report nothing. If a finding is a false positive, add
+  an inline `# noqa: XXXX  # reason: ...` comment and explain it in the
+  pull request.
 - The npm launcher's JavaScript files stay in `"use strict"` mode.
 - Add or update automated tests for new features and bug fixes where
   practical. The Python suite is `python3 -m unittest discover -s tests`;

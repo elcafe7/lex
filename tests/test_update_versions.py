@@ -11,7 +11,6 @@ Run: python3 -m unittest discover -s tests
 import hashlib
 import importlib.util
 import io
-import json
 import os
 import re
 import shutil

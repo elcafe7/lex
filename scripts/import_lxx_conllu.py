@@ -3,7 +3,6 @@ import argparse
 import os
 import re
 import sqlite3
-import sys
 import unicodedata
 
 from init_lxx_db import DEFAULT_DB, init_lxx_db
