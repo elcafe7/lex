@@ -357,27 +357,33 @@ shepherd psalm), not the Protestant Psalm 22.
 ## Keeping Lex Updated
 
 
-You can update your local Bible databases to the latest data manifest available
-on GitHub with one command:
+One command updates both the Lex program and its data, for every kind of
+install (git clone, npm launcher, or release download):
 
 ```bash
-lex update
+lex update      # same as: lex --update   and   lex -update
 ```
 
-This verifies file integrity using hashes and downloads only changed data files.
-With the npm launcher (`npm install -g @n8te_/lex-cli`), `lex update` also
-upgrades the CLI package when a newer version is published, then prints both
-the CLI version and the data version. If it can't upgrade the CLI (for example,
-no write permission), it prints the exact `npm install -g ...` command to run.
+It prints one summary with the old and new version of each:
 
-In a git checkout, the data updater only writes to `runtime-data/` and does
-not overwrite the CLI code. Update the code with Git from the Lex checkout:
-
-```bash
-cd /path/to/lex
-git pull
-./setup.sh
+```text
+Lex CLI:  2.6.8 → 2.6.9 (updated)
+Lex data: 2.6.8 → 2.6.9 (updated)
 ```
+
+- **Git clone:** `lex update` fast-forwards the clone (like `git pull --ff-only`),
+  runs `./setup.sh`, then refreshes the data. If you edited Lex's own files it
+  stops before changing anything and lists them. Files that would block the
+  pull are moved to `~/.lex_backups/` first.
+- **npm launcher** (`npm install -g @n8te_/lex-cli`): upgrades the CLI package
+  when a newer version is published, then refreshes the data. If it can't
+  upgrade the CLI (for example, no write permission), it prints the exact
+  `npm install -g ...` command to run.
+- **Release download:** downloads the newest release, verifies its published
+  SHA-256, and unpacks it over the folder, keeping your own files.
+
+Data files are verified with hashes from `manifest.json`; only changed files
+are downloaded.
 
 ## Credits And Licenses
 

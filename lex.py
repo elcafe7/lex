@@ -20,6 +20,9 @@ import shlex
 import time
 import html
 import subprocess
+import tempfile
+import tarfile
+import filecmp
 import shutil
 import plistlib
 from rich.align import Align
@@ -121,7 +124,7 @@ def rich_lexicon_text(value):
     return "".join(parts)
 
 
-TRUSTED_FETCH_HOSTS = {"raw.githubusercontent.com", "poeta.icu"}
+TRUSTED_FETCH_HOSTS = {"raw.githubusercontent.com", "poeta.icu", "api.github.com", "github.com"}
 
 
 STRONGS_REF_GAP = re.compile(r"(?<=\S) (?= )|(?<=[A-Za-z]) (?=[),;.:])|^ (?=[),;])")
@@ -308,6 +311,28 @@ class LexUpdateManager:
         # any files were downloaded this run.
         self.remote_version = None
         self.data_changed = False
+        # The data version this install had before the update: remembered from
+        # the last update, handed over by the re-run after a CLI update, or (for
+        # data that ships inside the code folder) the code's own version.
+        self.data_before = (os.environ.get("LEX_DATA_VERSION_BEFORE") or self.read_data_version()
+                            or (VERSION if os.path.realpath(self.data_dir) == os.path.realpath(RUNTIME_DATA_DIR) else None))
+
+    DATA_VERSION_FILE = ".lex-data-version"
+
+    def read_data_version(self):
+        try:
+            with open(os.path.join(self.data_dir, self.DATA_VERSION_FILE), encoding="utf-8") as fh:
+                value = fh.read().strip()
+            return value if _version_tuple(value) else None
+        except OSError:
+            return None
+
+    def write_data_version(self, version):
+        try:
+            with open(os.path.join(self.data_dir, self.DATA_VERSION_FILE), "w", encoding="utf-8") as fh:
+                fh.write(f"{version}\n")
+        except OSError:
+            pass  # a read-only data folder just means no remembered version
 
     def get_local_hash(self, filepath):
         if not os.path.exists(filepath):
@@ -382,6 +407,7 @@ class LexUpdateManager:
 
         if not updates:
             self.console.print(f"[success]Lex data is already up to date ({remote_version}).[/]")
+            self.write_data_version(remote_version)
             return True
 
         self.console.print(f"[info]Updating Lex data to {remote_version}... ({len(updates)} files)[/]")
@@ -422,6 +448,7 @@ class LexUpdateManager:
                 return False
 
         self.data_changed = True
+        self.write_data_version(remote_version)
         self.console.print(f"[success]Lex data updated to {remote_version}.[/]")
         return True
 
@@ -431,17 +458,303 @@ def _version_tuple(version):
     return tuple(int(part) for part in match.groups()) if match else None
 
 
-def cli_update_status(latest_data_version, env=None, base_dir=None):
-    """Describe the CLI side of `lex update` (#19).
+# ---------------------------------------------------------------------------
+# One update path: `lex update`, `lex --update` and `lex -update`
+# ---------------------------------------------------------------------------
+# All three spellings reach run_update_command(), which updates the CLI and the
+# data together and prints one summary:
+#   * git clone      -> safe fast-forward `git pull`, setup.sh, then the new
+#                       code refreshes the data (git_update)
+#   * npm launcher   -> the launcher upgrades @n8te_/lex-cli first and hands
+#                       the outcome to this process in LEX_CLI_* variables
+#   * release folder -> the verified release tarball is unpacked over the
+#                       folder (release_update), then the data is refreshed
+RELEASE_LATEST_URL = "https://api.github.com/repos/elcafe7/lex/releases/latest"
+RELEASE_DOWNLOAD_BASE = "https://github.com/elcafe7/lex/releases/download/"
+RELEASE_TAG_PATTERN = re.compile(r"^v\d+\.\d+\.\d+$")
+MAX_RELEASE_BYTES = 1024 * 1024 * 1024
+UPDATE_REEXEC_ENV = "LEX_CLI_UPDATE_STATUS"
 
-    The npm launcher checks npm, upgrades itself when it can, and passes the
-    outcome in LEX_CLI_* environment variables. Without the launcher (a git
-    clone or a direct `python3 lex.py`), `lex update` stays data-only, so
-    compare this code's VERSION with the manifest and say how to upgrade.
-    Returns a dict with cli_version, latest, status, and command.
-    """
+
+def is_update_request(args):
+    """True for `lex update`, `lex --update` and `lex -update` (the latter is
+    rewritten to `--update` by normalize_argv before argparse runs)."""
+    return bool(args.update or (args.query and args.query[0] == "update"))
+
+
+def detect_install_kind(base_dir=None, env=None):
+    """Return "npm", "git", "packaged" or "release" for this Lex install."""
     env = os.environ if env is None else env
     base_dir = base_dir or BASE_DIR
+    if env.get("LEX_CLI_PACKAGE_VERSION"):
+        return "npm"
+    if getattr(sys, "frozen", False):
+        return "packaged"
+    if os.path.exists(os.path.join(base_dir, ".git")):
+        return "git"
+    return "release"
+
+
+def update_backup_dir(env=None, now=None):
+    """Folder for files the updater moves aside (never inside the work tree)."""
+    env = os.environ if env is None else env
+    root = env.get("LEX_BACKUP_DIR") or os.path.expanduser("~/.lex_backups")
+    stamp = time.strftime("update-%Y%m%d-%H%M%S", time.localtime(now))
+    return os.path.join(root, stamp)
+
+
+class UpdateRefused(Exception):
+    """The CLI update stopped before changing anything; the message says why."""
+
+
+def _git(base_dir, *args, timeout=900):
+    git = shutil.which("git")
+    if not git:
+        raise UpdateRefused("git is not installed, so Lex can't update this clone.")
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"}
+    try:
+        return subprocess.run(
+            [git, "-C", base_dir, *args], capture_output=True, text=True, timeout=timeout, check=False, env=env,
+        )
+    except subprocess.TimeoutExpired:
+        raise UpdateRefused(f"`git {args[0]}` took too long. Check your connection and try again.") from None
+
+
+def _git_out(base_dir, *args, timeout=900):
+    proc = _git(base_dir, *args, timeout=timeout)
+    # NUL-separated listings (-z) keep their exact bytes; everything else is trimmed.
+    out = proc.stdout if "-z" in args else proc.stdout.strip()
+    return proc.returncode, out, proc.stderr.strip()
+
+
+def _code_version_from_text(text):
+    match = re.search(r'^VERSION\s*=\s*"([^"]+)"', text or "", re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def _move_aside(path, backup_root, rel):
+    """Move ``path`` to ``backup_root/rel`` and return the backup path."""
+    destination = os.path.join(backup_root, rel)
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    shutil.move(path, destination)
+    return destination
+
+
+def git_update(console, base_dir=None, env=None, run_setup=None):
+    """Fast-forward a git install to its upstream branch.
+
+    Returns {"status": "current"|"updated", "old", "new", "moved", ...}. Raises
+    UpdateRefused (nothing changed) for local edits, a detached HEAD, a branch
+    that has diverged, and so on. Files that would block the pull (untracked
+    copies of files the new version tracks, or data files an older updater
+    rewrote) are moved to a backup folder first, so the pull can't abort the
+    way it used to.
+    """
+    base_dir = base_dir or BASE_DIR
+    code, branch, _ = _git_out(base_dir, "rev-parse", "--abbrev-ref", "HEAD")
+    if code != 0:
+        raise UpdateRefused("This folder looks like a git clone, but git can't read it.")
+    if branch == "HEAD":
+        raise UpdateRefused("This clone is on a detached commit. Run `git switch main`, then `lex update`.")
+    code, upstream, _ = _git_out(base_dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+    if code != 0 or "/" not in upstream:
+        raise UpdateRefused(
+            f"Branch {branch} doesn't follow a remote branch. Run `git switch main`, then `lex update`."
+        )
+    remote = upstream.split("/", 1)[0]
+
+    # Local edits: data files are managed by the updater (an older version
+    # rewrote them in place), everything else belongs to the user.
+    code, status_out, _ = _git_out(base_dir, "status", "--porcelain", "-z", "--untracked-files=no")
+    changed = []
+    entries = status_out.split("\0") if status_out else []
+    index = 0
+    while index < len(entries):
+        entry = entries[index]
+        index += 1
+        if len(entry) < 4:
+            continue
+        changed.append(entry[3:])
+        if entry[0] in "RC":
+            index += 1  # the next field is the rename source
+    mine = [p for p in changed if not p.startswith("runtime-data/")]
+    if mine:
+        shown = ", ".join(mine[:5]) + (f" and {len(mine) - 5} more" if len(mine) > 5 else "")
+        raise UpdateRefused(
+            f"You have local changes to Lex's own files ({shown}), so I did not update. "
+            "Commit or stash them (`git stash`), or discard them (`git checkout -- <file>`), then run `lex update` again."
+        )
+    stale_data = [p for p in changed if p.startswith("runtime-data/")]
+
+    code, _, err = _git_out(base_dir, "fetch", "--tags", "--quiet", remote)
+    if code != 0:
+        raise UpdateRefused(f"Couldn't reach {remote} to check for a new version ({err or 'fetch failed'}).")
+    _, head, _ = _git_out(base_dir, "rev-parse", "HEAD")
+    _, tip, _ = _git_out(base_dir, "rev-parse", upstream)
+    old_version = VERSION
+    if head == tip or _git(base_dir, "merge-base", "--is-ancestor", tip, head).returncode == 0:
+        return {"status": "current", "old": old_version, "new": old_version, "moved": [], "kind": "git"}
+    if _git(base_dir, "merge-base", "--is-ancestor", head, tip).returncode != 0:
+        raise UpdateRefused(
+            f"Your copy of {branch} has commits that {upstream} doesn't, so it can't be fast-forwarded. "
+            "Nothing was changed. Rebase or reset that branch yourself, then run `lex update` again."
+        )
+    _, new_lex, _ = _git_out(base_dir, "show", f"{tip}:lex.py")
+    new_version = _code_version_from_text(new_lex) or old_version
+
+    # Make room: move aside anything that would stop the fast-forward.
+    backup_root = update_backup_dir(env)
+    moved = []  # (original, backup) pairs, so a failed pull can put them back
+    _, upstream_tree, _ = _git_out(base_dir, "ls-tree", "-r", "--name-only", "-z", tip)
+    upstream_files = set(p for p in upstream_tree.split("\0") if p)
+    _, untracked_out, _ = _git_out(base_dir, "ls-files", "--others", "--exclude-standard", "-z")
+    blockers = [p for p in untracked_out.split("\0") if p in upstream_files]
+    for rel in blockers + stale_data:
+        path = safe_join(base_dir, rel)
+        if not os.path.isfile(path):
+            continue
+        moved.append((path, _move_aside(path, backup_root, rel)))
+        if rel in stale_data:
+            _git(base_dir, "checkout", "HEAD", "--", rel)
+    console.print(f"[info]Updating Lex CLI {old_version} → {new_version} (git, {upstream})…[/]")
+    if moved:
+        console.print(f"[info]Moved {len(moved)} file(s) out of the way to {rich_escape(backup_root)}.[/]")
+    code, _, err = _git_out(base_dir, "merge", "--ff-only", "--quiet", tip)
+    if code != 0:
+        for original, backup in moved:
+            os.makedirs(os.path.dirname(original), exist_ok=True)
+            shutil.move(backup, original)
+        raise UpdateRefused(f"The fast-forward failed ({err or 'git merge error'}). Your files were put back as they were.")
+
+    result = {"status": "updated", "old": old_version, "new": new_version, "moved": [b for _, b in moved],
+              "backup_dir": backup_root if moved else None, "kind": "git"}
+    setup_error = (run_setup or run_setup_script)(console, base_dir)
+    if setup_error:
+        result["warning"] = setup_error
+    return result
+
+
+def run_setup_script(console, base_dir):
+    """Refresh the virtualenv and `lex` command with setup.sh (installs made by
+    setup.sh only). Returns an error string, or None when fine or not needed."""
+    script = os.path.join(base_dir, "setup.sh")
+    if os.name == "nt" or not os.path.isfile(script) or not os.path.isdir(os.path.join(base_dir, ".venv")):
+        return None
+    bash = shutil.which("bash")
+    if not bash:
+        return "bash was not found, so setup.sh was not run. Run ./setup.sh yourself."
+    console.print("[info]Refreshing dependencies (setup.sh)…[/]")
+    try:
+        proc = subprocess.run(
+            [bash, script], cwd=base_dir, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+            timeout=1800, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"setup.sh could not run ({exc}). Run ./setup.sh yourself."
+    if proc.returncode != 0:
+        tail = "\n".join((proc.stdout + proc.stderr).strip().splitlines()[-5:])
+        return f"setup.sh failed ({tail}). Run ./setup.sh yourself to see why."
+    return None
+
+
+def _read_limited(response, limit):
+    data = response.read(limit + 1)
+    if len(data) > limit:
+        raise ValueError("download is larger than expected")
+    return data
+
+
+def latest_release_tag(opener=None):
+    opener = opener or open_trusted_https
+    request = urllib.request.Request(RELEASE_LATEST_URL, headers={"Accept": "application/vnd.github+json",
+                                                                  "User-Agent": "lex-cli"})
+    with opener(request) as response:
+        tag = json.loads(_read_limited(response, 1024 * 1024).decode()).get("tag_name")
+    if not isinstance(tag, str) or not RELEASE_TAG_PATTERN.match(tag):
+        raise ValueError("the release list had no vX.Y.Z tag")
+    return tag
+
+
+def release_update(console, base_dir=None, env=None, opener=None, run_setup=None):
+    """Update a folder unpacked from a release download (no git, no npm)."""
+    base_dir = base_dir or BASE_DIR
+    opener = opener or open_trusted_https
+    old_version = VERSION
+    try:
+        tag = latest_release_tag(opener)
+    except Exception as exc:
+        raise UpdateRefused(f"Couldn't check GitHub for the latest release ({exc}).") from None
+    new_version = tag[1:]
+    current, newest = _version_tuple(old_version), _version_tuple(new_version)
+    if not current or not newest or current >= newest:
+        return {"status": "current", "old": old_version, "new": old_version, "moved": [], "kind": "release"}
+    console.print(f"[info]Updating Lex CLI {old_version} → {new_version} (release download)…[/]")
+    archive_name = f"lex-{tag}.tar.gz"
+    work = tempfile.mkdtemp(prefix="lex-update-")
+    try:
+        archive = os.path.join(work, archive_name)
+        try:
+            with opener(RELEASE_DOWNLOAD_BASE + f"{tag}/{archive_name}.sha256") as response:
+                expected = _read_limited(response, 4096).decode().split()[0].lower()
+            digest = hashlib.sha256()
+            size = 0
+            with opener(RELEASE_DOWNLOAD_BASE + f"{tag}/{archive_name}", timeout=60) as response, \
+                    open(archive, "wb") as output:
+                for chunk in iter(lambda: response.read(1024 * 1024), b""):
+                    size += len(chunk)
+                    if size > MAX_RELEASE_BYTES:
+                        raise ValueError("download is larger than expected")
+                    digest.update(chunk)
+                    output.write(chunk)
+        except Exception as exc:
+            raise UpdateRefused(f"Couldn't download {archive_name} ({exc}). Nothing was changed.") from None
+        if digest.hexdigest() != expected:
+            raise UpdateRefused(f"{archive_name} did not match its published checksum, so it was not installed.")
+        extract = os.path.join(work, "x")
+        os.makedirs(extract)
+        try:
+            with tarfile.open(archive, "r:gz") as tar:
+                tar.extractall(extract, filter="data")
+        except (tarfile.TarError, OSError) as exc:
+            raise UpdateRefused(f"{archive_name} could not be unpacked safely ({exc}). Nothing was changed.") from None
+        root = os.path.join(extract, f"lex-{new_version}")
+        if not os.path.isfile(os.path.join(root, "lex.py")):
+            raise UpdateRefused(f"{archive_name} is not a Lex release. Nothing was changed.")
+        backup_root = update_backup_dir(env)
+        moved = []
+        for folder, _dirs, files in os.walk(root):
+            for name in files:
+                source = os.path.join(folder, name)
+                rel = os.path.relpath(source, root)
+                target = safe_join(base_dir, rel)
+                if os.path.isfile(target) and filecmp.cmp(source, target, shallow=False):
+                    continue
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                if os.path.isfile(target) and not rel.startswith("runtime-data" + os.sep):
+                    moved.append(shutil.copy2(target, _backup_slot(backup_root, rel)))
+                staged = target + ".lex-new"
+                shutil.copy2(source, staged)
+                os.replace(staged, target)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    result = {"status": "updated", "old": old_version, "new": new_version, "moved": moved,
+              "backup_dir": backup_root if moved else None, "kind": "release"}
+    setup_error = (run_setup or run_setup_script)(console, base_dir)
+    if setup_error:
+        result["warning"] = setup_error
+    return result
+
+
+def _backup_slot(backup_root, rel):
+    destination = os.path.join(backup_root, rel)
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    return destination
+
+
+def cli_update_status(latest_data_version, env=None, base_dir=None):
+    """Describe the CLI side of an update from the LEX_CLI_* variables that the
+    npm launcher (or the re-run after a git/release update) passes in."""
+    env = os.environ if env is None else env
     cli_version = env.get("LEX_CLI_PACKAGE_VERSION") or VERSION
     status = env.get("LEX_CLI_UPDATE_STATUS")
     if status:
@@ -451,53 +764,116 @@ def cli_update_status(latest_data_version, env=None, base_dir=None):
             "status": status,
             "updated_from": env.get("LEX_CLI_UPDATED_FROM") or None,
             "command": env.get("LEX_CLI_UPGRADE_COMMAND") or "npm install -g @n8te_/lex-cli@latest",
+            "backup_dir": env.get("LEX_UPDATE_BACKUP_NOTE") or None,
+            "warning": env.get("LEX_UPDATE_WARNING") or None,
         }
-    latest = latest_data_version
-    current, newest = _version_tuple(cli_version), _version_tuple(latest)
-    if not current or not newest:
-        return {"cli_version": cli_version, "latest": latest, "status": "unchecked", "updated_from": None,
-                "command": None}
-    if current >= newest:
-        return {"cli_version": cli_version, "latest": latest, "status": "current", "updated_from": None,
-                "command": None}
-    if os.path.isdir(os.path.join(base_dir, ".git")):
-        command = f"git -C {shlex.quote(base_dir)} pull --ff-only && {shlex.quote(os.path.join(base_dir, 'setup.sh'))}"
-    else:
-        command = "npm install -g @n8te_/lex-cli@latest"
-    return {"cli_version": cli_version, "latest": latest, "status": "behind", "updated_from": None,
-            "command": command}
+    return {"cli_version": cli_version, "latest": latest_data_version, "status": "unchecked", "updated_from": None,
+            "command": None}
 
 
-def print_update_summary(console, manager, data_ok, env=None, base_dir=None):
+def update_cli_part(console, env=None, base_dir=None, git_runner=None, release_runner=None):
+    """Update the CLI for this install type. Returns a status dict like
+    cli_update_status(), or None when something else (the npm launcher, or the
+    re-run after a successful update) already did it."""
+    env = os.environ if env is None else env
+    base_dir = base_dir or BASE_DIR
+    if env.get(UPDATE_REEXEC_ENV):
+        return None
+    kind = detect_install_kind(base_dir, env)
+    if kind == "npm":
+        return None
+    if kind == "packaged":
+        return {"cli_version": VERSION, "latest": None, "status": "unchecked", "updated_from": None,
+                "command": None, "note": "This is a packaged build. Download the newest one from "
+                                         "https://github.com/elcafe7/lex/releases/latest."}
+    runner = (git_runner or git_update) if kind == "git" else (release_runner or release_update)
+    try:
+        result = runner(console, base_dir=base_dir, env=env)
+    except UpdateRefused as exc:
+        return {"cli_version": VERSION, "latest": None, "status": "refused", "updated_from": None,
+                "command": None, "reason": str(exc)}
+    return {"cli_version": result["new"] if result["status"] == "updated" else result["old"],
+            "latest": result["new"], "status": result["status"],
+            "updated_from": result["old"] if result["status"] == "updated" else None, "command": None,
+            "moved": result.get("moved") or [], "backup_dir": result.get("backup_dir"),
+            "warning": result.get("warning"), "kind": result["kind"]}
+
+
+def print_update_summary(console, manager, data_ok, env=None, base_dir=None, cli=None):
     """Print the CLI and data versions after `lex update`. Returns the exit code."""
-    info = cli_update_status(manager.remote_version, env=env, base_dir=base_dir)
-    cli, latest, status = info["cli_version"], info["latest"], info["status"]
+    info = cli or cli_update_status(manager.remote_version, env=env, base_dir=base_dir)
+    cli_version, latest, status = info["cli_version"], info["latest"], info["status"]
     console.print("")
     if status == "updated":
-        from_note = f"updated from {info['updated_from']}" if info["updated_from"] else "updated"
-        console.print(f"[success]Lex CLI:  {cli} ({from_note})[/]")
+        if info["updated_from"] and info["updated_from"] != cli_version:
+            console.print(f"[success]Lex CLI:  {info['updated_from']} → {cli_version} (updated)[/]")
+        elif info["updated_from"]:
+            console.print(f"[success]Lex CLI:  {cli_version} (updated to the newest code)[/]")
+        else:
+            console.print(f"[success]Lex CLI:  {cli_version} (updated)[/]")
     elif status == "current":
-        console.print(f"[success]Lex CLI:  {cli} (latest)[/]")
+        console.print(f"[success]Lex CLI:  {cli_version} (latest)[/]")
     elif status in ("failed", "behind"):
         behind = f"behind the latest {latest}" if latest else "not the latest"
-        console.print(f"[warning]Lex CLI:  {cli} ({behind}; NOT updated)[/]")
-        if status == "behind":
-            console.print("[info]`lex update` only refreshes data for this install. To upgrade the CLI, run:[/]")
-        else:
-            console.print("[info]To upgrade the CLI, run:[/]")
+        console.print(f"[warning]Lex CLI:  {cli_version} ({behind}; NOT updated)[/]")
+        console.print("[info]To upgrade the CLI, run:[/]")
         console.print(f"  {rich_escape(info['command'])}")
     else:
-        console.print(f"[warning]Lex CLI:  {cli} (couldn't check for a newer version)[/]")
-        if info["command"]:
+        console.print(f"[warning]Lex CLI:  {cli_version} (couldn't check for a newer version)[/]")
+        if info.get("command"):
             console.print(f"[info]To upgrade the CLI yourself, run:[/] {rich_escape(info['command'])}")
+    for note in (info.get("note"), info.get("warning")):
+        if note:
+            console.print(f"[warning]{rich_escape(note)}[/]")
+    if info.get("backup_dir"):
+        console.print(f"[info]Files moved aside during the update are in {rich_escape(info['backup_dir'])}.[/]")
     if data_ok and manager.remote_version:
-        data_note = "updated" if manager.data_changed else "up to date"
-        console.print(f"[success]Lex data: {manager.remote_version} ({data_note})[/]")
+        before = manager.data_before
+        if before and before != manager.remote_version:
+            console.print(f"[success]Lex data: {before} → {manager.remote_version} (updated)[/]")
+        elif manager.data_changed:
+            console.print(f"[success]Lex data: {manager.remote_version} (updated)[/]")
+        else:
+            console.print(f"[success]Lex data: {manager.remote_version} (up to date)[/]")
     else:
         console.print("[error]Lex data: update did not complete[/]")
     if not data_ok:
         return 1
-    return 1 if status == "failed" else 0
+    return 1 if status == "failed" or info.get("warning") else 0
+
+
+def run_update_command(console, manager, env=None, base_dir=None, runner=None, git_runner=None, release_runner=None):
+    """The one update path behind `lex update`, `lex --update` and `lex -update`.
+
+    Updates the CLI for this install type, then the data, then prints one
+    summary. After a git or release update it re-runs the freshly installed
+    code for the data step and the summary, so they come from the new version.
+    Returns the process exit code.
+    """
+    env = os.environ if env is None else env
+    base_dir = base_dir or BASE_DIR
+    cli = update_cli_part(console, env=env, base_dir=base_dir, git_runner=git_runner, release_runner=release_runner)
+    if cli and cli["status"] == "refused":
+        console.print(f"[error]Lex was not updated.[/] {rich_escape(cli['reason'])}")
+        return 1
+    if cli and cli["status"] == "updated":
+        data_before = manager.data_before or ""
+        child_env = {
+            **env,
+            UPDATE_REEXEC_ENV: "updated",
+            "LEX_CLI_UPDATED_FROM": cli["updated_from"] or "",
+            "LEX_CLI_LATEST_VERSION": cli["latest"] or "",
+            "LEX_DATA_VERSION_BEFORE": data_before,
+            "LEX_UPDATE_BACKUP_NOTE": cli.get("backup_dir") or "",
+            "LEX_UPDATE_WARNING": cli.get("warning") or "",
+        }
+        venv_python = os.path.join(base_dir, ".venv", "Scripts" if os.name == "nt" else "bin", "python")
+        python = venv_python if os.path.isfile(venv_python) else sys.executable
+        run = runner or subprocess.run
+        proc = run([python, os.path.join(base_dir, "lex.py"), "--update"], env=child_env, check=False)
+        return proc.returncode if proc.returncode is not None else 1
+    data_ok = manager.perform_update()
+    return print_update_summary(console, manager, data_ok, env=env, base_dir=base_dir, cli=cli)
 
 # ---------------------------------------------------------------------------
 # Runtime paths and bundled-data adapters
@@ -2838,7 +3214,7 @@ version.
 ## Maintenance
 
 *   `lex history` / `lex history --limit 10` / `lex history --clear`
-*   `lex update` / `lex --update`
+*   `lex update` / `lex --update` / `lex -update` - update the CLI and the data together (one command for git clones, npm installs and release downloads)
 *   `lex --credits`
 *   `lex --version`
 """
@@ -7595,7 +7971,8 @@ flags:
   `--help`, `-help`, `-h`, and `--h` all show this help, including after a
   subcommand (`lex study --help`). Long options also accept one dash
   (`-json`, `-plain`, `-update`) and single-letter flags also accept two
-  (`--h`, `--B kjv`). Theme flags stay `-light` / `--light`, `-dark`, `-auto`.
+  (`--h`, `--B kjv`). `lex update`, `lex --update` and `lex -update` are the
+  same command: they update the CLI and the data together. Theme flags stay `-light` / `--light`, `-dark`, `-auto`.
   Known option names only are rewritten; these are left alone:
   attached short values (`-Bkjv`, `-vkjv`), negative numbers (`-1`),
   numeric-looking tokens (`-3:16`), and search scopes (`-nt`, `-ot`).
@@ -7613,7 +7990,7 @@ command-specific help.
     parser.add_argument("-v", dest="bible_version", type=str, default=None, help="Set the sticky default Bible version (e.g. -v kjv). Bare `lex -v` explains it and lists versions")
     parser.add_argument("--version", action="version", version=VERSION)
     parser.add_argument("-B", "--bible", type=str, default=None, metavar="{" + ",".join(CANONICAL_BIBLE_IDS) + "}", help="Use a Bible version for this one command only; never changes the default")
-    parser.add_argument("--update", action="store_true", help="Update the Lex CLI (npm installs) and its data, then report both versions")
+    parser.add_argument("--update", action="store_true", help="Update the Lex CLI and its data together, then report both versions (same as `lex update` and `lex -update`)")
     theme_group = parser.add_mutually_exclusive_group()
     theme_group.add_argument("-light", dest="theme_mode", action="store_const", const="light", help="Use and remember the light terminal theme")
     theme_group.add_argument("-dark", dest="theme_mode", action="store_const", const="dark", help="Use and remember the dark terminal theme")
@@ -7760,9 +8137,8 @@ def main():
     manager = LexUpdateManager(console, data_dir=DATA_DIR)
 
     # If the user is running an update, we handle it and exit
-    if args.update or (len(args.query) > 0 and args.query[0] == "update"):
-        data_ok = manager.perform_update()
-        sys.exit(print_update_summary(console, manager, data_ok))
+    if is_update_request(args):
+        sys.exit(run_update_command(console, manager))
 
     # Ensure critical data exists (downloads if missing)
     if not manager.ensure_data():

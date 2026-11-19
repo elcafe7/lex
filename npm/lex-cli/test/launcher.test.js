@@ -136,3 +136,22 @@ test("jsonModeRequested accepts -json as well as --json", () => {
   assert.equal(launcher.jsonModeRequested(["-json", "John", "3:16"]), true);
   assert.equal(launcher.jsonModeRequested(["search", "--", "-json"]), false);
 });
+
+test("lex update, lex --update and lex -update are the same update command", () => {
+  const { isUpdateCommand } = require("../lib/self-update");
+  for (const spelling of [["update"], ["--update"], ["-update"]]) {
+    assert.ok(isUpdateCommand(launcher.normalizeArgs(spelling)), spelling.join(" "));
+  }
+  assert.deepEqual(launcher.normalizeArgs(["-update"]), ["--update"]);
+});
+
+test("after a self-update the new launcher reports old to new for the CLI and the data", () => {
+  assert.deepEqual(
+    launcher.updatedRunEnv({ LEX_CLI_UPDATED_FROM: "2.6.8" }, "2.6.9"),
+    { LEX_CLI_UPDATE_STATUS: "updated", LEX_CLI_LATEST_VERSION: "2.6.9", LEX_DATA_VERSION_BEFORE: "2.6.8" },
+  );
+  assert.equal(
+    launcher.updatedRunEnv({ LEX_CLI_UPDATED_FROM: "2.6.8", LEX_DATA_VERSION_BEFORE: "2.6.7" }, "2.6.9").LEX_DATA_VERSION_BEFORE,
+    undefined,
+  );
+});

@@ -400,6 +400,18 @@ async function resolveLexHome() {
   return downloadRelease(tag);
 }
 
+// Environment for the Python CLI when this launcher was started by an older
+// one that just upgraded it (`lex update`, `lex --update` or `lex -update`).
+// The CLI then reports "old -> new" for both the CLI and the data, which ships
+// inside the release the old launcher was running.
+function updatedRunEnv(parentEnv, version) {
+  const extra = { LEX_CLI_UPDATE_STATUS: "updated", LEX_CLI_LATEST_VERSION: version };
+  if (!parentEnv.LEX_DATA_VERSION_BEFORE && parentEnv.LEX_CLI_UPDATED_FROM) {
+    extra.LEX_DATA_VERSION_BEFORE = parentEnv.LEX_CLI_UPDATED_FROM;
+  }
+  return extra;
+}
+
 async function main(args) {
   args = normalizeArgs(args);
   setQuiet(jsonModeRequested(args));
@@ -410,8 +422,7 @@ async function main(args) {
   const env = { ...process.env, LEX_CLI_PACKAGE_VERSION: metadata.version };
   if (process.env.LEX_CLI_UPDATED_FROM) {
     // Re-run by an older launcher right after it upgraded this one.
-    env.LEX_CLI_UPDATE_STATUS = "updated";
-    env.LEX_CLI_LATEST_VERSION = metadata.version;
+    Object.assign(env, updatedRunEnv(process.env, metadata.version));
   } else if (isUpdateCommand(args) && !process.env.LEX_CLI_SKIP_SELF_UPDATE) {
     // `lex --update` keeps the CLI current as well as the data (#19).
     const packageDir = path.resolve(__dirname, "..");
@@ -453,6 +464,7 @@ module.exports = {
   dependenciesInstalled,
   jsonModeRequested,
   normalizeArgs,
+  updatedRunEnv,
   setQuiet,
   main,
 };

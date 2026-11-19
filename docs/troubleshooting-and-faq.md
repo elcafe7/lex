@@ -17,6 +17,8 @@ type -a lex
 | Not sure which version you have | `lex --version` shows the Lex version. `lex --npm-version` shows the npm launcher's version. |
 | "No reference result" | Try the full book name, such as `lex 1 Corinthians 13`. |
 | Study mode says the interlinear data is not installed | Run `lex update` to download the data. |
+| `lex update` says "Lex was not updated" on a Git clone | You have local changes to Lex's own files, and it lists them. Run `git stash` (or commit them), then `lex update` again. |
+| An old update left `git pull` failing with "untracked working tree files would be overwritten" | An older Lex downloaded that file by itself. Delete the file git names (or move it aside), then run `git pull --ff-only`. After that, `lex update` handles this automatically: it moves any blocking file to `~/.lex_backups/` and carries on. |
 | Output is messy in a log or CI job | Use `lex --plain ...` (no colour, boxes, or prompts) or `NO_COLOR=1`. Set `COLUMNS` to control the width; Lex honours it even when `TERM=dumb`. |
 | A script or AI tool gets stuck or can't read the output | Use `lex --json ...`. It never prompts and prints one JSON document. Errors come back as JSON on stderr with exit code 2, 3, or 4. |
 | A dictionary entry is missing | The local ISBE encyclopedia import is incomplete. It currently covers only Volume II (Clement to Heresh). |
@@ -27,7 +29,7 @@ type -a lex
 
 **Is it free?** Yes. The code is MIT licensed. Bible texts and lexicons keep their own licenses; see the [licensing notes](https://github.com/elcafe7/lex/blob/main/docs/LICENSING.md).
 
-**How do I update?** Type `lex update`. On an npm install it upgrades Lex itself and refreshes the data, and tells you both versions. On a Git checkout it refreshes the data only (run `git pull` and `./setup.sh` for the code).
+**How do I update?** Type `lex update` (`lex --update` and `lex -update` are the same command). It updates Lex and its data together on every kind of install (Git clone, npm, or release download) and tells you the old and new version of each. On a Git clone it does the `git pull` and `./setup.sh` for you, and stops without changing anything if you have local edits to Lex's files.
 
 **Which Bible versions are included?** Eight: ESV, KJV (1769 and 1611), NASB 1995, Geneva 1599, Douay-Rheims 1899, the Septuagint, and the Clementine Vulgate. See [Read a passage](read-a-passage.md).
 

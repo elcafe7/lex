@@ -56,7 +56,7 @@ re-download of the latest release.
 
 ## Self-update (`lex update`)
 
-`lex update` / `lex --update` asks `registry.npmjs.org` for the `latest`
+`lex update` / `lex --update` / `lex -update` (the launcher rewrites `-update` to `--update`) asks `registry.npmjs.org` for the `latest`
 `@n8te_/lex-cli`. When the running launcher is older and lives in a writable
 global npm prefix, it runs `npm install -g --prefix <prefix>
 @n8te_/lex-cli@<latest>` and re-runs the command with the new launcher. After

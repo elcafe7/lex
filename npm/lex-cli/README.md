@@ -38,6 +38,10 @@ also accept two (`--h`, `--B kjv`). Attached short values (`-Bkjv`), negative
 numbers, and search scopes (`-nt`) are left alone. `-v` sets the default Bible;
 `--version` prints the Lex version.
 
+`lex update`, `lex --update` and `lex -update` are the same command: it upgrades
+this npm package when a newer one is published, then refreshes the data, and
+prints the old and new version of each.
+
 ## Try It
 
 ```sh

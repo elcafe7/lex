@@ -57,3 +57,6 @@ gitleaks-report/
 coverage-reports/
 .coverage
 .coverage.*
+
+# Remembered by `lex update` (the data version this install last had)
+runtime-data/.lex-data-version
