@@ -1,0 +1,9 @@
+# Test coverage for .github/workflows/tests.yml.
+# coverage: coverage.py, run with branch coverage over the unit tests.
+# The unit tests import lex.py (and its dependencies), so install the
+# runtime dependencies from pyproject.toml separately; only coverage is pinned here.
+# Compile the hash-locked file with:
+#   uv pip compile --python-version 3.12 --generate-hashes --universal \
+#     .github/requirements/coverage-requirements.in \
+#     -o .github/requirements/coverage-requirements.txt
+coverage

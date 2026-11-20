@@ -54,3 +54,6 @@ build/
 bandit-report/
 gitleaks-report/
 .gitleaks-test-*/
+coverage-reports/
+.coverage
+.coverage.*

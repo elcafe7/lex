@@ -97,9 +97,26 @@ is enabled for Python and GitHub Actions (default query suite, weekly
 schedule).
 
 The full unit test suite (`python3 -m unittest discover -s tests`) and the
-npm tests (`npm test` in `npm/lex-cli`) are run locally, as above. They are
-not currently a pull-request workflow. A few gate unit tests run inside the
-Bandit, Gitleaks, and release workflows. The
+npm tests (`npm test` in `npm/lex-cli`) also run on every pull request and
+every push to `main`, in
+[`.github/workflows/tests.yml`](.github/workflows/tests.yml). A failing test
+fails the job. The Python tests run under
+[coverage.py](https://coverage.readthedocs.io/) with branch coverage
+(settings in `.coveragerc`, hash-pinned install from
+`.github/requirements/coverage-requirements.txt`), and the npm tests report
+Node's built-in coverage. Both coverage reports are printed in the job log,
+and the Python XML and HTML reports are uploaded as the `coverage-reports`
+artifact. There is no minimum coverage threshold yet; the number is
+reported only. To see it locally:
+
+```bash
+pip install -r .github/requirements/coverage-requirements.txt
+coverage run -m unittest discover -s tests
+coverage combine && coverage report
+```
+
+A few gate unit tests also run inside the Bandit, Gitleaks, and release
+workflows. The
 [release workflow](.github/workflows/release.yml) also runs OSV-Scanner,
 Bandit, Gitleaks, and (when configured) VirusTotal before a release is
 published. [OpenSSF Scorecard](.github/workflows/scorecard.yml) runs on a

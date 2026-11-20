@@ -527,7 +527,11 @@ class WorkflowBanditTests(unittest.TestCase):
         self.assertEqual(on["push"]["branches"], ["main"])
         self.assertEqual(self.bandit_wf["permissions"], {"contents": "read"})
         job = self.bandit_wf["jobs"]["bandit"]
-        self.assertEqual(job["permissions"], {"contents": "read"})
+        # security-events: write uploads the SARIF report to code scanning.
+        self.assertEqual(
+            job["permissions"],
+            {"contents": "read", "security-events": "write"},
+        )
         self._install_and_scan(job)
 
     def test_requirements_are_hash_pinned(self):
