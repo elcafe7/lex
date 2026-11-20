@@ -72,12 +72,30 @@ def sha256_file(path):
     return digest.hexdigest()
 
 
+# Cap a single CCAT morphology download well above any real book file
+# (text, a few MB at most) so a redirected payload cannot fill the disk.
+CURL_MAX_FILESIZE = "32M"
+
+
 def fetch_verified(url, target, expected):
     directory = os.path.dirname(target)
     fd, temporary = tempfile.mkstemp(prefix=f".{os.path.basename(target)}.", dir=directory)
     os.close(fd)
     try:
-        subprocess.run(["curl", "-fsSL", url, "-o", temporary], check=True)
+        subprocess.run(
+            [
+                "curl",
+                "-fsSL",
+                "--proto",
+                "=https",
+                "--max-filesize",
+                CURL_MAX_FILESIZE,
+                url,
+                "-o",
+                temporary,
+            ],
+            check=True,
+        )
         actual = sha256_file(temporary)
         if not hmac.compare_digest(actual, expected):
             raise ValueError(f"checksum mismatch for {os.path.basename(target)}")
@@ -107,26 +125,19 @@ def resolve_manifest(raw):
 
 
 def resolve_output_dir(raw):
-    """Require --out to stay under runtime-data; create it if needed."""
+    """Require --out to stay under runtime-data; create it if needed.
+
+    Resolve and check containment before mkdir, so a path like
+    runtime-data/new/../../../x cannot create a directory outside the root.
+    """
     if not isinstance(raw, str) or not raw or "\x00" in raw:
         raise UnsafePathError(f"invalid output directory: {raw!r}")
     root_real = os.path.realpath(ROOT)
     prefix = root_real if root_real.endswith(os.sep) else root_real + os.sep
-
-    # Walk up to an existing ancestor so realpath cannot escape via missing dirs.
-    existing = raw
-    while existing and not os.path.exists(existing):
-        existing = os.path.dirname(existing)
-    if not existing:
-        raise UnsafePathError(f"output directory must remain under {root_real}")
-    existing_real = os.path.realpath(existing)
-    if existing_real != root_real and not existing_real.startswith(prefix):
-        raise UnsafePathError(f"output directory must remain under {root_real}")
-
-    os.makedirs(raw, exist_ok=True)
     out_real = os.path.realpath(raw)
     if out_real != root_real and not out_real.startswith(prefix):
         raise UnsafePathError(f"output directory must remain under {root_real}")
+    os.makedirs(out_real, exist_ok=True)
     return out_real
 
 

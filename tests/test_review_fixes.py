@@ -51,7 +51,13 @@ class LxxDownloadIntegrityTest(unittest.TestCase):
 
             def fake_download(command, check):
                 self.assertTrue(check)
-                with open(command[-1], "wb") as handle:
+                self.assertEqual(command[command.index("--proto") + 1], "=https")
+                self.assertEqual(
+                    command[command.index("--max-filesize") + 1],
+                    download_lxxmorph.CURL_MAX_FILESIZE,
+                )
+                dest = command[command.index("-o") + 1]
+                with open(dest, "wb") as handle:
                     handle.write(b"wrong")
 
             with mock.patch.object(download_lxxmorph.subprocess, "run", fake_download):
@@ -59,6 +65,31 @@ class LxxDownloadIntegrityTest(unittest.TestCase):
                     download_lxxmorph.fetch_verified("https://example.test/source", target, expected)
             with open(target, "rb") as handle:
                 self.assertEqual(handle.read(), b"known-good")
+
+    def test_escaping_out_path_creates_no_directory_outside(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = os.path.join(tmp, "workspace", "runtime-data")
+            os.makedirs(root)
+            # Same shape as --out runtime-data/new/../../../x: realpath lands
+            # at tmp/x, outside runtime-data, and must not be created.
+            raw = os.path.join(root, "new", "..", "..", "..", "x")
+            escaped = os.path.realpath(raw)
+            self.assertEqual(escaped, os.path.join(tmp, "x"))
+            with mock.patch.object(download_lxxmorph, "ROOT", root):
+                with self.assertRaises(download_lxxmorph.UnsafePathError):
+                    download_lxxmorph.resolve_output_dir(raw)
+            self.assertFalse(os.path.exists(escaped))
+            self.assertFalse(os.path.exists(os.path.join(root, "new")))
+
+    def test_missing_out_subdir_is_created_after_containment_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = os.path.join(tmp, "runtime-data")
+            os.makedirs(root)
+            wanted = os.path.join(root, "sources", "lxxmorph")
+            with mock.patch.object(download_lxxmorph, "ROOT", root):
+                resolved = download_lxxmorph.resolve_output_dir(wanted)
+            self.assertEqual(resolved, os.path.realpath(wanted))
+            self.assertTrue(os.path.isdir(resolved))
 
 
 class VerseWebValidationTest(unittest.TestCase):
