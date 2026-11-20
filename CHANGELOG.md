@@ -13,6 +13,14 @@
 - **Fixed: bracketed words dropped from verse text.** Display no longer strips
   any `[word]`; only real formatting tags (`[i]`, `[/i]`, `[wj]`, ...) are
   removed, so Brenton's supplied words (`This [is] the book`) show.
+- **New: Matthew Poole and John Gill commentaries (#18).** `lex commentary`
+  and `lex --json commentary` now also show Poole's *English Annotations on
+  the Holy Bible* (green) and Gill's *Exposition of the Entire Bible*
+  (yellow), whole Bible, public domain. Book and chapter introductions show
+  with chapter lookups. A missing commentary database is skipped. Psalms notes
+  now appear for editions that spell the book "Psalm". Built by
+  `scripts/build_commentary_mybible.py`; sources and checksums in
+  `docs/components/COMMENTARIES.md`.
 - **Friendly errors.** When a command fails, Lex says why in plain words and
   suggests the command you probably meant: close matches for misspelt flags
   (one or two dashes, help aliases included), commands, book names and `-B`
