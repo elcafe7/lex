@@ -1,0 +1,12 @@
+# Runtime dependencies for Lex (mirrors requirements.txt / pyproject.toml).
+# Used by .github/workflows/tests.yml so CI installs them with --require-hashes.
+# Compile the hash-locked file with:
+#   uv pip compile --python-version 3.12 --generate-hashes --universal \
+#     .github/requirements/runtime-requirements.in \
+#     -o .github/requirements/runtime-requirements.txt
+rich
+python-docx
+reportlab
+python-pptx
+Pillow>=13
+defusedxml

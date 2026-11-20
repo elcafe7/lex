@@ -9,7 +9,8 @@
 # reports are uploaded as the coverage-reports artifact.
 #
 # coverage.py is installed from the hash-pinned
-# .github/requirements/coverage-requirements.txt (pip --require-hashes).
+# .github/requirements/coverage-requirements.txt and
+# .github/requirements/runtime-requirements.txt (pip --require-hashes).
 # Settings are in .coveragerc.
 #
 # Free tools only. Every action is pinned to a full commit SHA.
@@ -46,12 +47,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install coverage.py (hash-pinned) and Lex's dependencies
+      - name: Install coverage.py and Lex's dependencies (hash-pinned)
         run: |
           python3 -m venv "$RUNNER_TEMP/test-venv"
           "$RUNNER_TEMP/test-venv/bin/python" -m pip install --quiet --require-hashes --no-deps \
-            -r .github/requirements/coverage-requirements.txt
-          "$RUNNER_TEMP/test-venv/bin/python" -m pip install --quiet -r requirements.txt
+            -r .github/requirements/coverage-requirements.txt \
+            -r .github/requirements/runtime-requirements.txt
 
       - name: Run the unit tests under coverage (branch coverage)
         run: |
