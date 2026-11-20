@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Friendly errors.** When a command fails, Lex says why in plain words and
+  suggests the command you probably meant: close matches for misspelt flags
+  (one or two dashes, help aliases included), commands, book names and `-B`
+  codes; the likely form of a malformed reference (`jn 3:16:2`); how many
+  chapters or verses a book really has; and which installed editions contain a
+  book the chosen Bible lacks. Messages go to stderr, exit codes stay non-zero,
+  colour follows `NO_COLOR` / `TERM=dumb`, and `--json` errors gain `reason`
+  and `suggestions` fields.
 - **Docs rewritten around tasks.** `docs/` now has a plain-language page for each
   thing a reader wants to do (get started, read a passage, look up a word, search,
   study mode, creeds, using Lex with AI tools via `--json`, troubleshooting and FAQ,

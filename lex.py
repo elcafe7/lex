@@ -14,6 +14,7 @@ import re
 import json
 import unicodedata
 import argparse
+import difflib
 import io
 from collections import Counter
 import shlex
@@ -2189,6 +2190,7 @@ class LexAgent:
         if bible_id is None:
             bible_id = load_bible_preference()
 
+        self.bible_id = resolve_bible_id(bible_id) or bible_id
         self.db = LexDB(LEXICON_DB_PATH)
         bible_path = get_bible_path(bible_id)
         if not os.path.exists(bible_path):
@@ -7034,6 +7036,405 @@ Chapter-only references (e.g., `John 1`) will export every verse in that chapter
         return True
 
 # ---------------------------------------------------------------------------
+# Friendly errors: work out what the user meant
+# ---------------------------------------------------------------------------
+# When a command fails, Lex tries to say why in plain words and to suggest a
+# corrected command (difflib close matches over the real flags, subcommands,
+# book names and Bible ids; no new data and no network). Messages go to stderr,
+# exit codes stay nonzero, colour follows NO_COLOR / LEX_NO_COLOR / TERM=dumb,
+# and --json reports {"error": {code, message, reason, suggestions, ...}}.
+HELP_FLAG_ALIASES = ("--help", "-help", "-h", "--h")
+COMMAND_WORDS = (
+    "read", "study", "search", "strongs", "web", "manuscript", "export", "topic", "naves",
+    "commentary", "define", "creed", "history", "update", "bible", "version", "help", "commands", "options",
+)
+_BOOK_PREFIX_WORDS = {"chapter", "chap", "chp", "ch", "book"}
+
+
+def close_matches(word, choices, n=3, cutoff=0.6):
+    """Up to n close matches for word among choices, best first (case-insensitive)."""
+    pool = {}
+    for choice in choices:
+        pool.setdefault(str(choice).lower(), choice)
+    hits = difflib.get_close_matches(str(word or "").lower(), list(pool), n=n, cutoff=cutoff)
+    return [pool[hit] for hit in hits]
+
+
+def _compact(text):
+    return NORM_RE.sub("", str(text or "").lower())
+
+
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def strip_control(text):
+    """Remove terminal control characters (C0, DEL, C1) so echoed input can't inject escapes."""
+    text = re.sub(r"[\t\n\r]+", " ", str(text))
+    return _CONTROL_CHARS_RE.sub("", text)
+
+
+def command_line(args, json_mode=False):
+    """A suggested command, shell-quoted so it is safe to paste.
+
+    ``args`` is a list of argv tokens, or a string split on whitespace. Every
+    token goes through shlex.quote, so user text such as ``$(touch x)`` comes out
+    inert. In --json mode it keeps --json unless the tokens already have it.
+    """
+    tokens = args.split() if isinstance(args, str) else list(args)
+    tokens = [strip_control(t) for t in tokens]
+    has_json = any(_option_name(t) == "json" for t in tokens)
+    prefix = ["lex", "--json"] if json_mode and not has_json else ["lex"]
+    return shlex.join(prefix + [t for t in tokens if t])
+
+
+def stderr_color_enabled():
+    return bool(
+        sys.stderr.isatty() and not PLAIN_MODE and not os.environ.get("NO_COLOR")
+        and not os.environ.get("LEX_NO_COLOR") and os.environ.get("TERM", "") not in {"dumb", ""}
+    )
+
+
+def emit_friendly_error(message, reason=None, suggestions=(), json_mode=False):
+    """Print a plain-words error to stderr (text mode). Never prints to stdout."""
+    color = stderr_color_enabled()
+    red, bold, dim, off = ("\x1b[1;31m", "\x1b[1m", "\x1b[2m", "\x1b[0m") if color else ("", "", "", "")
+    message = strip_control(message)
+    reason = strip_control(reason) if reason else reason
+    lines = [f"{red}lex:{off} {message}"]
+    if reason and reason != message:
+        lines.append(f"  {reason}")
+    suggestions = list(suggestions)
+    if suggestions:
+        lines.append(f"  {dim}Did you mean:{off}" if len(suggestions) > 1 else f"  {dim}Did you mean{off}:")
+        for s in suggestions:
+            lines.append(f"    {bold}{command_line(s, json_mode)}{off}")
+    sys.stderr.write("\n".join(lines) + "\n")
+    sys.stderr.flush()
+
+
+def option_names(parser=None):
+    """Map option name (no dashes) -> registered option string, plus the help aliases."""
+    parser = parser or build_arg_parser()
+    names = {}
+    for action in parser._actions:
+        for opt in action.option_strings:
+            names.setdefault(opt.lstrip("-"), opt)
+    names.setdefault("help", "--help")
+    names.setdefault("h", "-h")
+    return names
+
+
+def scope_names():
+    return set(BOOK_SCOPE_GROUPS) | set(BOOK_SCOPE_ALIASES)
+
+
+def interpret_unknown_option(token, parser=None):
+    """Return (reason, corrected option strings, extra suggestions) for an unrecognised option token."""
+    body = token[2:] if token.startswith("--") else token[1:]
+    name, eq, value = body.partition("=")
+    names = option_names(parser)
+    hits = [names[m] for m in close_matches(name, [n for n in names if len(n) > 1], n=3, cutoff=0.6)]
+    fixes = [hit + (eq + value if eq else "") for hit in hits]
+    if token.startswith("-") and not token.startswith("--") and name.lower() in scope_names():
+        return (
+            f"`{token}` is a search scope, not an option. Scopes go after the search words.",
+            [],
+            [f"search <words> {token}"],
+        )
+    if fixes:
+        reason = f"`{token}` is not an option Lex knows. Options take one or two dashes (`--json` and `-json` both work)."
+    else:
+        reason = f"`{token}` is not an option Lex knows. Run `lex --help` to see them all."
+    return reason, fixes, []
+
+
+def interpret_usage_error(parser, message):
+    """Turn an argparse error string into (message, reason, suggestions)."""
+    match = re.match(r"unrecognized arguments: (.*)$", message)
+    if match:
+        tokens = match.group(1).split()
+        reasons, fix_for, extras = [], {}, []
+        for token in tokens:
+            if token.startswith("-") and len(token) > 1:
+                reason, hits, more = interpret_unknown_option(token, parser)
+                reasons.append(reason)
+                extras.extend(more)
+                if hits:
+                    fix_for[token] = hits
+            else:
+                reasons.append(f"`{token}` was not expected here.")
+        argv = [t for t in sys.argv[1:] if _option_name(t) != "json"]
+        suggestions = []
+        first = next(iter(fix_for), None)
+        for alt in (fix_for[first] if first else [])[:3]:
+            suggestions.append([alt if t == first else (fix_for[t][0] if t in fix_for else t) for t in argv])
+        return message, " ".join(dict.fromkeys(reasons)), suggestions + extras
+    match = re.match(r"argument ([^:]+): invalid choice: '([^']*)' \(choose from (.*)\)$", message)
+    if match:
+        flag, bad = match.group(1), match.group(2)
+        choices = [c.strip().strip("'") for c in match.group(3).split(",")]
+        hits = close_matches(bad, choices, n=3, cutoff=0.5)
+        flag = flag.split("/")[0]
+        return message, f"`{bad}` is not a valid value for {flag}. Choose one of: {', '.join(choices)}.", [f"{flag} {h}" for h in hits]
+    match = re.match(r"argument ([^:]+): invalid int value: '([^']*)'", message)
+    if match:
+        flag = match.group(1).split("/")[0]
+        return message, f"{flag} needs a whole number, for example `{flag} 2`.", []
+    return message, "Run `lex --help` to see the options.", []
+
+
+class FriendlyArgumentParser(argparse.ArgumentParser):
+    """argparse with did-you-mean errors on stderr (exit code 2)."""
+
+    def error(self, message):
+        message, reason, suggestions = interpret_usage_error(self, message)
+        emit_friendly_error(message, reason, suggestions)
+        sys.exit(2)
+
+
+def fail_lookup(agent, part, args, skipped=False):
+    """Print the plain-words reason a lookup failed (stderr) with corrected commands."""
+    prefix = f"-B {args.bible}" if getattr(args, "bible", None) else ""
+    reason, suggestions = diagnose_lookup(agent, part, prefix=prefix)
+    verb = "Skipped" if skipped else "Couldn't find"
+    emit_friendly_error(f'{verb} "{part}" in {agent.bible_id.upper()}.', reason, suggestions)
+
+
+def installed_bible_ids():
+    return [b for b in CANONICAL_BIBLE_IDS if bible_version_available(b)]
+
+
+def interpret_unknown_bible(value, rest=""):
+    """(reason, suggestions) for an unknown Bible id given to -B / -v / `lex bible`."""
+    aliases = [b for b in BIBLE_VERSIONS]
+    hits = []
+    for hit in close_matches(value, aliases, n=3, cutoff=0.5):
+        hit = resolve_bible_id(hit) or hit
+        if hit not in hits:
+            hits.append(hit)
+    reason = f"`{value}` is not a Bible id Lex knows. Available: {', '.join(CANONICAL_BIBLE_IDS)} (see `lex -B`)."
+    return reason, [f"-B {hit} {rest}".strip() for hit in hits]
+
+
+def _edition_label(bible_id):
+    return f"the {bible_id.upper()}"
+
+
+def book_chapter_verses(agent, db_book):
+    """{chapter: highest verse} for a book as stored in this edition (empty if absent)."""
+    stats = {}
+    rows = agent.bible_db.query("SELECT DISTINCT reference FROM bible WHERE reference LIKE ?", (f"%:{db_book}:%",))
+    for (ref,) in rows:
+        parts = ref.split(":", 1)[1].rsplit(":", 2) if ":" in ref else []
+        if len(parts) != 3 or parts[0] != db_book or not parts[1].isdigit() or not parts[2].isdigit():
+            continue
+        chapter, verse = int(parts[1]), int(parts[2])
+        if verse > 0:
+            stats[chapter] = max(stats.get(chapter, 0), verse)
+    return stats
+
+
+def _book_alias_choices(agent):
+    """compact alias -> display book name for every book Lex can recognise."""
+    choices = {}
+    for book in BIBLE_BOOKS:
+        choices.setdefault(_compact(book), book)
+    for names in DEUTEROCANON_SCOPE_BOOKS:
+        for alias in names:
+            choices.setdefault(_compact(alias), names[0])
+    for alias, book in BOOK_SCOPE_ALIASES.items():
+        choices.setdefault(_compact(alias), book)
+    for key, db_book in agent.canon_map.items():
+        choices.setdefault(key, agent.reverse_canon_map.get(db_book, db_book))
+    return {k: v for k, v in choices.items() if k}
+
+
+def book_is_known(agent, name):
+    key = _compact(name)
+    return key in _book_alias_choices(agent) or key in LXX_REFERENCE_BOOK_ALIASES
+
+
+def fuzzy_books(agent, text, n=3, cutoff=0.6):
+    """Nearest real book names for a misspelt book, best first, no duplicates."""
+    choices = _book_alias_choices(agent)
+    want = _compact(text)
+    scored = {}
+    for key in close_matches(want, [k for k in choices if len(k) >= 3], n=12, cutoff=cutoff):
+        name = choices[key]
+        if name[0].isdigit() and not want[:1].isdigit():
+            continue  # "Jhon" means John, not 3 John
+        full = difflib.SequenceMatcher(None, want, _compact(name)).ratio()
+        score = max(full, 0.8 * difflib.SequenceMatcher(None, want, key).ratio())
+        scored[name] = max(score, scored.get(name, 0))
+    return sorted(scored, key=lambda name: -scored[name])[:n]
+
+
+def _split_reference(text):
+    """(book words, chapter/verse numbers, tail text) from loosely typed reference text."""
+    low = text.lower().strip().translate(REFERENCE_DASH_TRANSLATION)[:128]
+    start = next((i for i, ch in enumerate(low) if ch.isdecimal() and not (i == 0 and ch in "1234")), None)
+    book = low[:start] if start is not None else low
+    tail = low[start:] if start is not None else ""
+    words = [w for w in re.split(r"[^a-z0-9]+", book) if w]
+    while words and words[-1] in _BOOK_PREFIX_WORDS:
+        words.pop()
+    return " ".join(words), re.findall(r"\d+", tail), tail
+
+
+def repaired_reference_forms(book, numbers, tail):
+    """Likely intended chapter/verse text for a malformed numeric tail."""
+    if not numbers:
+        return []
+    forms = []
+    ranged = bool(re.search(r"-|\bto\b|through|thru", tail))
+    if len(numbers) == 1:
+        forms.append(numbers[0])
+    else:
+        forms.append(f"{numbers[0]}:{numbers[1]}")
+        if len(numbers) >= 3 and ranged and int(numbers[2]) > int(numbers[1]):
+            forms.append(f"{numbers[0]}:{numbers[1]}-{numbers[2]}")
+        elif len(numbers) == 2 and ranged and int(numbers[1]) > int(numbers[0]):
+            forms.append(f"{numbers[0]}:1-{numbers[1]}")
+    return forms
+
+
+def _other_editions_with(agent, edition, query):
+    """Installed editions (other than edition) that contain the book of query."""
+    found = []
+    for other in installed_bible_ids():
+        if other == edition:
+            continue
+        try:
+            other_agent = LexAgent(bible_id=other)
+            _ref, book, chap, _verse, _end = other_agent.normalize_ref(query)
+            stats = book_chapter_verses(other_agent, book) if book else {}
+        except Exception:
+            continue
+        if stats:
+            found.append((other, book, int(chap) in stats if chap else True))
+    found.sort(key=lambda item: not item[2])
+    return found
+
+
+def _plural(n, word):
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def diagnose_lookup(agent, query, edition=None, prefix="", json_mode=False):
+    """Explain a failed lookup. Returns (reason, suggestions); never raises."""
+    try:
+        return _diagnose_lookup(agent, query, edition or getattr(agent, "bible_id", None) or agent.bible_prefix, prefix)
+    except Exception:  # an error path must not hide the original failure
+        return f"Lex did not recognise `{query}`.", [f"{prefix} search {query}".strip()]
+
+
+def _diagnose_lookup(agent, query, edition, prefix):
+    pre = (prefix + " ") if prefix else ""
+    text = " ".join(str(query).split())
+    edition_label = _edition_label(edition) if edition in BIBLE_VERSIONS else "this edition"
+    book_text, numbers, tail = _split_reference(text)
+    words = text.split()
+
+    # A mistyped subcommand ("serch grace", "strong G3056", "reed John 3:16").
+    first = words[0].lower() if words else ""
+    if first and first not in COMMAND_WORDS and not book_is_known(agent, first) and not book_is_known(agent, text):
+        cmd_hits = close_matches(first, COMMAND_WORDS, n=2, cutoff=0.75)
+        if cmd_hits:
+            rest = " ".join(words[1:])
+            return f"`{words[0]}` is not a Lex command.", [f"{pre}{hit} {rest}".strip() for hit in cmd_hits]
+
+    # No digits: a bare book name or plain words.
+    if not numbers:
+        if book_text and book_is_known(agent, book_text):
+            _ref, db_book, _c, _v, _e = agent.normalize_ref(f"{book_text} 1")
+            if book_chapter_verses(agent, db_book):
+                return (
+                    f"`{text}` is a book name. Add a chapter, and a verse if you want one.",
+                    [f"{pre}{db_book} 1", f"{pre}{db_book} 1:1"],
+                )
+            return _missing_book_reason(agent, edition, edition_label, f"{db_book} 1", db_book, pre)
+        near = fuzzy_books(agent, text, cutoff=0.75) if len(words) <= 3 else []
+        suggestions = [f"{pre}{b} 1" for b in near]
+        suggestions.append(f"{pre}search {text}".strip())
+        if near:
+            return f"`{text}` is not a Bible book, Strong's number or command Lex knows.", suggestions
+        return (
+            f"`{text}` is not a Bible reference, Strong's number or command. To look for those words in the text, use search.",
+            suggestions[-1:],
+        )
+
+    ref_norm, book, chap, verse, v_end = agent.normalize_ref(text)
+    if ref_norm:
+        return _diagnose_valid_syntax(agent, edition, edition_label, text, book, chap, verse, v_end, pre)
+
+    # The numbers could not be read as chapter[:verse]; offer the likely intended form.
+    if book_text and book_is_known(agent, book_text):
+        _r, db_book, _c, _v, _e = agent.normalize_ref(f"{book_text} 1")
+        forms = [f"{db_book} {f}" for f in repaired_reference_forms(book_text, numbers, tail)]
+        forms = [f for f in forms if agent.normalize_ref(f)[0]]
+        reason = (
+            f"`{text}` is not a reference Lex can read. "
+            "A reference is a book, a chapter, and optionally a verse or range, like John 3:16 or John 3:16-18."
+        )
+        return reason, [pre + f for f in forms[:3]]
+    near = fuzzy_books(agent, book_text) if book_text else []
+    forms = repaired_reference_forms(book_text, numbers, tail) or [numbers[0]]
+    out = []
+    for name in near:
+        for form in forms[:1]:
+            out.append(f"{pre}{name} {form}")
+    if book_text:
+        reason = f"`{book_text}` is not a book name Lex knows."
+        if not out:
+            reason += " Book names and common abbreviations work, like John, Jn, 1 Cor or Song of Solomon."
+    else:
+        reason = f"`{text}` has no book name. A reference needs one, like John 3:16."
+    return reason, out
+
+
+def _missing_book_reason(agent, edition, edition_label, probe, db_book, pre):
+    """The book is real but this edition doesn't carry it: say so and point at editions that do."""
+    short = edition.upper() if edition in BIBLE_VERSIONS else "this edition"
+    apocrypha_keys = {_compact(a) for names in DEUTEROCANON_SCOPE_BOOKS for a in names}
+    others = _other_editions_with(agent, edition, probe)
+    if edition == "lxx" and db_book in PROTESTANT_NT_BOOKS:
+        reason = f"{db_book} isn't in the {short}; the Septuagint is a Greek Old Testament, so it has no New Testament books."
+    elif _compact(db_book) in apocrypha_keys:
+        reason = f"{db_book} isn't in {edition_label}; it's one of the Apocrypha books."
+    else:
+        reason = f"{db_book} isn't in {edition_label}."
+    if others:
+        reason += f" Editions that have it: {', '.join(o[0] for o in others)}."
+    else:
+        reason += " No other installed edition has it."
+    return reason, [f"-B {other} {probe}" for other, _book, _has in others[:3]]
+
+
+def _diagnose_valid_syntax(agent, edition, edition_label, text, book, chap, verse, v_end, pre):
+    stats = book_chapter_verses(agent, book)
+    c = int(chap)
+    tail = f"{chap}" + (f":{verse}" if verse else "")
+    if not stats:
+        if not book_is_known(agent, book):
+            return f"`{book}` is not a book name Lex knows.", [f"{pre}{name} {tail}" for name in fuzzy_books(agent, book)]
+        return _missing_book_reason(agent, edition, edition_label, f"{book} {tail}", book, pre)
+    name = agent.reverse_canon_map.get(book, book)
+    chapters = max(stats)
+    if c < 1:
+        return f"Chapters start at 1, so {name} chapter {c} doesn't exist.", [f"{pre}{name} 1"]
+    if c > chapters:
+        reason = f"{name} has {_plural(chapters, 'chapter')} in {edition_label}; chapter {c} doesn't exist."
+        return reason, [f"{pre}{name} {chapters}" if chapters > 1 else f"{pre}{name} 1"]
+    max_verse = stats[c]
+    if verse and int(verse) < 1:
+        return f"Verses start at 1, so {name} {c}:{int(verse)} doesn't exist.", [f"{pre}{name} {c}:1", f"{pre}{name} {c}"]
+    if verse and int(verse) > max_verse:
+        reason = f"{name} {c} has {_plural(max_verse, 'verse')} in {edition_label}; verse {int(verse)} doesn't exist."
+        return reason, [f"{pre}{name} {c}:{max_verse}", f"{pre}{name} {c}"]
+    return f"{text} exists in {edition_label}, but Lex has no data to show for it with this command.", []
+
+
+# ---------------------------------------------------------------------------
 # Machine-readable output (--json)
 # ---------------------------------------------------------------------------
 # `lex --json ...` prints exactly one JSON document on stdout (schema in
@@ -7090,6 +7491,12 @@ def json_error_payload(code, message, hint=None, **extra):
     if hint:
         error["hint"] = hint
     error.update(extra)
+    error.setdefault("reason", message)
+    error.setdefault("suggestions", [])
+    for key in ("message", "hint", "reason"):
+        if isinstance(error.get(key), str):
+            error[key] = strip_control(error[key])
+    error["suggestions"] = [strip_control(s) for s in error["suggestions"]]
     return {"schema_version": JSON_SCHEMA_VERSION, "lex_version": VERSION, "error": error}
 
 def json_dumps(payload):
@@ -7199,9 +7606,11 @@ def json_read(agent, edition, query):
         else:
             missing.append(part)
     if not passages:
+        reason, suggestions = diagnose_lookup(agent, missing[0] if missing else query, edition)
         raise JsonExit(
             "not_found", f"No verse or chapter found for: {query}", JSON_EXIT_NOT_FOUND,
             hint="Check the reference, or use `lex --json search <terms>` for words and `lex --json strongs <number>` for Strong's.",
+            reason=reason, suggestions=[command_line(s, True) for s in suggestions],
         )
     return json_envelope("read", edition, query=query, passages=passages, not_found=missing)
 
@@ -7683,7 +8092,11 @@ def json_dispatch(raw_argv):
     parser = build_arg_parser()
 
     def usage_error(message):
-        raise JsonExit("usage", message, JSON_EXIT_USAGE, hint="Run `lex help`; JSON schema: docs/json-output.md")
+        message, reason, suggestions = interpret_usage_error(parser, message)
+        raise JsonExit(
+            "usage", message, JSON_EXIT_USAGE, hint="Run `lex help`; JSON schema: docs/json-output.md",
+            reason=reason, suggestions=[command_line(s, True) for s in suggestions],
+        )
 
     parser.error = usage_error
     argv = protect_search_scope_flags(raw_argv)
@@ -7717,7 +8130,11 @@ def json_dispatch(raw_argv):
     if args.bible:
         edition = resolve_bible_id(args.bible)
         if not edition:
-            raise JsonExit("unknown_edition", f"Unknown Bible version: {args.bible}", JSON_EXIT_USAGE, available=CANONICAL_BIBLE_IDS)
+            reason, suggestions = interpret_unknown_bible(args.bible, query)
+            raise JsonExit(
+                "unknown_edition", f"Unknown Bible version: {args.bible}", JSON_EXIT_USAGE, available=CANONICAL_BIBLE_IDS,
+                reason=reason, suggestions=[command_line(s, True) for s in suggestions],
+            )
 
     if unknown:
         if first in {"search", "serch", "read"} and all(u.startswith("-") and not u.startswith("--") for u in unknown):
@@ -8052,7 +8469,7 @@ def protect_search_scope_flags(raw_argv):
     return raw_argv
 
 def build_arg_parser():
-    parser = argparse.ArgumentParser(
+    parser = FriendlyArgumentParser(
         prog="lex",
         description="Lex: local-first Bible reading, study, search, Strong's, manuscript tools, and export.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -8215,8 +8632,8 @@ def main():
         requested_bible = args.bible
         args.bible = resolve_bible_id(requested_bible)
         if not args.bible:
-            console.print(f"[error]Unknown Bible version: {requested_bible}[/]")
-            console.print(f"Available: {', '.join(CANONICAL_BIBLE_IDS)} (see `lex -B`)")
+            reason, suggestions = interpret_unknown_bible(requested_bible, " ".join(args.query))
+            emit_friendly_error(f"Unknown Bible version: {requested_bible}", reason, suggestions)
             sys.exit(1)
         if not args.query and not unknown and not (args.next or args.prev or args.credits or args.update):
             display_flag_explainer(
@@ -8274,8 +8691,8 @@ def main():
             console.print(f"[success]Default Bible version set to [bold cyan]{target}[/] ({BIBLE_VERSIONS[target]['name']})[/]")
             sys.exit(0)
         else:
-            console.print(f"[error]Unknown Bible version: {requested}[/]")
-            console.print(f"Available: {', '.join(CANONICAL_BIBLE_IDS)} (see `lex -v`)")
+            reason, suggestions = interpret_unknown_bible(requested)
+            emit_friendly_error(f"Unknown Bible version: {requested}", reason, [s.replace("-B ", "bible ", 1) for s in suggestions])
             sys.exit(1)
 
     # Handle -v Bible-version selection cleanly
@@ -8292,8 +8709,8 @@ def main():
                 sys.exit(0)
             # Continue with the query using the new default
         else:
-            console.print(f"[error]Unknown Bible version: {args.bible_version}[/]")
-            console.print(f"Available: {', '.join(CANONICAL_BIBLE_IDS)} (see `lex -v`)")
+            reason, suggestions = interpret_unknown_bible(args.bible_version)
+            emit_friendly_error(f"Unknown Bible version: {args.bible_version}", reason, [s.replace("-B ", "-v ", 1) for s in suggestions])
             sys.exit(1)
 
     # -B never writes config: `lex -B kjv` with no command was handled above.
@@ -8424,7 +8841,7 @@ def main():
             sys.exit(0)
         else:
             if not agent.display_study_query(query, animate=args.animate):
-                console.print("[warning]No local study data found for that reference.[/]")
+                fail_lookup(agent, query, args)
                 sys.exit(1)
             sys.exit(0)
     elif query in {"search", "serch"}:
@@ -8438,7 +8855,15 @@ def main():
             unknown_scope = getattr(agent, "last_search_scope_unknown", None)
             missing_scope = getattr(agent, "last_search_scope_missing", None)
             if unknown_scope:
-                console.print(f"[warning]Unknown book scope {rich_escape(unknown_scope)}; use a book or group such as -psalms, -nt or -apocrypha (see `lex search`).[/]")
+                scope_name = unknown_scope.lstrip("-")
+                near = [f"-{g}" for g in close_matches(scope_name, list(BOOK_SCOPE_GROUPS), n=2, cutoff=0.6)]
+                near += [f"-{_compact(b)}" for b in fuzzy_books(agent, scope_name, n=2)]
+                terms = " ".join(w for w in query.split() if w != unknown_scope)
+                emit_friendly_error(
+                    f"Unknown book scope {unknown_scope}",
+                    "A scope narrows a search to a book or group, such as -psalms, -nt or -apocrypha (see `lex search`).",
+                    [f"search {terms} {s}" for s in list(dict.fromkeys(near))[:3]],
+                )
             elif missing_scope:
                 edition_name = BIBLE_VERSIONS.get(agent.bible_prefix, {}).get("name", agent.bible_prefix)
                 console.print(f"[warning]{rich_escape(missing_scope)} is not in {rich_escape(edition_name)}; try another edition with -B.[/]")
@@ -8555,19 +8980,23 @@ def main():
         ref_parts = [p.strip() for p in re.split(r'[,;]+', query) if p.strip()]
         if len(ref_parts) > 1:
             any_success = False
+            failed_parts = []
             for part in ref_parts:
                 if agent.display_verse(part, interlinear=args.interlinear, animate=args.animate):
                     any_success = True
                 else:
                     if agent.display_strongs(part):
                         any_success = True
+                    else:
+                        failed_parts.append(part)
+            for part in failed_parts:
+                fail_lookup(agent, part, args, skipped=any_success)
             if not any_success:
-                agent.display_search_howto()
                 sys.exit(1)
         else:
             if not agent.display_verse(query, interlinear=args.interlinear, animate=args.animate):
                 if not agent.display_strongs(query, page=args.page, limit=args.limit or 8, show_all=args.all):
-                    agent.display_search_howto()
+                    fail_lookup(agent, query, args)
                     sys.exit(1)
     else:
         agent.display_intro()
