@@ -2,6 +2,7 @@ import sqlite3
 import json
 import os
 import re
+import sys
 
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtime-data")
 DB_PATH = os.path.join(BASE_DIR, "lexicon.db")
