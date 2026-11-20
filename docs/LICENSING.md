@@ -28,6 +28,7 @@ Known local sources include:
 
 - **Bible text:** ESV via local bible-data/ESV-derived database. Bible translation text should be treated as permission/copyright-controlled and not relicensed by Lex.
 - **Douay-Rheims 1899:** public-domain Challoner revision (1899 American Edition, John Murphy Company) from eBible.org `engDRA` ([copyright page](https://ebible.org/engDRA/copyright.htm)). Do not treat other English Catholic translations as public domain.
+- **Brenton English Septuagint (1851):** public-domain translation by Sir Lancelot C. L. Brenton, from eBible.org `eng-Brenton` (original 1851 wording, not the CC0 updated-spelling `englxxup`). Source checksums and versification notes: [docs/editions/BRENTON.md](editions/BRENTON.md).
 - **Cross-references:** Treasury of Scripture Knowledge data via OpenBible-style cross-reference data. Verify upstream terms before redistribution.
 - **Strong's data:** public-domain Strong's-style concordance/lexicon data, per project README.
 - **OpenScriptures Strong's XHTML:** local `strongs/strongs-dictionary.xhtml` states GPL-3.0. Because local notes differ, verify the exact Strong's source chain before public redistribution.

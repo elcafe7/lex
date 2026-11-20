@@ -184,7 +184,7 @@ class HelpSpellingTest(LexCLITestCase):
             "--h",
             "lex --json John 3:16",
             "lex -B dra John 3:16",
-            "-B {esv,kjv,kj16,nasb,gen,dra,lxx,vulg}",
+            "-B {esv,kjv,kj16,nasb,gen,dra,lxx,brenton,vulg}",
         ):
             self.assertIn(needle, texts[0])
 
