@@ -55,7 +55,7 @@ That is the whole idea: type `lex`, then what you want to read. Short names such
 - [Study mode](#study-mode): the original language, word by word.
 - Stuck? Type `lex help`, or see [Troubleshooting and FAQ](#troubleshooting-and-faq).
 
-To get the newest version later, type `lex update`.
+To get the newest version later, type `lex update`. It updates Lex and its data together, whichever way you installed it. `lex --update` and `lex -update` do exactly the same thing.
 
 ## Read a passage
 
@@ -456,6 +456,8 @@ type -a lex
 | Not sure which version you have | `lex --version` shows the Lex version. `lex --npm-version` shows the npm launcher's version. |
 | "No reference result" | Try the full book name, such as `lex 1 Corinthians 13`. |
 | Study mode says the interlinear data is not installed | Run `lex update` to download the data. |
+| `lex update` says "Lex was not updated" on a Git clone | You have local changes to Lex's own files, and it lists them. Run `git stash` (or commit them), then `lex update` again. |
+| An old update left `git pull` failing with "untracked working tree files would be overwritten" | An older Lex downloaded that file by itself. Delete the file git names (or move it aside), then run `git pull --ff-only`. After that, `lex update` handles this automatically: it moves any blocking file to `~/.lex_backups/` and carries on. |
 | Output is messy in a log or CI job | Use `lex --plain ...` (no colour, boxes, or prompts) or `NO_COLOR=1`. Set `COLUMNS` to control the width; Lex honours it even when `TERM=dumb`. |
 | A script or AI tool gets stuck or can't read the output | Use `lex --json ...`. It never prompts and prints one JSON document. Errors come back as JSON on stderr with exit code 2, 3, or 4. |
 | A dictionary entry is missing | The local ISBE encyclopedia import is incomplete. It currently covers only Volume II (Clement to Heresh). |
@@ -466,7 +468,7 @@ type -a lex
 
 **Is it free?** Yes. The code is MIT licensed. Bible texts and lexicons keep their own licenses; see the [licensing notes](https://github.com/elcafe7/lex/blob/main/docs/LICENSING.md).
 
-**How do I update?** Type `lex update`. On an npm install it upgrades Lex itself and refreshes the data, and tells you both versions. On a Git checkout it refreshes the data only (run `git pull` and `./setup.sh` for the code).
+**How do I update?** Type `lex update` (`lex --update` and `lex -update` are the same command). It updates Lex and its data together on every kind of install (Git clone, npm, or release download) and tells you the old and new version of each. On a Git clone it does the `git pull` and `./setup.sh` for you, and stops without changing anything if you have local edits to Lex's files.
 
 **Which Bible versions are included?** Eight: ESV, KJV (1769 and 1611), NASB 1995, Geneva 1599, Douay-Rheims 1899, the Septuagint, and the Clementine Vulgate. See [Read a passage](#read-a-passage).
 
@@ -527,13 +529,22 @@ git pull
 ./setup.sh
 ```
 
-#### Update Runtime Data
+#### Update Lex (code and data together)
 
 ```sh
-lex update
+lex update      # same as: lex --update   and   lex -update
 ```
 
-In a Git checkout, `lex update` only refreshes data: it syncs manifest-tracked files under `runtime-data/` and does not overwrite your code (it prints the `git pull` command if your code is older than the data). On an npm install it also upgrades `@n8te_/lex-cli` when a newer version is published, then refreshes the data and prints both versions.
+There is one update command for every kind of install. It updates the Lex program and its data together, then prints one summary with the old and new version of each:
+
+```text
+Lex CLI:  2.6.8 → 2.6.9 (updated)
+Lex data: 2.6.8 → 2.6.9 (updated)
+```
+
+- **Git clone:** `lex update` fast-forwards the clone for you (the same as `git pull --ff-only`), runs `./setup.sh` to refresh dependencies, then refreshes the data with the new code. If you have local changes to Lex's own files it stops before changing anything and tells you which ones; commit or stash them and run it again. Files that would block the pull (an old downloaded copy of a data file, for example) are moved to `~/.lex_backups/` first.
+- **npm install:** it upgrades `@n8te_/lex-cli` when a newer version is published, then refreshes the data. If it can't upgrade the CLI (for example, no write permission to the npm prefix), it prints the exact `npm install -g ...` command to run.
+- **Release download (an unpacked `lex-vX.Y.Z.tar.gz`):** it downloads the newest release, checks its published SHA-256, and unpacks it over the folder (refusing an archive that is too large or whose `lex.py` version doesn't match the release tag). Your own files are left alone and replaced code files are kept in `~/.lex_backups/`. If anything fails part-way, your files are put back. This is a checksum check only: it confirms the download matches the SHA-256 published beside it on the same GitHub release, which catches corruption in transit, but it is not a signature or attestation check. To verify where a release came from, follow [Release verification](https://github.com/elcafe7/lex/blob/main/docs/RELEASE_VERIFICATION.md).
 
 ### Reference syntax
 
@@ -601,7 +612,7 @@ lex -B dra John 3:16
 | `lex --version` | Print the plain application version for scripts. |
 | `lex --npm-version` | Print the npm launcher version (npm installs only). |
 | `lex --credits` | Show data credits and source acknowledgements. |
-| `lex update` or `lex --update` | Refresh manifest-managed runtime data. |
+| `lex update`, `lex --update` or `lex -update` | Update Lex and its data together (same command, three spellings). See [Update Lex](#update-lex-code-and-data-together). |
 
 #### Read Scripture
 

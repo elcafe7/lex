@@ -228,30 +228,32 @@ See [If `lex` runs the flex lexer instead](#if-lex-runs-the-flex-lexer-instead).
 <details>
 <summary><b>Show the update steps</b></summary>
 
-**Update both code and dependencies**
+**One command updates everything: the Lex program, its dependencies and the offline data**
 ```bash
-git pull
-./setup.sh
+lex update        # same as: lex --update   and   lex -update
 ```
 
-**npm installs: update the CLI and the data**
-```bash
-lex update        # or: lex --update
+It works the same for every install and ends with one summary:
+
+```text
+Lex CLI:  2.6.8 → 2.6.9 (updated)
+Lex data: 2.6.8 → 2.6.9 (updated)
 ```
 
-With the npm launcher, `lex update` upgrades `@n8te_/lex-cli` when a newer
-version is published, refreshes the offline runtime data, and prints both
-versions. If it can't upgrade the CLI (for example, no write permission to the
-npm prefix), it prints the exact `npm install -g ...` command to run.
-
-**Git clones: refresh only the offline runtime data** (Bibles, lexicons, etc.)
-```bash
-lex update
-```
-
-In a git clone, `lex update` only updates data and won't overwrite your local
-code changes. If your code is older than the data, it prints the `git pull`
-command to run.
+- **Git clones:** `lex update` fast-forwards your clone (like `git pull --ff-only`),
+  runs `./setup.sh`, then refreshes the data. If you have local changes to Lex's
+  own files it stops before changing anything and lists them. Files that would
+  block the pull are moved to `~/.lex_backups/` first.
+- **npm installs:** it upgrades `@n8te_/lex-cli` when a newer version is
+  published, then refreshes the data. If it can't upgrade the CLI (for example,
+  no write permission to the npm prefix), it prints the exact `npm install -g ...`
+  command to run.
+- **Release downloads:** it downloads the newest release, checks its SHA-256,
+  and unpacks it over the folder, keeping your own files. This is a checksum
+  check only: it confirms the download matches the SHA-256 published beside it
+  on the same release (catching corruption in transit), but it is not a
+  signature or attestation check. To verify where a release came from, see
+  [Release verification](docs/RELEASE_VERIFICATION.md).
 
 </details>
 

@@ -1,10 +1,9 @@
 """`lex update` keeps the CLI current, not only the data (#19).
 
 Covers the Python side: the version summary printed after an update, for the
-npm launcher outcomes (current / updated / failed / unchecked) and for a
-standalone install (git clone or direct `python3 lex.py`) whose code is behind
-the data manifest. Network access is stubbed; nothing outside a temp dir is
-written.
+npm launcher outcomes (current / updated / failed / unchecked). The git and
+release install paths are covered in test_update_paths.py. Network access is
+stubbed; nothing outside a temp dir is written.
 
 Run: python3 -m unittest discover -s tests
 """
@@ -112,7 +111,7 @@ class UpdateSummaryTest(unittest.TestCase):
         code, out = self.run_update({"LEX_CLI_PACKAGE_VERSION": "2.6.6", "LEX_CLI_UPDATE_STATUS": "updated",
                                      "LEX_CLI_LATEST_VERSION": "2.6.6", "LEX_CLI_UPDATED_FROM": "2.6.2"})
         self.assertEqual(code, 0)
-        self.assertIn("Lex CLI:  2.6.6 (updated from 2.6.2)", out)
+        self.assertIn("Lex CLI:  2.6.2 → 2.6.6 (updated)", out)
         self.assertIn("Lex data: 2.6.6 (updated)", out)
 
     def test_cli_upgrade_failed_prints_command_and_exits_nonzero(self):
@@ -132,20 +131,13 @@ class UpdateSummaryTest(unittest.TestCase):
         self.assertIn("couldn't check for a newer version", out)
         self.assertIn("npm install -g @n8te_/lex-cli@latest", out)
 
-    def test_standalone_git_clone_behind_prints_git_command(self):
-        os.makedirs(os.path.join(self.tmp, ".git"))
-        with mock.patch.object(LEXMOD, "VERSION", "2.6.2"):
-            code, out = self.run_update({}, base_dir=self.tmp)
+    def test_without_any_cli_outcome_the_summary_says_it_could_not_check(self):
+        # The update command always supplies the CLI outcome (git, npm or
+        # release); a bare summary never claims the CLI is current.
+        code, out = self.run_update({}, base_dir=self.tmp)
         self.assertEqual(code, 0)
-        self.assertIn("Lex CLI:  2.6.2 (behind the latest 2.6.6; NOT updated)", out)
-        self.assertIn(f"git -C {self.tmp} pull --ff-only", out)
-        self.assertIn("Lex data: 2.6.6 (updated)", out)
-
-    def test_standalone_current(self):
-        with mock.patch.object(LEXMOD, "VERSION", "2.6.6"):
-            code, out = self.run_update({}, base_dir=self.tmp)
-        self.assertEqual(code, 0)
-        self.assertIn("Lex CLI:  2.6.6 (latest)", out)
+        self.assertIn("couldn't check for a newer version", out)
+        self.assertNotIn("(latest)", out)
 
     def test_failed_data_update_exits_nonzero(self):
         console = self.console()

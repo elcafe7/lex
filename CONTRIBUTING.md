@@ -138,7 +138,12 @@ weekly schedule.
 - Do not add runtime dependencies without discussing it in an issue first.
 - Do not commit large databases or generated data that already has a
   published download path.
-- Update the README or docs if you change how something is used.
+- Update the README or docs if you change how something is used. The docs
+  pages in `docs/` are built into `docs/lex-docs.md` and `docs/lex-docs.html`
+  by `python3 scripts/build_docs.py`; rebuild them after editing a page.
+- `lex update`, `lex --update` and `lex -update` are one update path for git,
+  npm and release installs. Keep it that way: change `run_update_command` and
+  its tests in `tests/test_update_paths.py`, not a separate path per install.
 - Keep each pull request to one topic.
 
 ## Sign-off and license

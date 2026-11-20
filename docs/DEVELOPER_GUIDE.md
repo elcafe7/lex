@@ -44,8 +44,11 @@ head -5 ~/.local/bin/lex
 
 Lex uses a manifest-driven update system:
 - `manifest.json` tracks the `version` and the `sha256` hash of each tracked runtime data file.
-- `lex update` fetches the remote manifest from GitHub and syncs only changed or missing data files.
-- Code updates are handled by Git plus the local wrapper/install flow; Lex does not overwrite its own installed script.
+- `lex update`, `lex --update` and `lex -update` are one path (`run_update_command` in `lex.py`): update the CLI for the install type, then sync the data, then print one summary.
+  - git clone: `git_update()` refuses on tracked local edits, moves blocking untracked files (and data files an older updater rewrote) to `~/.lex_backups/`, fast-forwards, runs `setup.sh`, then re-runs the new `lex.py --update` for the data step and the summary.
+  - npm launcher: the launcher upgrades `@n8te_/lex-cli` and hands the outcome over in `LEX_CLI_*` variables.
+  - release download: `release_update()` downloads the release tarball, verifies its `.sha256`, and unpacks it over the folder.
+- The data step fetches the remote manifest from GitHub and syncs only changed or missing data files. `runtime-data/.lex-data-version` (gitignored) remembers the last data version.
 - Manifest asset paths are accepted only under `runtime-data/` and are resolved with realpath containment checks before writes.
 - Atomic updates are achieved by downloading to `.tmp` files and then performing an `os.replace`.
 

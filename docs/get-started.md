@@ -36,4 +36,4 @@ That is the whole idea: type `lex`, then what you want to read. Short names such
 - [Study mode](study-mode.md): the original language, word by word.
 - Stuck? Type `lex help`, or see [Troubleshooting and FAQ](troubleshooting-and-faq.md).
 
-To get the newest version later, type `lex update`.
+To get the newest version later, type `lex update`. It updates Lex and its data together, whichever way you installed it. `lex --update` and `lex -update` do exactly the same thing.

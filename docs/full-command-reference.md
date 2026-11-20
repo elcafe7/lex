@@ -47,13 +47,22 @@ git pull
 ./setup.sh
 ```
 
-### Update Runtime Data
+### Update Lex (code and data together)
 
 ```sh
-lex update
+lex update      # same as: lex --update   and   lex -update
 ```
 
-In a Git checkout, `lex update` only refreshes data: it syncs manifest-tracked files under `runtime-data/` and does not overwrite your code (it prints the `git pull` command if your code is older than the data). On an npm install it also upgrades `@n8te_/lex-cli` when a newer version is published, then refreshes the data and prints both versions.
+There is one update command for every kind of install. It updates the Lex program and its data together, then prints one summary with the old and new version of each:
+
+```text
+Lex CLI:  2.6.8 → 2.6.9 (updated)
+Lex data: 2.6.8 → 2.6.9 (updated)
+```
+
+- **Git clone:** `lex update` fast-forwards the clone for you (the same as `git pull --ff-only`), runs `./setup.sh` to refresh dependencies, then refreshes the data with the new code. If you have local changes to Lex's own files it stops before changing anything and tells you which ones; commit or stash them and run it again. Files that would block the pull (an old downloaded copy of a data file, for example) are moved to `~/.lex_backups/` first.
+- **npm install:** it upgrades `@n8te_/lex-cli` when a newer version is published, then refreshes the data. If it can't upgrade the CLI (for example, no write permission to the npm prefix), it prints the exact `npm install -g ...` command to run.
+- **Release download (an unpacked `lex-vX.Y.Z.tar.gz`):** it downloads the newest release, checks its published SHA-256, and unpacks it over the folder (refusing an archive that is too large or whose `lex.py` version doesn't match the release tag). Your own files are left alone and replaced code files are kept in `~/.lex_backups/`. If anything fails part-way, your files are put back. This is a checksum check only: it confirms the download matches the SHA-256 published beside it on the same GitHub release, which catches corruption in transit, but it is not a signature or attestation check. To verify where a release came from, follow [Release verification](https://github.com/elcafe7/lex/blob/main/docs/RELEASE_VERIFICATION.md).
 
 ## Reference syntax
 
@@ -121,7 +130,7 @@ lex -B dra John 3:16
 | `lex --version` | Print the plain application version for scripts. |
 | `lex --npm-version` | Print the npm launcher version (npm installs only). |
 | `lex --credits` | Show data credits and source acknowledgements. |
-| `lex update` or `lex --update` | Refresh manifest-managed runtime data. |
+| `lex update`, `lex --update` or `lex -update` | Update Lex and its data together (same command, three spellings). See [Update Lex](#update-lex-code-and-data-together). |
 
 ### Read Scripture
 
