@@ -2,6 +2,7 @@ import sqlite3
 import json
 import os
 import re
+import sys
 
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtime-data")
 DB_PATH = os.path.join(BASE_DIR, "lexicon.db")
@@ -98,8 +99,8 @@ def load_historical_docs(conn):
                 if not doc_path.startswith(docs_real + os.sep) or not os.path.isfile(doc_path):
                     print(f"Skipping unsafe historical document: {filename}")
                     continue
-                with open(doc_path, 'r') as f:
-                    try:
+                try:
+                    with open(doc_path, 'r') as f:
                         doc = json.load(f)
                         title = doc.get('title', filename)
                         # Some docs have sections, others might just be a blob, some use 'chapters'
@@ -115,8 +116,9 @@ def load_historical_docs(conn):
                                 entries.append((full_topic, content, "TheologAI"))
                         else:
                             entries.append((title, json.dumps(doc, indent=2), "TheologAI"))
-                    except Exception:
-                        continue
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError, AttributeError, TypeError) as error:
+                    print(f"Skipping unreadable historical document {filename}: {error}", file=sys.stderr)
+                    continue
         conn.executemany("INSERT INTO dictionary_fts VALUES (?, ?, ?)", entries)
         print("Indexed Historical Documents with FTS5.")
 

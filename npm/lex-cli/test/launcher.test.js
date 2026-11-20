@@ -58,6 +58,13 @@ test("venv python path matches the current platform", () => {
   }
 });
 
+test("childExitCode treats a signal-terminated child as failure", () => {
+  assert.equal(launcher.childExitCode(0), 0);
+  assert.equal(launcher.childExitCode(7), 7);
+  assert.equal(launcher.childExitCode(null), 1);
+  assert.equal(launcher.childExitCode(undefined), 1);
+});
+
 test("archiveRoot follows a resolved release tag", () => {
   assert.equal(launcher.archiveRoot("v9.9.9"), "lex-9.9.9");
   assert.equal(launcher.archiveRoot("not-a-tag"), launcher.archiveRoot());
