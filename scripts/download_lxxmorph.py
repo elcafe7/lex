@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
+"""Download CCAT LXX morphology files into runtime-data with pinned checksums.
+
+Operator-supplied --out/--manifest paths are confined under approved roots
+(CodeQL py/path-injection). Declared source names come from FILES only.
+"""
 import argparse
 import hashlib
 import hmac
 import os
 import subprocess
 import tempfile
+
+from safe_paths import MissingSourceFile, UnsafePathError, safe_source_file
 
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "runtime-data")
@@ -39,7 +46,9 @@ def load_checksums(path):
     with open(path, encoding="utf-8") as handle:
         for raw in handle:
             parts = raw.strip().split()
-            if len(parts) != 2 or len(parts[0]) != 64 or any(char not in "0123456789abcdef" for char in parts[0]):
+            if len(parts) != 2 or len(parts[0]) != 64 or any(
+                char not in "0123456789abcdef" for char in parts[0]
+            ):
                 raise ValueError(f"invalid checksum manifest line: {raw!r}")
             checksum, filename = parts
             if filename in checksums:
@@ -48,17 +57,11 @@ def load_checksums(path):
     missing = set(FILES) - set(checksums)
     extra = set(checksums) - set(FILES)
     if missing or extra:
-        raise ValueError(f"checksum manifest does not match declared files (missing={sorted(missing)}, extra={sorted(extra)})")
+        raise ValueError(
+            "checksum manifest does not match declared files "
+            f"(missing={sorted(missing)}, extra={sorted(extra)})"
+        )
     return checksums
-
-
-def contained_path(parent, path, label):
-    """Resolve a CLI path only when it remains inside its approved directory."""
-    parent = os.path.realpath(parent)
-    candidate = os.path.realpath(path)
-    if os.path.commonpath((parent, candidate)) != parent:
-        raise ValueError(f"{label} must remain under {parent}")
-    return candidate
 
 
 def sha256_file(path):
@@ -70,7 +73,7 @@ def sha256_file(path):
 
 
 def fetch_verified(url, target, expected):
-    directory = os.path.dirname(os.path.abspath(target))
+    directory = os.path.dirname(target)
     fd, temporary = tempfile.mkstemp(prefix=f".{os.path.basename(target)}.", dir=directory)
     os.close(fd)
     try:
@@ -85,29 +88,89 @@ def fetch_verified(url, target, expected):
         raise
 
 
-def main():
+def resolve_manifest(raw):
+    """Require the manifest to stay under scripts/ before opening it."""
+    if not isinstance(raw, str) or not raw or "\x00" in raw:
+        raise UnsafePathError(f"invalid manifest path: {raw!r}")
+    scripts_real = os.path.realpath(SCRIPTS_ROOT)
+    # Prefer basename confinement (same pattern as safe_source_file callers).
+    name = os.path.basename(raw)
+    try:
+        candidate = safe_source_file(scripts_real, name)
+    except MissingSourceFile as exc:
+        raise UnsafePathError(str(exc)) from exc
+    # If the operator passed a path, it must resolve to that same file.
+    resolved = os.path.realpath(raw)
+    if resolved != candidate:
+        raise UnsafePathError(f"manifest must be scripts/{name}")
+    return candidate
+
+
+def resolve_output_dir(raw):
+    """Require --out to stay under runtime-data; create it if needed."""
+    if not isinstance(raw, str) or not raw or "\x00" in raw:
+        raise UnsafePathError(f"invalid output directory: {raw!r}")
+    root_real = os.path.realpath(ROOT)
+    prefix = root_real if root_real.endswith(os.sep) else root_real + os.sep
+
+    # Walk up to an existing ancestor so realpath cannot escape via missing dirs.
+    existing = raw
+    while existing and not os.path.exists(existing):
+        existing = os.path.dirname(existing)
+    if not existing:
+        raise UnsafePathError(f"output directory must remain under {root_real}")
+    existing_real = os.path.realpath(existing)
+    if existing_real != root_real and not existing_real.startswith(prefix):
+        raise UnsafePathError(f"output directory must remain under {root_real}")
+
+    os.makedirs(raw, exist_ok=True)
+    out_real = os.path.realpath(raw)
+    if out_real != root_real and not out_real.startswith(prefix):
+        raise UnsafePathError(f"output directory must remain under {root_real}")
+    return out_real
+
+
+def confined_target(output_dir, filename):
+    """Join an allowlisted filename under output_dir and re-check containment."""
+    target = os.path.realpath(os.path.join(output_dir, filename))
+    prefix = output_dir if output_dir.endswith(os.sep) else output_dir + os.sep
+    if not target.startswith(prefix):
+        raise UnsafePathError(f"output file escapes output directory: {filename!r}")
+    return target
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser(description="Download CCAT LXX morphology files.")
-    parser.add_argument("--out", default=DEFAULT_OUT, help="Output directory")
+    parser.add_argument("--out", default=DEFAULT_OUT, help="Output directory under runtime-data")
     parser.add_argument("--force", action="store_true", help="Download even if the file exists")
-    parser.add_argument("--manifest", default=DEFAULT_MANIFEST, help="SHA-256 manifest for the declared source files")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--manifest",
+        default=DEFAULT_MANIFEST,
+        help="SHA-256 manifest (must stay under scripts/)",
+    )
+    args = parser.parse_args(argv)
 
     try:
-        manifest = contained_path(SCRIPTS_ROOT, args.manifest, "manifest")
-        output_dir = contained_path(ROOT, args.out, "output directory")
+        manifest = resolve_manifest(args.manifest)
+        output_dir = resolve_output_dir(args.out)
         checksums = load_checksums(manifest)
-    except (OSError, ValueError) as error:
-        parser.error(f"cannot load checksum manifest: {error}")
-    os.makedirs(output_dir, exist_ok=True)
+    except (OSError, ValueError, UnsafePathError) as error:
+        parser.error(f"cannot prepare download: {error}")
+
     for filename in FILES:
-        target = contained_path(output_dir, os.path.join(output_dir, filename), "output file")
+        try:
+            target = confined_target(output_dir, filename)
+        except UnsafePathError as error:
+            parser.error(str(error))
         expected = checksums[filename]
         if os.path.exists(target):
             if hmac.compare_digest(sha256_file(target), expected) and not args.force:
                 print(f"exists {filename}")
                 continue
             if not args.force:
-                parser.error(f"checksum mismatch for existing {filename}; use --force to replace it")
+                parser.error(
+                    f"checksum mismatch for existing {filename}; use --force to replace it"
+                )
         url = f"{BASE_URL}/{filename}"
         fetch_verified(url, target, expected)
         print(f"downloaded {filename}")
