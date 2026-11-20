@@ -229,7 +229,8 @@ class FriendlyErrorCliTest(unittest.TestCase):
         return [line.strip() for line in err.splitlines() if line.strip().startswith("lex ") and not line.startswith("lex:")]
 
     def test_suggestions_quote_shell_metacharacters(self):
-        payload = "$(touch /tmp/lex-friendly-pwned)"
+        marker = os.path.join(self.home, "pwned")
+        payload = f"$(touch {marker})"
         err = self.fails("--jsn", payload, code=2)
         lines = self.suggestion_lines(err)
         self.assertTrue(lines, err)
@@ -237,8 +238,6 @@ class FriendlyErrorCliTest(unittest.TestCase):
             self.assertEqual(shlex.split(line)[:2], ["lex", "--json"])
             self.assertIn(payload, shlex.split(line))  # kept as one inert argument
             # Running the suggestion through a shell must not execute the substitution.
-            marker = os.path.join(self.home, "pwned")
-            line = line.replace("/tmp/lex-friendly-pwned", marker)
             subprocess.run(["sh", "-c", "echo " + line], capture_output=True, check=True)
             self.assertFalse(os.path.exists(marker))
 
